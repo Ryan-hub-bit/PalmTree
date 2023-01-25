@@ -53,6 +53,7 @@ def parse_instruction(ins, symbol_map, string_map):
 
 
 
+# BERT Tranformer
 class UsableTransformer:
     def __init__(self, model_path, vocab_path):
         print("Loading Vocab", vocab_path)
@@ -65,14 +66,19 @@ class UsableTransformer:
 
 
     def encode(self, text, output_option='lst'):
-
         segment_label = []
         sequence = []
         for t in text:
             l = (len(t.split(' '))+2) * [1]
+            # s is the sequence number of the current word in vocau
             s = self.vocab.to_seq(t)
-            # print(t, s)
-            s = [3] + s + [2]
+            # print(t, s, l) eg: mov rbp rdi [5, 14, 19] [1, 1, 1, 1, 1]
+            # [3] as the start sign
+            # [2] as the end sign
+            # eg: [3, 5, 14, 19, 2]
+            s = [3] + s + [2] 
+            # print(s)
+            # let the unit be 20, the part less then 20 just filled '0'
             if len(l) > 20:
                 segment_label.append(l[:20])
             else:
@@ -81,17 +87,18 @@ class UsableTransformer:
                  sequence.append(s[:20])
             else:
                 sequence.append(s + [0]*(20-len(s)))
-         
         segment_label = torch.LongTensor(segment_label)
         sequence = torch.LongTensor(sequence)
+        #print(segment_label)
+        #print(sequence)
 
         if USE_CUDA:
             sequence = sequence.cuda(CUDA_DEVICE)
             segment_label = segment_label.cuda(CUDA_DEVICE)
-
         encoded = self.model.forward(sequence, segment_label)
+        #print(encoded)
         result = torch.mean(encoded.detach(), dim=1)
-
+        print(result)
         del encoded
         if USE_CUDA:
             if numpy:
