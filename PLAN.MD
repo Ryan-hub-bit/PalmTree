@@ -36,16 +36,21 @@ token_emb = embed_token(token_id)      # [128]
 seq_emb   = embed_seqlen(seq_idx)      # [128]
 
 x_token   = token_emb + seq_emb
+x_src = sin/cos(addr)
+x_des = sin/cos(des)
+x_i = [x_token, x_src, x_des] [3 * 128]
+
 ```
 
 
-### 3.2  ROPE
+### 3.2  Transfomer encoder
 
-q = W_q(x_token)            # [128]
-k = W_k(x_token)            # [128]
+x_i -> make 3 * [128]  to [3 * 128] to bert
+    -> make 3 * [128] to 128 then input to bert 
 
-q_rope = apply_rope(q, pos_idx=seq_idx)
-k_rope = apply_rope(k, pos_idx=seq_idx)
+
+
+
 
 
 ## 4. Input to BERT
