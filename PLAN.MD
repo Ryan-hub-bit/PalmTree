@@ -42,17 +42,12 @@ x_i = [x_token, x_src, x_des] [3 * 128]
 
 ```
 
-
 ### 3.2  Transfomer encoder
 
 x_i -> make 3 * [128]  to [3 * 128] to bert
+
     -> make 3 * [128] to 128 then input to bert 
 
 
-
-
-
-
-## 4. Input to BERT
-
 ## 5. Address Out-of-Window Issue
+Attention is within a sequence.
