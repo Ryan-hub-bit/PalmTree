@@ -5,8 +5,8 @@ mov  rax   qword  [ rel   symbol ]	test  rax   rax
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
 test  rax   rax 	je  address 
-je  address 	call  rax 
-je  address 	call  rax 
+mov  rax   qword  [ rel   symbol ] test rax rax, je  address 	
+je address call  rax   add  rsp   0x8  
 call  rax 	add  rsp   0x8 
 call  rax 	add  rsp   0x8 
 add  rsp   0x8 	retn

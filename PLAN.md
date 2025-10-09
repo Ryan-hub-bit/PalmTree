@@ -1,7 +1,6 @@
 # Address-Aware Embedding & ROPE Integration Plan
 
 This document outlines the pipeline for extending PalmTree embeddings with **token + src/tgt address slots**, applying **Rotary Position Embeddings (ROPE)**, and integrating into a Transformer/BERT workflow.
-
 ---
 
 ## 1. Data Collection
@@ -48,8 +47,6 @@ x_i -> make 3 * [128]  to [3 * 128] to bert
 
 -> make 3 * [128] to 128 then input to bert 
 
-
 ## 5. Address Out-of-Window Issue
 Attention is within a sequence.
-
 0x400800 in one binary != 0x400800 in another binary.  

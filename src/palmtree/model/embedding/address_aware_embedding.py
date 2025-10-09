@@ -5,7 +5,7 @@ from .bert import BERTEmbedding
 from .address_encoding import AddressEncoding
 from .fusion_concat import ConcatProject
 from .fusion_gated import GatedAdd
-from .fusion_mlp import GatedAdd
+from .fusion_mlp import MLPFuse
 
 
 class AddressAwareEmbedding(nn.Module):
