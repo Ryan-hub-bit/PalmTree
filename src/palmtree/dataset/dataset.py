@@ -185,7 +185,7 @@ class BERTDataset(Dataset):
     def random_sent(self, index):
         c1, c2, d1, d2 = self.get_corpus_line(index)
         dice = random.random() # TODO: should throw the dice twice here. 
-        if dice > 0.25:
+        if dice < 0.25:
             return c1, c2, 1, d1, d2, 1
         elif 0.25 <= dice < 0.5:
             return c1, self.get_random_line(), 0, d1, d2, 1

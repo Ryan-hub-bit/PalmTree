@@ -114,9 +114,7 @@ def process_file(f):
                 if len(s) >= 2:
                     for idx in range(1, len(s)):
                         w.write(s[idx-1] + '\t' + s[idx] + '\n')
-    # ------------------------------------------
 
-    gc.collect()
 
 
 def process_string(f):

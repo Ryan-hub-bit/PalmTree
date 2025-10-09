@@ -9,14 +9,16 @@ import palmtree
 from palmtree import dataset
 from palmtree import trainer
 import pickle as pkl
+import bert_pytorch
+
 
 print(palmtree.__file__)
-vocab_path = "cdfg_bert_1/vocab"
-train_cfg_dataset = "data/training/cdfg_bert_1/cfg_train.txt"
-train_dfg_dataset = "data/training/cdfg_bert_1/dfg_train.txt"
+vocab_path = "/home/louie/PalmTree/output/vocab"
+train_cfg_dataset = "/home/louie/PalmTree/data/cfg_train.txt"
+train_dfg_dataset = "/home/louie/PalmTree/data/dfg_train.txt"
 test_dataset = "data/training/cdfg_bert_1/test.txt"
 sent_dataset = "data/sentence.pkl"
-output_path = "cdfg_bert_1/transformer"
+output_path = "/home/louie/PalmTree/output/transformer"
 
 with open(train_cfg_dataset, "r", encoding="utf-8") as f1:
     with open(train_dfg_dataset, "r", encoding="utf-8") as f2:
@@ -45,8 +47,8 @@ train_data_loader = DataLoader(train_dataset, batch_size=256, num_workers=10)
 
 
 
-test_data_loader = DataLoader(test_dataset, batch_size=256, num_workers=10) \
-    if test_dataset is not None else None
+# test_data_loader = DataLoader(test_dataset, batch_size=256, num_workers=10) \
+    # if test_dataset is not None else None
 
 print("Building BERT model")
 bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=12, attn_heads=8, dropout=0.0)
