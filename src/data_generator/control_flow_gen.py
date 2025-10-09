@@ -67,7 +67,6 @@ def process_file(f, window_size):
 
     print(f"[INFO] Processing: {f}")
     bv = load(f)
-    #bv.update_analysis()   # lightweight analysis (fast, enough for CFG)
 
     # Create an output directory (once)
     out_dir = Path("/home/louie/PalmTree/src/data_generator/cfg_output")
