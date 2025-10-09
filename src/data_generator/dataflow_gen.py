@@ -1,4 +1,5 @@
 from binaryninja import *
+from binaryninja import load 
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ import pickle
 from  collections import Counter
 from memory_profiler import profile
 import gc
-
+from pathlib import Path  # <-- added
 
 def parse_instruction(ins, symbol_map, string_map):
     ins = re.sub('\s+', ', ', ins, 1)
@@ -39,16 +40,16 @@ def parse_instruction(ins, symbol_map, string_map):
 def random_walk(g,length, symbol_map, string_map):
     sequence = []
     for n in g:
-        if n != -1 and g.node[n]['text'] != None:
+        if n != -1 and g.nodes[n]['text'] != None:
             s = []
             l = 0
-            s.append(parse_instruction(g.node[n]['text'], symbol_map, string_map))
+            s.append(parse_instruction(g.nodes[n]['text'], symbol_map, string_map))
             cur = n
             while l < length:
                 nbs = list(g.successors(cur))
                 if len(nbs):
                     cur = random.choice(nbs)
-                    s.append(parse_instruction(g.node[cur]['text'], symbol_map, string_map))
+                    s.append(parse_instruction(g.nodes[cur]['text'], symbol_map, string_map))
                     l += 1
                 else:
                     break
@@ -56,12 +57,11 @@ def random_walk(g,length, symbol_map, string_map):
     return sequence
 
 
-
 def process_file(f):
     symbol_map = {}
     string_map = {}
     print(f)
-    bv = BinaryViewType.get_view_of_file(f)
+    bv = load(f)
 
     # encode strings
     for sym in bv.get_symbols():
@@ -80,7 +80,6 @@ def process_file(f):
 
         for block in func.mlil:
             for ins in block: 
-
                 G.add_node(ins.address, text=bv.get_disassembly(ins.address))
                 label_dict[ins.address] = bv.get_disassembly(ins.address)
                 depd = []
@@ -90,8 +89,8 @@ def process_file(f):
                             if func.mlil[i].address != ins.address]
                 for var in ins.vars_written:
                     depd += [(ins.address, func.mlil[i].address)
-                            for i in func.mlil.get_var_uses(var)
-                            if func.mlil[i].address != ins.address]
+                             for i in func.mlil.get_var_uses(var)
+                             if func.mlil[i].address != ins.address]
                 if depd:
                     G.add_edges_from(depd)
 
@@ -100,36 +99,43 @@ def process_file(f):
                 G.add_edge(-1, node)
         if len(G.nodes) > 2:
             function_graphs[func.name] = G
-    
-    with open('dfg_train.txt', 'a') as w:
+
+    # --- per-binary output (minimal change) ---
+    out_dir = Path("/home/louie/PalmTree/data/dfg")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    binary_name = Path(f).stem
+    out_path = out_dir / f"{binary_name}_dfg.txt"
+    print(f"[INFO] Writing DFG pairs to: {out_path}")
+
+    with open(out_path, 'w', encoding='utf-8') as w:
         for name, graph in function_graphs.items():
             sequence = random_walk(graph, 40, symbol_map, string_map)
             for s in sequence:
-               if len(s) >= 2:
+                if len(s) >= 2:
                     for idx in range(1, len(s)):
-                        w.write(s[idx-1] +'\t' + s[idx] + '\n')
+                        w.write(s[idx-1] + '\t' + s[idx] + '\n')
+    # ------------------------------------------
+
     gc.collect()
 
 
 def process_string(f):
     str_lst = [] 
-    bv = BinaryViewType.get_view_of_file(f)
+    bv = load(f)
     for sym in bv.get_symbols():
         str_lst.extend(re.findall('([0-9A-Za-z]+)', sym.full_name))
     return str_lst
 
 
-
-
 def main():
-    bin_folder = '/path/to/binaries'
+    bin_folder = '/home/louie/smallbinary'
     file_lst = []
     str_counter = Counter()
     for parent, subdirs, files in os.walk(bin_folder):
         if files:
             for f in files:
                 file_lst.append(os.path.join(parent,f))
-    for f in tqdm(file_lst):
+    for f in tqdm.tqdm(file_lst):
         process_file(f)
 
 

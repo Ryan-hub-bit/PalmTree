@@ -45,12 +45,12 @@ class BERTDataset(Dataset):
         
 
 
-        if not on_memory:
-            self.file = open(corpus_path, "r", encoding=encoding)
-            self.random_file = open(corpus_path, "r", encoding=encoding)
+        # if not on_memory:
+        #     self.file = open(corpus_path, "r", encoding=encoding)
+        #     self.random_file = open(corpus_path, "r", encoding=encoding)
 
-            for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
-                self.random_file.__next__()
+        #     for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
+        #         self.random_file.__next__()
 
 
     def __len__(self):

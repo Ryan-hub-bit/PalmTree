@@ -1,4 +1,5 @@
 from binaryninja import *
+from binaryninja import load
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
@@ -36,33 +37,47 @@ def parse_instruction(ins, symbol_map, string_map):
 def random_walk(g,length, symbol_map, string_map):
     sequence = []
     for n in g:
-        if n != -1 and 'text' in g.node[n]:
+        if n != -1 and 'text' in g.nodes[n]:
             s = []
             l = 0
-            s.append(parse_instruction(g.node[n]['text'], symbol_map, string_map))
+            s.append(parse_instruction(g.nodes[n]['text'], symbol_map, string_map))
             cur = n
             while l < length:
                 nbs = list(g.successors(cur))
                 if len(nbs):
                     cur = random.choice(nbs)
-                    if 'text' in g.node[cur]:
-                        s.append(parse_instruction(g.node[cur]['text'], symbol_map, string_map))
+                    if 'text' in g.nodes[cur]:
+                        s.append(parse_instruction(g.nodes[cur]['text'], symbol_map, string_map))
                         l += 1
                     else:
                         break
                 else:
                     break
             sequence.append(s)
-        if len(sequence) > 5000:
+        if len(sequence) > 100:
             print("early stop")
-            return sequence[:5000]
+            return sequence[:100]
     return sequence
+
+from pathlib import Path
 
 def process_file(f, window_size):
     symbol_map = {}
     string_map = {}
-    print(f)
-    bv = BinaryViewType.get_view_of_file(f)
+
+    print(f"[INFO] Processing: {f}")
+    bv = load(f)
+
+    # Create an output directory (once)
+    out_dir = Path("/home/louie/PalmTree/data/cfg/")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Output filename per binary
+    binary_name = Path(f).stem
+    out_path = out_dir / f"{binary_name}_cfg.txt"
+    print(f"[INFO] Writing CFG pairs to: {out_path}")
+
+    # Collect symbols and strings
     for sym in bv.get_symbols():
         symbol_map[sym.address] = sym.full_name
     for string in bv.get_strings():
@@ -72,15 +87,12 @@ def process_file(f, window_size):
 
     for func in bv.functions:
         G = nx.DiGraph()
-        label_dict = {}   
-        add_map = {}
         for block in func:
-            # print(block.disassembly_text)
             curr = block.start
             predecessor = curr
             for inst in block:
-                label_dict[curr] = bv.get_disassembly(curr)
-                G.add_node(curr, text=bv.get_disassembly(curr))
+                disasm = bv.get_disassembly(curr)
+                G.add_node(curr, text=disasm)
                 if curr != block.start:
                     G.add_edge(predecessor, curr)
                 predecessor = curr
@@ -88,26 +100,28 @@ def process_file(f, window_size):
             for edge in block.outgoing_edges:
                 G.add_edge(predecessor, edge.target.start)
         if len(G.nodes) > 2:
-            function_graphs[func.name] = G    
+            function_graphs[func.name] = G
 
-    with open('cfg_train.txt', 'a') as w:
+    # Write sequences for this binary
+    with open(out_path, "w", encoding="utf-8") as w:
         for name, graph in function_graphs.items():
             sequence = random_walk(graph, 40, symbol_map, string_map)
             for s in sequence:
                 if len(s) >= 4:
-                    for idx in range(0, len(s)):
-                        for i in range(1, window_size+1):
+                    for idx in range(len(s)):
+                        for i in range(1, window_size + 1):
                             if idx - i > 0:
-                                w.write(s[idx-i] +'\t' + s[idx]  + '\n')
+                                w.write(s[idx - i] + "\t" + s[idx] + "\n")
                             if idx + i < len(s):
-                                w.write(s[idx] +'\t' + s[idx+i]  + '\n')
-    # gc.collect()
+                                w.write(s[idx] + "\t" + s[idx + i] + "\n")
+    print(f"[DONE] {out_path}")
+
 
 def main():
-    bin_folder = '/path/to/binaries' 
+    bin_folder = '/home/louie/smallbinary' 
     file_lst = []
     str_counter = Counter()
-    window_size = 1;
+    window_size = 1
     for parent, subdirs, files in os.walk(bin_folder):
         if files:
             for f in files:
