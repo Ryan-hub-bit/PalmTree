@@ -46,8 +46,10 @@ x_i = [x_token, x_src, x_des] [3 * 128]
 
 x_i -> make 3 * [128]  to [3 * 128] to bert
 
-    -> make 3 * [128] to 128 then input to bert 
+-> make 3 * [128] to 128 then input to bert 
 
 
 ## 5. Address Out-of-Window Issue
 Attention is within a sequence.
+
+0x400800 in one binary != 0x400800 in another binary.  

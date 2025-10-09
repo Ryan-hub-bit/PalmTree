@@ -1,4 +1,5 @@
 from binaryninja import *
+from binaryninja import load 
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
@@ -39,16 +40,16 @@ def parse_instruction(ins, symbol_map, string_map):
 def random_walk(g,length, symbol_map, string_map):
     sequence = []
     for n in g:
-        if n != -1 and g.node[n]['text'] != None:
+        if n != -1 and g.nodes[n]['text'] != None:
             s = []
             l = 0
-            s.append(parse_instruction(g.node[n]['text'], symbol_map, string_map))
+            s.append(parse_instruction(g.nodes[n]['text'], symbol_map, string_map))
             cur = n
             while l < length:
                 nbs = list(g.successors(cur))
                 if len(nbs):
                     cur = random.choice(nbs)
-                    s.append(parse_instruction(g.node[cur]['text'], symbol_map, string_map))
+                    s.append(parse_instruction(g.nodes[cur]['text'], symbol_map, string_map))
                     l += 1
                 else:
                     break
@@ -61,8 +62,8 @@ def process_file(f):
     symbol_map = {}
     string_map = {}
     print(f)
-    bv = BinaryViewType.get_view_of_file(f)
-
+    # bv = BinaryViewType.get_view_of_file(f)
+    bv = load(f)
     # encode strings
     for sym in bv.get_symbols():
         symbol_map[sym.address] = sym.full_name
