@@ -196,8 +196,29 @@ class BERTDataset(Dataset):
 
 
     def get_corpus_line(self, item):
-        if self.on_memory:
-            return self.cfg_lines[item][0], self.cfg_lines[item][1], self.dfg_lines[item][0], self.dfg_lines[item][1]
+        try:
+            c_line = self.cfg_lines[item]
+            d_line = self.dfg_lines[item]
+
+            # sanity check: both should have at least 2 items
+            if len(c_line) < 2 or len(d_line) < 2:
+                print(f"[Bad line @ index {item}]")
+                print(f"  CFG: {c_line}")
+                print(f"  DFG: {d_line}")
+                # skip to next valid line
+                return self.get_corpus_line((item + 1) % len(self))
+            
+            return c_line[0], c_line[1], d_line[0], d_line[1]
+
+        except IndexError:
+            print(f"[IndexError @ item={item}]")
+            print(f"  len(cfg_lines)={len(self.cfg_lines)} len(dfg_lines)={len(self.dfg_lines)}")
+            # wrap around instead of crashing
+            return self.get_corpus_line(item % min(len(self.cfg_lines), len(self.dfg_lines)))
+
+    # def get_corpus_line(self, item):
+    #     if self.on_memory:
+    #         return self.cfg_lines[item][0], self.cfg_lines[item][1], self.dfg_lines[item][0], self.dfg_lines[item][1]
 
         # now only on_memory copurs are supported
         # else:
