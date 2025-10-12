@@ -11,7 +11,7 @@ import tqdm
 
 class BERTTrainer:
     """
-    BERTTrainer make the pretrained BERT model with two LM training method.
+    BERTTrainer make the pretrained BERT model with two LMtraining method.
 
         1. Masked Language Model : 3.3.1 Task #1: Masked LM
         2. Next Sentence prediction : 3.3.2 Task #2: Next Sentence Prediction
@@ -104,18 +104,14 @@ class BERTTrainer:
             data = {key: value.to(self.device) for key, value in data.items()}
 
             # 1. forward the next_sentence_prediction and masked_lm model
-            dfg_next_sent_output, cfg_next_sent_output, mask_lm_output= self.model.forward(data["dfg_bert_input"], data["dfg_segment_label"], data["cfg_bert_input"], data["cfg_segment_label"])
+            dfg_next_sent_output, cfg_next_sent_output, mask_lm_output= self.model(data["dfg_bert_input"], data["dfg_segment_label"], data["cfg_bert_input"], data["cfg_segment_label"])
             # 2-1. NLL(negative log likelihood) loss of is_next classification result
             dfg_next_loss = self.dfg_next_criterion(dfg_next_sent_output, data["dfg_is_next"])
             cfg_next_loss = self.cfg_next_criterion(cfg_next_sent_output, data["cfg_is_next"])
-
-
             # 2-2. NLLLoss of predicting masked token word
             mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["dfg_bert_label"])
-
             # 2-3 NLLloss of instruction component prediction
             #comp_loss = self.comp_criterion(inst_comp_output.transpose(1, 2), data["component"])
-            
 
             
             # 2-5. Adding next_loss and mask_loss : 3.4 Pre-training Procedure

@@ -6,7 +6,7 @@ import pickle as pkl
 
 
 class BERTDataset(Dataset):
-    def __init__(self, dfg_corpus_path, cfg_corpus_path, vocab, seq_len, encoding="utf-8", corpus_lines=None, on_memory=True):
+    def __init__(self, cfg_corpus_path, dfg_corpus_path, vocab, seq_len, encoding="utf-8", corpus_lines=None, on_memory=True):
         self.vocab = vocab
         self.seq_len = seq_len
 
@@ -14,8 +14,8 @@ class BERTDataset(Dataset):
 
         self.on_memory = on_memory
         self.corpus_lines = corpus_lines
-        self.dfg_corpus_path = dfg_corpus_path
-        self.cfg_corpus_path = cfg_corpus_path
+        self.dfg_corpus_path = cfg_corpus_path
+        self.cfg_corpus_path = dfg_corpus_path
         self.encoding = encoding
 
         # load DFG sequences 
