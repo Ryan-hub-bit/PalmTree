@@ -1,484 +1,281 @@
 endbr64	sub     rsp, 0x8
 sub     rsp, 0x8	mov     rax, qword [rel 0x403fe8]
-sub     rsp, 0x8	mov     rax, qword [rel 0x403fe8]
-mov     rax, qword [rel 0x403fe8]	test    rax, rax
 mov     rax, qword [rel 0x403fe8]	test    rax, rax
 test    rax, rax	je      0x401016
-test    rax, rax	je      0x401016
-je      0x401016	add     rsp, 0x8
-je      0x401016	add     rsp, 0x8
-add     rsp, 0x8	retn
+je      0x401016	call    rax
+call    rax	add     rsp, 0x8
 add     rsp, 0x8	retn
 sub     rsp, 0x8	mov     rax, qword [rel 0x403fe8]
 mov     rax, qword [rel 0x403fe8]	test    rax, rax
-mov     rax, qword [rel 0x403fe8]	test    rax, rax
 test    rax, rax	je      0x401016
-test    rax, rax	je      0x401016
-je      0x401016	call    rax
-je      0x401016	call    rax
-call    rax	add     rsp, 0x8
-call    rax	add     rsp, 0x8
-add     rsp, 0x8	retn
+je      0x401016	add     rsp, 0x8
 add     rsp, 0x8	retn
 mov     rax, qword [rel 0x403fe8]	test    rax, rax
 test    rax, rax	je      0x401016
-test    rax, rax	je      0x401016
-je      0x401016	add     rsp, 0x8
-je      0x401016	add     rsp, 0x8
-add     rsp, 0x8	retn
+je      0x401016	call    rax
+call    rax	add     rsp, 0x8
 add     rsp, 0x8	retn
 test    rax, rax	je      0x401016
 je      0x401016	add     rsp, 0x8
-je      0x401016	add     rsp, 0x8
-add     rsp, 0x8	retn
 add     rsp, 0x8	retn
 je      0x401016	call    rax
 call    rax	add     rsp, 0x8
-call    rax	add     rsp, 0x8
-add     rsp, 0x8	retn
 add     rsp, 0x8	retn
 add     rsp, 0x8	retn
 call    rax	add     rsp, 0x8
-add     rsp, 0x8	retn
 add     rsp, 0x8	retn
 endbr64	push    0x0
 push    0x0	jmp     0x401020
 push    0x0	jmp     0x401020
-push    0x0	jmp     0x401020
 endbr64	xor     ebp, ebp
 xor     ebp, ebp	mov     r9, rdx
-xor     ebp, ebp	mov     r9, rdx
-mov     r9, rdx	pop     rsi
 mov     r9, rdx	pop     rsi
 pop     rsi	mov     rdx, rsp
-pop     rsi	mov     rdx, rsp
-mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
 mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
 and     rsp, 0xfffffffffffffff0	push    rax
-and     rsp, 0xfffffffffffffff0	push    rax
-push    rax	push    rsp
 push    rax	push    rsp
 push    rsp	xor     r8d, r8d
-push    rsp	xor     r8d, r8d
-xor     r8d, r8d	xor     ecx, ecx
 xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 xor     ebp, ebp	mov     r9, rdx
 mov     r9, rdx	pop     rsi
-mov     r9, rdx	pop     rsi
-pop     rsi	mov     rdx, rsp
 pop     rsi	mov     rdx, rsp
 mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
-mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
-and     rsp, 0xfffffffffffffff0	push    rax
 and     rsp, 0xfffffffffffffff0	push    rax
 push    rax	push    rsp
-push    rax	push    rsp
-push    rsp	xor     r8d, r8d
 push    rsp	xor     r8d, r8d
 xor     r8d, r8d	xor     ecx, ecx
-xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 mov     r9, rdx	pop     rsi
 pop     rsi	mov     rdx, rsp
-pop     rsi	mov     rdx, rsp
-mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
 mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
 and     rsp, 0xfffffffffffffff0	push    rax
-and     rsp, 0xfffffffffffffff0	push    rax
-push    rax	push    rsp
 push    rax	push    rsp
 push    rsp	xor     r8d, r8d
-push    rsp	xor     r8d, r8d
-xor     r8d, r8d	xor     ecx, ecx
 xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 pop     rsi	mov     rdx, rsp
 mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
-mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
-and     rsp, 0xfffffffffffffff0	push    rax
 and     rsp, 0xfffffffffffffff0	push    rax
 push    rax	push    rsp
-push    rax	push    rsp
-push    rsp	xor     r8d, r8d
 push    rsp	xor     r8d, r8d
 xor     r8d, r8d	xor     ecx, ecx
-xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 mov     rdx, rsp	and     rsp, 0xfffffffffffffff0
 and     rsp, 0xfffffffffffffff0	push    rax
-and     rsp, 0xfffffffffffffff0	push    rax
-push    rax	push    rsp
 push    rax	push    rsp
 push    rsp	xor     r8d, r8d
-push    rsp	xor     r8d, r8d
-xor     r8d, r8d	xor     ecx, ecx
 xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 and     rsp, 0xfffffffffffffff0	push    rax
 push    rax	push    rsp
-push    rax	push    rsp
-push    rsp	xor     r8d, r8d
 push    rsp	xor     r8d, r8d
 xor     r8d, r8d	xor     ecx, ecx
-xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 push    rax	push    rsp
 push    rsp	xor     r8d, r8d
-push    rsp	xor     r8d, r8d
-xor     r8d, r8d	xor     ecx, ecx
 xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 push    rsp	xor     r8d, r8d
 xor     r8d, r8d	xor     ecx, ecx
-xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 xor     r8d, r8d	xor     ecx, ecx
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 xor     ecx, ecx	lea     rdi, [rel 0x401149]
-lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x401149]	call    qword [rel 0x403fd8]
 lea     rdi, [rel 0x404010]	lea     rax, [rel 0x404010]
 lea     rax, [rel 0x404010]	cmp     rax, rdi
-lea     rax, [rel 0x404010]	cmp     rax, rdi
 cmp     rax, rdi	je      0x4010b8
-cmp     rax, rdi	je      0x4010b8
-je      0x4010b8	retn
 je      0x4010b8	retn
 lea     rax, [rel 0x404010]	cmp     rax, rdi
 cmp     rax, rdi	je      0x4010b8
-cmp     rax, rdi	je      0x4010b8
-je      0x4010b8	retn
 je      0x4010b8	retn
 cmp     rax, rdi	je      0x4010b8
-je      0x4010b8	retn
 je      0x4010b8	retn
 je      0x4010b8	retn
 mov     rax, qword [rel 0x403fe0]	test    rax, rax
 test    rax, rax	je      0x4010b8
-test    rax, rax	je      0x4010b8
-je      0x4010b8	jmp     rax
 je      0x4010b8	jmp     rax
 test    rax, rax	je      0x4010b8
-je      0x4010b8	retn
-je      0x4010b8	retn
 je      0x4010b8	jmp     rax
+je      0x4010b8	retn
 lea     rdi, [rel 0x404010]	lea     rsi, [rel 0x404010]
 lea     rsi, [rel 0x404010]	sub     rsi, rdi
-lea     rsi, [rel 0x404010]	sub     rsi, rdi
-sub     rsi, rdi	mov     rax, rsi
 sub     rsi, rdi	mov     rax, rsi
 mov     rax, rsi	shr     rsi, 0x3f
-mov     rax, rsi	shr     rsi, 0x3f
-shr     rsi, 0x3f	sar     rax, 0x3
 shr     rsi, 0x3f	sar     rax, 0x3
 sar     rax, 0x3	add     rsi, rax
-sar     rax, 0x3	add     rsi, rax
-add     rsi, rax	sar     rsi, 0x1
 add     rsi, rax	sar     rsi, 0x1
 sar     rsi, 0x1	je      0x4010f8
-sar     rsi, 0x1	je      0x4010f8
-je      0x4010f8	retn
 je      0x4010f8	retn
 lea     rsi, [rel 0x404010]	sub     rsi, rdi
 sub     rsi, rdi	mov     rax, rsi
+mov     rax, rsi	shr     rsi, 0x3f
+shr     rsi, 0x3f	sar     rax, 0x3
+sar     rax, 0x3	add     rsi, rax
+add     rsi, rax	sar     rsi, 0x1
+sar     rsi, 0x1	je      0x4010f8
+je      0x4010f8	mov     rax, qword [rel 0x403ff0]
+mov     rax, qword [rel 0x403ff0]	test    rax, rax
+test    rax, rax	je      0x4010f8
+je      0x4010f8	retn
 sub     rsi, rdi	mov     rax, rsi
 mov     rax, rsi	shr     rsi, 0x3f
-mov     rax, rsi	shr     rsi, 0x3f
-shr     rsi, 0x3f	sar     rax, 0x3
 shr     rsi, 0x3f	sar     rax, 0x3
 sar     rax, 0x3	add     rsi, rax
-sar     rax, 0x3	add     rsi, rax
 add     rsi, rax	sar     rsi, 0x1
-add     rsi, rax	sar     rsi, 0x1
-sar     rsi, 0x1	je      0x4010f8
 sar     rsi, 0x1	je      0x4010f8
 je      0x4010f8	mov     rax, qword [rel 0x403ff0]
-je      0x4010f8	mov     rax, qword [rel 0x403ff0]
-mov     rax, qword [rel 0x403ff0]	test    rax, rax
 mov     rax, qword [rel 0x403ff0]	test    rax, rax
 test    rax, rax	je      0x4010f8
-test    rax, rax	je      0x4010f8
-je      0x4010f8	jmp     rax
-je      0x4010f8	jmp     rax
-sub     rsi, rdi	mov     rax, rsi
-mov     rax, rsi	shr     rsi, 0x3f
-mov     rax, rsi	shr     rsi, 0x3f
-shr     rsi, 0x3f	sar     rax, 0x3
-shr     rsi, 0x3f	sar     rax, 0x3
-sar     rax, 0x3	add     rsi, rax
-sar     rax, 0x3	add     rsi, rax
-add     rsi, rax	sar     rsi, 0x1
-add     rsi, rax	sar     rsi, 0x1
-sar     rsi, 0x1	je      0x4010f8
-sar     rsi, 0x1	je      0x4010f8
-je      0x4010f8	retn
 je      0x4010f8	retn
 mov     rax, rsi	shr     rsi, 0x3f
 shr     rsi, 0x3f	sar     rax, 0x3
-shr     rsi, 0x3f	sar     rax, 0x3
-sar     rax, 0x3	add     rsi, rax
 sar     rax, 0x3	add     rsi, rax
 add     rsi, rax	sar     rsi, 0x1
-add     rsi, rax	sar     rsi, 0x1
 sar     rsi, 0x1	je      0x4010f8
-sar     rsi, 0x1	je      0x4010f8
-je      0x4010f8	retn
 je      0x4010f8	retn
 shr     rsi, 0x3f	sar     rax, 0x3
 sar     rax, 0x3	add     rsi, rax
+add     rsi, rax	sar     rsi, 0x1
+sar     rsi, 0x1	je      0x4010f8
+je      0x4010f8	mov     rax, qword [rel 0x403ff0]
+mov     rax, qword [rel 0x403ff0]	test    rax, rax
+test    rax, rax	je      0x4010f8
+je      0x4010f8	jmp     rax
 sar     rax, 0x3	add     rsi, rax
 add     rsi, rax	sar     rsi, 0x1
-add     rsi, rax	sar     rsi, 0x1
-sar     rsi, 0x1	je      0x4010f8
 sar     rsi, 0x1	je      0x4010f8
 je      0x4010f8	mov     rax, qword [rel 0x403ff0]
-je      0x4010f8	mov     rax, qword [rel 0x403ff0]
-mov     rax, qword [rel 0x403ff0]	test    rax, rax
 mov     rax, qword [rel 0x403ff0]	test    rax, rax
 test    rax, rax	je      0x4010f8
-test    rax, rax	je      0x4010f8
-je      0x4010f8	retn
-je      0x4010f8	retn
-sar     rax, 0x3	add     rsi, rax
-add     rsi, rax	sar     rsi, 0x1
-add     rsi, rax	sar     rsi, 0x1
-sar     rsi, 0x1	je      0x4010f8
-sar     rsi, 0x1	je      0x4010f8
-je      0x4010f8	retn
 je      0x4010f8	retn
 add     rsi, rax	sar     rsi, 0x1
 sar     rsi, 0x1	je      0x4010f8
-sar     rsi, 0x1	je      0x4010f8
-je      0x4010f8	retn
 je      0x4010f8	retn
 sar     rsi, 0x1	je      0x4010f8
 je      0x4010f8	mov     rax, qword [rel 0x403ff0]
-je      0x4010f8	mov     rax, qword [rel 0x403ff0]
-mov     rax, qword [rel 0x403ff0]	test    rax, rax
 mov     rax, qword [rel 0x403ff0]	test    rax, rax
 test    rax, rax	je      0x4010f8
-test    rax, rax	je      0x4010f8
-je      0x4010f8	retn
 je      0x4010f8	retn
 je      0x4010f8	mov     rax, qword [rel 0x403ff0]
 mov     rax, qword [rel 0x403ff0]	test    rax, rax
-mov     rax, qword [rel 0x403ff0]	test    rax, rax
 test    rax, rax	je      0x4010f8
-test    rax, rax	je      0x4010f8
-je      0x4010f8	retn
 je      0x4010f8	retn
 mov     rax, qword [rel 0x403ff0]	test    rax, rax
-test    rax, rax	je      0x4010f8
-test    rax, rax	je      0x4010f8
-je      0x4010f8	retn
-je      0x4010f8	retn
 test    rax, rax	je      0x4010f8
 je      0x4010f8	jmp     rax
-je      0x4010f8	jmp     rax
-je      0x4010f8	jmp     rax
+test    rax, rax	je      0x4010f8
+je      0x4010f8	retn
+je      0x4010f8	retn
 endbr64	cmp     byte [rel 0x404010], 0x0
 cmp     byte [rel 0x404010], 0x0	jne     0x401138
+jne     0x401138	push    rbp
+push    rbp	cmp     qword [rel 0x403ff8], 0x0
+cmp     qword [rel 0x403ff8], 0x0	mov     rbp, rsp
+mov     rbp, rsp	je      0x401127
+je      0x401127	call    0x401090
+call    0x401090	mov     byte [rel 0x404010], 0x1
+mov     byte [rel 0x404010], 0x1	pop     rbp
+pop     rbp	retn
 cmp     byte [rel 0x404010], 0x0	jne     0x401138
-jne     0x401138	retn
-jne     0x401138	retn
-cmp     byte [rel 0x404010], 0x0	jne     0x401138
-jne     0x401138	retn
 jne     0x401138	retn
 jne     0x401138	push    rbp
 push    rbp	cmp     qword [rel 0x403ff8], 0x0
-push    rbp	cmp     qword [rel 0x403ff8], 0x0
-cmp     qword [rel 0x403ff8], 0x0	mov     rbp, rsp
 cmp     qword [rel 0x403ff8], 0x0	mov     rbp, rsp
 mov     rbp, rsp	je      0x401127
-mov     rbp, rsp	je      0x401127
-je      0x401127	mov     rdi, qword [rel 0x404008]
 je      0x401127	mov     rdi, qword [rel 0x404008]
 mov     rdi, qword [rel 0x404008]	call    0x401040
-mov     rdi, qword [rel 0x404008]	call    0x401040
-call    0x401040	call    0x401090
 call    0x401040	call    0x401090
 call    0x401090	mov     byte [rel 0x404010], 0x1
-call    0x401090	mov     byte [rel 0x404010], 0x1
 mov     byte [rel 0x404010], 0x1	pop     rbp
-mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 push    rbp	cmp     qword [rel 0x403ff8], 0x0
 cmp     qword [rel 0x403ff8], 0x0	mov     rbp, rsp
-cmp     qword [rel 0x403ff8], 0x0	mov     rbp, rsp
 mov     rbp, rsp	je      0x401127
-mov     rbp, rsp	je      0x401127
-je      0x401127	mov     rdi, qword [rel 0x404008]
-je      0x401127	mov     rdi, qword [rel 0x404008]
-mov     rdi, qword [rel 0x404008]	call    0x401040
-mov     rdi, qword [rel 0x404008]	call    0x401040
-call    0x401040	call    0x401090
-call    0x401040	call    0x401090
-call    0x401090	mov     byte [rel 0x404010], 0x1
+je      0x401127	call    0x401090
 call    0x401090	mov     byte [rel 0x404010], 0x1
 mov     byte [rel 0x404010], 0x1	pop     rbp
-mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 cmp     qword [rel 0x403ff8], 0x0	mov     rbp, rsp
 mov     rbp, rsp	je      0x401127
-mov     rbp, rsp	je      0x401127
-je      0x401127	call    0x401090
 je      0x401127	call    0x401090
 call    0x401090	mov     byte [rel 0x404010], 0x1
-call    0x401090	mov     byte [rel 0x404010], 0x1
 mov     byte [rel 0x404010], 0x1	pop     rbp
-mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 mov     rbp, rsp	je      0x401127
-je      0x401127	mov     rdi, qword [rel 0x404008]
-je      0x401127	mov     rdi, qword [rel 0x404008]
-mov     rdi, qword [rel 0x404008]	call    0x401040
-mov     rdi, qword [rel 0x404008]	call    0x401040
-call    0x401040	call    0x401090
-call    0x401040	call    0x401090
+je      0x401127	call    0x401090
 call    0x401090	mov     byte [rel 0x404010], 0x1
-call    0x401090	mov     byte [rel 0x404010], 0x1
-mov     byte [rel 0x404010], 0x1	pop     rbp
 mov     byte [rel 0x404010], 0x1	pop     rbp
 pop     rbp	retn
-pop     rbp	retn
-je      0x401127	mov     rdi, qword [rel 0x404008]
-mov     rdi, qword [rel 0x404008]	call    0x401040
-mov     rdi, qword [rel 0x404008]	call    0x401040
-call    0x401040	call    0x401090
-call    0x401040	call    0x401090
-call    0x401090	mov     byte [rel 0x404010], 0x1
+je      0x401127	call    0x401090
 call    0x401090	mov     byte [rel 0x404010], 0x1
 mov     byte [rel 0x404010], 0x1	pop     rbp
-mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 call    0x401090	mov     byte [rel 0x404010], 0x1
 mov     byte [rel 0x404010], 0x1	pop     rbp
-mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 mov     rdi, qword [rel 0x404008]	call    0x401040
 call    0x401040	call    0x401090
-call    0x401040	call    0x401090
-call    0x401090	mov     byte [rel 0x404010], 0x1
 call    0x401090	mov     byte [rel 0x404010], 0x1
 mov     byte [rel 0x404010], 0x1	pop     rbp
-mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 pop     rbp	retn
 call    0x401040	call    0x401090
 call    0x401090	mov     byte [rel 0x404010], 0x1
-call    0x401090	mov     byte [rel 0x404010], 0x1
 mov     byte [rel 0x404010], 0x1	pop     rbp
-mov     byte [rel 0x404010], 0x1	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 endbr64	push    rbp
 push    rbp	mov     rbp, rsp
-push    rbp	mov     rbp, rsp
-mov     rbp, rsp	lea     rax, [rel 0x402004]
 mov     rbp, rsp	lea     rax, [rel 0x402004]
 lea     rax, [rel 0x402004]	mov     rdi, rax
-lea     rax, [rel 0x402004]	mov     rdi, rax
-mov     rdi, rax	call    0x401050
 mov     rdi, rax	call    0x401050
 call    0x401050	mov     eax, 0x0
-call    0x401050	mov     eax, 0x0
 mov     eax, 0x0	pop     rbp
-mov     eax, 0x0	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 push    rbp	mov     rbp, rsp
 mov     rbp, rsp	lea     rax, [rel 0x402004]
-mov     rbp, rsp	lea     rax, [rel 0x402004]
-lea     rax, [rel 0x402004]	mov     rdi, rax
 lea     rax, [rel 0x402004]	mov     rdi, rax
 mov     rdi, rax	call    0x401050
-mov     rdi, rax	call    0x401050
-call    0x401050	mov     eax, 0x0
 call    0x401050	mov     eax, 0x0
 mov     eax, 0x0	pop     rbp
-mov     eax, 0x0	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 mov     rbp, rsp	lea     rax, [rel 0x402004]
 lea     rax, [rel 0x402004]	mov     rdi, rax
-lea     rax, [rel 0x402004]	mov     rdi, rax
-mov     rdi, rax	call    0x401050
 mov     rdi, rax	call    0x401050
 call    0x401050	mov     eax, 0x0
-call    0x401050	mov     eax, 0x0
 mov     eax, 0x0	pop     rbp
-mov     eax, 0x0	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 lea     rax, [rel 0x402004]	mov     rdi, rax
 mov     rdi, rax	call    0x401050
-mov     rdi, rax	call    0x401050
-call    0x401050	mov     eax, 0x0
 call    0x401050	mov     eax, 0x0
 mov     eax, 0x0	pop     rbp
-mov     eax, 0x0	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 mov     rdi, rax	call    0x401050
 call    0x401050	mov     eax, 0x0
-call    0x401050	mov     eax, 0x0
 mov     eax, 0x0	pop     rbp
-mov     eax, 0x0	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 call    0x401050	mov     eax, 0x0
 mov     eax, 0x0	pop     rbp
-mov     eax, 0x0	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 mov     eax, 0x0	pop     rbp
-pop     rbp	retn
 pop     rbp	retn
 pop     rbp	retn
 endbr64	sub     rsp, 0x8
 sub     rsp, 0x8	add     rsp, 0x8
-sub     rsp, 0x8	add     rsp, 0x8
-add     rsp, 0x8	retn
 add     rsp, 0x8	retn
 sub     rsp, 0x8	add     rsp, 0x8
-add     rsp, 0x8	retn
 add     rsp, 0x8	retn
 add     rsp, 0x8	retn

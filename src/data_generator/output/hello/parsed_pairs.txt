@@ -1,484 +1,281 @@
 endbr64	sub  rsp   0x8 
 sub  rsp   0x8 	mov  rax   qword  [ rel   symbol ]
-sub  rsp   0x8 	mov  rax   qword  [ rel   symbol ]
-mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	add  rsp   0x8 
-je  address 	add  rsp   0x8 
-add  rsp   0x8 	retn
+je  address 	call  rax 
+call  rax 	add  rsp   0x8 
 add  rsp   0x8 	retn
 sub  rsp   0x8 	mov  rax   qword  [ rel   symbol ]
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
-mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	call  rax 
-je  address 	call  rax 
-call  rax 	add  rsp   0x8 
-call  rax 	add  rsp   0x8 
-add  rsp   0x8 	retn
+je  address 	add  rsp   0x8 
 add  rsp   0x8 	retn
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	add  rsp   0x8 
-je  address 	add  rsp   0x8 
-add  rsp   0x8 	retn
+je  address 	call  rax 
+call  rax 	add  rsp   0x8 
 add  rsp   0x8 	retn
 test  rax   rax 	je  address 
 je  address 	add  rsp   0x8 
-je  address 	add  rsp   0x8 
-add  rsp   0x8 	retn
 add  rsp   0x8 	retn
 je  address 	call  rax 
 call  rax 	add  rsp   0x8 
-call  rax 	add  rsp   0x8 
-add  rsp   0x8 	retn
 add  rsp   0x8 	retn
 add  rsp   0x8 	retn
 call  rax 	add  rsp   0x8 
-add  rsp   0x8 	retn
 add  rsp   0x8 	retn
 endbr64	push  0x0 
 push  0x0 	jmp  address 
 push  0x0 	jmp  address 
-push  0x0 	jmp  address 
 endbr64	xor  ebp   ebp 
 xor  ebp   ebp 	mov  r9   rdx 
-xor  ebp   ebp 	mov  r9   rdx 
-mov  r9   rdx 	pop  rsi 
 mov  r9   rdx 	pop  rsi 
 pop  rsi 	mov  rdx   rsp 
-pop  rsi 	mov  rdx   rsp 
-mov  rdx   rsp 	and  rsp   address 
 mov  rdx   rsp 	and  rsp   address 
 and  rsp   address 	push  rax 
-and  rsp   address 	push  rax 
-push  rax 	push  rsp 
 push  rax 	push  rsp 
 push  rsp 	xor  r8d   r8d 
-push  rsp 	xor  r8d   r8d 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 xor  ebp   ebp 	mov  r9   rdx 
 mov  r9   rdx 	pop  rsi 
-mov  r9   rdx 	pop  rsi 
-pop  rsi 	mov  rdx   rsp 
 pop  rsi 	mov  rdx   rsp 
 mov  rdx   rsp 	and  rsp   address 
-mov  rdx   rsp 	and  rsp   address 
-and  rsp   address 	push  rax 
 and  rsp   address 	push  rax 
 push  rax 	push  rsp 
-push  rax 	push  rsp 
-push  rsp 	xor  r8d   r8d 
 push  rsp 	xor  r8d   r8d 
 xor  r8d   r8d 	xor  ecx   ecx 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 mov  r9   rdx 	pop  rsi 
 pop  rsi 	mov  rdx   rsp 
-pop  rsi 	mov  rdx   rsp 
-mov  rdx   rsp 	and  rsp   address 
 mov  rdx   rsp 	and  rsp   address 
 and  rsp   address 	push  rax 
-and  rsp   address 	push  rax 
-push  rax 	push  rsp 
 push  rax 	push  rsp 
 push  rsp 	xor  r8d   r8d 
-push  rsp 	xor  r8d   r8d 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 pop  rsi 	mov  rdx   rsp 
 mov  rdx   rsp 	and  rsp   address 
-mov  rdx   rsp 	and  rsp   address 
-and  rsp   address 	push  rax 
 and  rsp   address 	push  rax 
 push  rax 	push  rsp 
-push  rax 	push  rsp 
-push  rsp 	xor  r8d   r8d 
 push  rsp 	xor  r8d   r8d 
 xor  r8d   r8d 	xor  ecx   ecx 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 mov  rdx   rsp 	and  rsp   address 
 and  rsp   address 	push  rax 
-and  rsp   address 	push  rax 
-push  rax 	push  rsp 
 push  rax 	push  rsp 
 push  rsp 	xor  r8d   r8d 
-push  rsp 	xor  r8d   r8d 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 and  rsp   address 	push  rax 
 push  rax 	push  rsp 
-push  rax 	push  rsp 
-push  rsp 	xor  r8d   r8d 
 push  rsp 	xor  r8d   r8d 
 xor  r8d   r8d 	xor  ecx   ecx 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 push  rax 	push  rsp 
 push  rsp 	xor  r8d   r8d 
-push  rsp 	xor  r8d   r8d 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 push  rsp 	xor  r8d   r8d 
 xor  r8d   r8d 	xor  ecx   ecx 
-xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 xor  r8d   r8d 	xor  ecx   ecx 
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 xor  ecx   ecx 	lea  rdi  [ rel   symbol ]
-lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	call  qword  [ rel   symbol ]
 lea  rdi  [ rel   symbol ]	lea  rax  [ rel   symbol ]
 lea  rax  [ rel   symbol ]	cmp  rax   rdi 
-lea  rax  [ rel   symbol ]	cmp  rax   rdi 
 cmp  rax   rdi 	je  address 
-cmp  rax   rdi 	je  address 
-je  address 	retn
 je  address 	retn
 lea  rax  [ rel   symbol ]	cmp  rax   rdi 
 cmp  rax   rdi 	je  address 
-cmp  rax   rdi 	je  address 
-je  address 	retn
 je  address 	retn
 cmp  rax   rdi 	je  address 
-je  address 	retn
 je  address 	retn
 je  address 	retn
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	jmp  rax 
 je  address 	jmp  rax 
 test  rax   rax 	je  address 
-je  address 	retn
-je  address 	retn
 je  address 	jmp  rax 
+je  address 	retn
 lea  rdi  [ rel   symbol ]	lea  rsi  [ rel   symbol ]
 lea  rsi  [ rel   symbol ]	sub  rsi   rdi 
-lea  rsi  [ rel   symbol ]	sub  rsi   rdi 
-sub  rsi   rdi 	mov  rax   rsi 
 sub  rsi   rdi 	mov  rax   rsi 
 mov  rax   rsi 	shr  rsi   0x3f 
-mov  rax   rsi 	shr  rsi   0x3f 
-shr  rsi   0x3f 	sar  rax   0x3 
 shr  rsi   0x3f 	sar  rax   0x3 
 sar  rax   0x3 	add  rsi   rax 
-sar  rax   0x3 	add  rsi   rax 
-add  rsi   rax 	sar  rsi   0x1 
 add  rsi   rax 	sar  rsi   0x1 
 sar  rsi   0x1 	je  address 
-sar  rsi   0x1 	je  address 
-je  address 	retn
 je  address 	retn
 lea  rsi  [ rel   symbol ]	sub  rsi   rdi 
 sub  rsi   rdi 	mov  rax   rsi 
+mov  rax   rsi 	shr  rsi   0x3f 
+shr  rsi   0x3f 	sar  rax   0x3 
+sar  rax   0x3 	add  rsi   rax 
+add  rsi   rax 	sar  rsi   0x1 
+sar  rsi   0x1 	je  address 
+je  address 	mov  rax   qword  [ rel   symbol ]
+mov  rax   qword  [ rel   symbol ]	test  rax   rax 
+test  rax   rax 	je  address 
+je  address 	retn
 sub  rsi   rdi 	mov  rax   rsi 
 mov  rax   rsi 	shr  rsi   0x3f 
-mov  rax   rsi 	shr  rsi   0x3f 
-shr  rsi   0x3f 	sar  rax   0x3 
 shr  rsi   0x3f 	sar  rax   0x3 
 sar  rax   0x3 	add  rsi   rax 
-sar  rax   0x3 	add  rsi   rax 
 add  rsi   rax 	sar  rsi   0x1 
-add  rsi   rax 	sar  rsi   0x1 
-sar  rsi   0x1 	je  address 
 sar  rsi   0x1 	je  address 
 je  address 	mov  rax   qword  [ rel   symbol ]
-je  address 	mov  rax   qword  [ rel   symbol ]
-mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	jmp  rax 
-je  address 	jmp  rax 
-sub  rsi   rdi 	mov  rax   rsi 
-mov  rax   rsi 	shr  rsi   0x3f 
-mov  rax   rsi 	shr  rsi   0x3f 
-shr  rsi   0x3f 	sar  rax   0x3 
-shr  rsi   0x3f 	sar  rax   0x3 
-sar  rax   0x3 	add  rsi   rax 
-sar  rax   0x3 	add  rsi   rax 
-add  rsi   rax 	sar  rsi   0x1 
-add  rsi   rax 	sar  rsi   0x1 
-sar  rsi   0x1 	je  address 
-sar  rsi   0x1 	je  address 
-je  address 	retn
 je  address 	retn
 mov  rax   rsi 	shr  rsi   0x3f 
 shr  rsi   0x3f 	sar  rax   0x3 
-shr  rsi   0x3f 	sar  rax   0x3 
-sar  rax   0x3 	add  rsi   rax 
 sar  rax   0x3 	add  rsi   rax 
 add  rsi   rax 	sar  rsi   0x1 
-add  rsi   rax 	sar  rsi   0x1 
 sar  rsi   0x1 	je  address 
-sar  rsi   0x1 	je  address 
-je  address 	retn
 je  address 	retn
 shr  rsi   0x3f 	sar  rax   0x3 
 sar  rax   0x3 	add  rsi   rax 
+add  rsi   rax 	sar  rsi   0x1 
+sar  rsi   0x1 	je  address 
+je  address 	mov  rax   qword  [ rel   symbol ]
+mov  rax   qword  [ rel   symbol ]	test  rax   rax 
+test  rax   rax 	je  address 
+je  address 	jmp  rax 
 sar  rax   0x3 	add  rsi   rax 
 add  rsi   rax 	sar  rsi   0x1 
-add  rsi   rax 	sar  rsi   0x1 
-sar  rsi   0x1 	je  address 
 sar  rsi   0x1 	je  address 
 je  address 	mov  rax   qword  [ rel   symbol ]
-je  address 	mov  rax   qword  [ rel   symbol ]
-mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	retn
-je  address 	retn
-sar  rax   0x3 	add  rsi   rax 
-add  rsi   rax 	sar  rsi   0x1 
-add  rsi   rax 	sar  rsi   0x1 
-sar  rsi   0x1 	je  address 
-sar  rsi   0x1 	je  address 
-je  address 	retn
 je  address 	retn
 add  rsi   rax 	sar  rsi   0x1 
 sar  rsi   0x1 	je  address 
-sar  rsi   0x1 	je  address 
-je  address 	retn
 je  address 	retn
 sar  rsi   0x1 	je  address 
 je  address 	mov  rax   qword  [ rel   symbol ]
-je  address 	mov  rax   qword  [ rel   symbol ]
-mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	retn
 je  address 	retn
 je  address 	mov  rax   qword  [ rel   symbol ]
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
-mov  rax   qword  [ rel   symbol ]	test  rax   rax 
 test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	retn
 je  address 	retn
 mov  rax   qword  [ rel   symbol ]	test  rax   rax 
-test  rax   rax 	je  address 
-test  rax   rax 	je  address 
-je  address 	retn
-je  address 	retn
 test  rax   rax 	je  address 
 je  address 	jmp  rax 
-je  address 	jmp  rax 
-je  address 	jmp  rax 
+test  rax   rax 	je  address 
+je  address 	retn
+je  address 	retn
 endbr64	cmp  byte  [ rel   symbol ]  0x0 
 cmp  byte  [ rel   symbol ]  0x0 	jne  address 
+jne  address 	push  rbp 
+push  rbp 	cmp  qword  [ rel   symbol ]  0x0 
+cmp  qword  [ rel   symbol ]  0x0 	mov  rbp   rsp 
+mov  rbp   rsp 	je  address 
+je  address 	call  symbol 
+call  symbol 	mov  byte  [ rel   symbol ]  0x1 
+mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
+pop  rbp 	retn
 cmp  byte  [ rel   symbol ]  0x0 	jne  address 
-jne  address 	retn
-jne  address 	retn
-cmp  byte  [ rel   symbol ]  0x0 	jne  address 
-jne  address 	retn
 jne  address 	retn
 jne  address 	push  rbp 
 push  rbp 	cmp  qword  [ rel   symbol ]  0x0 
-push  rbp 	cmp  qword  [ rel   symbol ]  0x0 
-cmp  qword  [ rel   symbol ]  0x0 	mov  rbp   rsp 
 cmp  qword  [ rel   symbol ]  0x0 	mov  rbp   rsp 
 mov  rbp   rsp 	je  address 
-mov  rbp   rsp 	je  address 
-je  address 	mov  rdi   qword  [ rel   symbol ]
 je  address 	mov  rdi   qword  [ rel   symbol ]
 mov  rdi   qword  [ rel   symbol ]	call  symbol 
-mov  rdi   qword  [ rel   symbol ]	call  symbol 
-call  symbol 	call  symbol 
 call  symbol 	call  symbol 
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
-call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 push  rbp 	cmp  qword  [ rel   symbol ]  0x0 
 cmp  qword  [ rel   symbol ]  0x0 	mov  rbp   rsp 
-cmp  qword  [ rel   symbol ]  0x0 	mov  rbp   rsp 
 mov  rbp   rsp 	je  address 
-mov  rbp   rsp 	je  address 
-je  address 	mov  rdi   qword  [ rel   symbol ]
-je  address 	mov  rdi   qword  [ rel   symbol ]
-mov  rdi   qword  [ rel   symbol ]	call  symbol 
-mov  rdi   qword  [ rel   symbol ]	call  symbol 
-call  symbol 	call  symbol 
-call  symbol 	call  symbol 
-call  symbol 	mov  byte  [ rel   symbol ]  0x1 
+je  address 	call  symbol 
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 cmp  qword  [ rel   symbol ]  0x0 	mov  rbp   rsp 
 mov  rbp   rsp 	je  address 
-mov  rbp   rsp 	je  address 
-je  address 	call  symbol 
 je  address 	call  symbol 
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
-call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 mov  rbp   rsp 	je  address 
-je  address 	mov  rdi   qword  [ rel   symbol ]
-je  address 	mov  rdi   qword  [ rel   symbol ]
-mov  rdi   qword  [ rel   symbol ]	call  symbol 
-mov  rdi   qword  [ rel   symbol ]	call  symbol 
-call  symbol 	call  symbol 
-call  symbol 	call  symbol 
+je  address 	call  symbol 
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
-call  symbol 	mov  byte  [ rel   symbol ]  0x1 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
 pop  rbp 	retn
-pop  rbp 	retn
-je  address 	mov  rdi   qword  [ rel   symbol ]
-mov  rdi   qword  [ rel   symbol ]	call  symbol 
-mov  rdi   qword  [ rel   symbol ]	call  symbol 
-call  symbol 	call  symbol 
-call  symbol 	call  symbol 
-call  symbol 	mov  byte  [ rel   symbol ]  0x1 
+je  address 	call  symbol 
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 mov  rdi   qword  [ rel   symbol ]	call  symbol 
 call  symbol 	call  symbol 
-call  symbol 	call  symbol 
-call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 pop  rbp 	retn
 call  symbol 	call  symbol 
 call  symbol 	mov  byte  [ rel   symbol ]  0x1 
-call  symbol 	mov  byte  [ rel   symbol ]  0x1 
 mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-mov  byte  [ rel   symbol ]  0x1 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 endbr64	push  rbp 
 push  rbp 	mov  rbp   rsp 
-push  rbp 	mov  rbp   rsp 
-mov  rbp   rsp 	lea  rax  [ rel   string ]
 mov  rbp   rsp 	lea  rax  [ rel   string ]
 lea  rax  [ rel   string ]	mov  rdi   rax 
-lea  rax  [ rel   string ]	mov  rdi   rax 
-mov  rdi   rax 	call  symbol 
 mov  rdi   rax 	call  symbol 
 call  symbol 	mov  eax   0x0 
-call  symbol 	mov  eax   0x0 
 mov  eax   0x0 	pop  rbp 
-mov  eax   0x0 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 push  rbp 	mov  rbp   rsp 
 mov  rbp   rsp 	lea  rax  [ rel   string ]
-mov  rbp   rsp 	lea  rax  [ rel   string ]
-lea  rax  [ rel   string ]	mov  rdi   rax 
 lea  rax  [ rel   string ]	mov  rdi   rax 
 mov  rdi   rax 	call  symbol 
-mov  rdi   rax 	call  symbol 
-call  symbol 	mov  eax   0x0 
 call  symbol 	mov  eax   0x0 
 mov  eax   0x0 	pop  rbp 
-mov  eax   0x0 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 mov  rbp   rsp 	lea  rax  [ rel   string ]
 lea  rax  [ rel   string ]	mov  rdi   rax 
-lea  rax  [ rel   string ]	mov  rdi   rax 
-mov  rdi   rax 	call  symbol 
 mov  rdi   rax 	call  symbol 
 call  symbol 	mov  eax   0x0 
-call  symbol 	mov  eax   0x0 
 mov  eax   0x0 	pop  rbp 
-mov  eax   0x0 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 lea  rax  [ rel   string ]	mov  rdi   rax 
 mov  rdi   rax 	call  symbol 
-mov  rdi   rax 	call  symbol 
-call  symbol 	mov  eax   0x0 
 call  symbol 	mov  eax   0x0 
 mov  eax   0x0 	pop  rbp 
-mov  eax   0x0 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 mov  rdi   rax 	call  symbol 
 call  symbol 	mov  eax   0x0 
-call  symbol 	mov  eax   0x0 
 mov  eax   0x0 	pop  rbp 
-mov  eax   0x0 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 call  symbol 	mov  eax   0x0 
 mov  eax   0x0 	pop  rbp 
-mov  eax   0x0 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 mov  eax   0x0 	pop  rbp 
-pop  rbp 	retn
 pop  rbp 	retn
 pop  rbp 	retn
 endbr64	sub  rsp   0x8 
 sub  rsp   0x8 	add  rsp   0x8 
-sub  rsp   0x8 	add  rsp   0x8 
-add  rsp   0x8 	retn
 add  rsp   0x8 	retn
 sub  rsp   0x8 	add  rsp   0x8 
-add  rsp   0x8 	retn
 add  rsp   0x8 	retn
 add  rsp   0x8 	retn

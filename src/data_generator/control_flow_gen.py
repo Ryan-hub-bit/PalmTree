@@ -9,11 +9,11 @@ from pathlib import Path
 # ---------- regex ----------
 HEX_RE = re.compile(r'0x[0-9a-fA-F]+')
 
-# ---------- address-like heuristic (matches your parser rule) ----------
+# ---------- address-like heuristic ----------
 def is_addr_like_str(s: str) -> bool:
     return s.startswith("0x") and len(s) >= 6
 
-# ---------- your original parser (kept) ----------
+# ---------- instruction parser ----------
 def parse_instruction(ins, symbol_map, string_map):
     ins = re.sub(r'\s+', ', ', ins, 1)
     parts = ins.split(', ')
@@ -40,11 +40,9 @@ def parse_instruction(ins, symbol_map, string_map):
 
 # ---------- token helpers ----------
 def tokenize_raw(s: str):
-    """Simple whitespace tokenizer (for length alignment)."""
     return s.split()
 
 def tokenize_with_spans(s: str):
-    """Tokenize while keeping (start,end) spans in original string."""
     toks = []
     i = 0
     n = len(s)
@@ -58,13 +56,10 @@ def tokenize_with_spans(s: str):
             j += 1
         toks.append((s[i:j], i, j))
         i = j
-    return toks  # [(token, start, end)]
+    return toks
 
 def per_token_echo_hex_or_zero(raw_text: str):
-    """
-    File #4: For every token, if it overlaps a hex literal AND passes the address heuristic
-             (0x.... with len>=6), output that hex; else '0'.
-    """
+    """File #4: echo the hex for address-like tokens (0x..., len>=6), else '0'"""
     toks = tokenize_with_spans(raw_text)
     if not toks:
         return []
@@ -80,11 +75,12 @@ def per_token_echo_hex_or_zero(raw_text: str):
                 break
     return out
 
-def per_token_sid_labels_all_hex(raw_text: str, instr_to_sid: dict):
+def per_token_addr_seqid(raw_text: str, addr_to_seqid: dict[int, list[int]]):
     """
-    File #5: For every token, if it overlaps a hex literal AND passes the address heuristic,
-             and that hex equals an instruction address we assigned a sentence ID to,
-             output the SID; else '-1'.
+    File #5: for every token:
+      - not address-like -> '-1'
+      - address-like -> list of all line indices where this address appears
+        as a sentence address; if none, '-2'
     """
     toks = tokenize_with_spans(raw_text)
     if not toks:
@@ -98,15 +94,19 @@ def per_token_sid_labels_all_hex(raw_text: str, instr_to_sid: dict):
             addr = int(lit, 16)
         except ValueError:
             continue
-        sid = instr_to_sid.get(addr, -1)
+        seqids = addr_to_seqid.get(addr)
+        if seqids:
+            val = "[" + ",".join(str(x) for x in sorted(set(seqids))) + "]"
+        else:
+            val = "-2"
         hs, he = m.span()
         for idx, (_tok, ts, te) in enumerate(toks):
             if not (te <= hs or ts >= he):
-                out[idx] = str(sid)
+                out[idx] = val
                 break
     return out
 
-# ---------- CFG sequence sampling (kept) ----------
+# ---------- CFG random walk ----------
 def random_walk(g, length, node_has_text):
     sequences = []
     for n in g:
@@ -143,20 +143,18 @@ def process_file(f, window_size):
     p1 = out_dir / "raw_pairs.txt"
     p2 = out_dir / "parsed_pairs.txt"
     p3 = out_dir / "instr_addr_per_token.txt"
-    p4 = out_dir / "addr_token_per_token.txt"           # every addr-like token → hex, else 0
-    p5 = out_dir / "addr_sent_id_per_token.txt"         # every addr-like token → SID, else -1
-    pmap = out_dir / "instruction_index_map.tsv"        # instruction addr → sentence id
+    p4 = out_dir / "addr_token_per_token.txt"
+    p5 = out_dir / "addr_sent_seqid_per_token.txt"
 
-    print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p3}\n 4) {p4}\n 5) {p5}\n map) {pmap}")
+    print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p3}\n 4) {p4}\n 5) {p5}")
 
     # parser maps
     symbol_map = {sym.address: sym.full_name for sym in bv.get_symbols()}
     string_map = {s.start: s.value for s in bv.get_strings()}
 
-    # build per-function graphs and collect instruction addresses
+    # build per-function graphs
     function_graphs = {}
-    all_instr_addrs = set()
-
+    node_meta = {}
     for func in bv.functions:
         G = nx.DiGraph()
         for block in func:
@@ -164,8 +162,16 @@ def process_file(f, window_size):
             predecessor = curr
             for inst in block:
                 raw = bv.get_disassembly(curr)
-                G.add_node(curr, text=raw)   # store raw at instruction address
-                all_instr_addrs.add(curr)
+                parsed = parse_instruction(raw, symbol_map, string_map)
+                raw_tok_count = len(tokenize_raw(raw))
+                addr_tok = per_token_echo_hex_or_zero(raw)
+                G.add_node(curr, text=raw)
+                node_meta[curr] = {
+                    "raw": raw,
+                    "parsed": parsed,
+                    "raw_tok_count": raw_tok_count,
+                    "addr_tok": addr_tok,
+                }
                 if curr != block.start:
                     G.add_edge(predecessor, curr)
                 predecessor = curr
@@ -175,81 +181,62 @@ def process_file(f, window_size):
         if len(G.nodes) > 2:
             function_graphs[func.name] = G
 
-    # assign per-binary sentence ids to *instruction addresses*
-    instr_addrs_sorted = sorted(all_instr_addrs)
-    instr_to_sid = {addr: i for i, addr in enumerate(instr_addrs_sorted)}
+    # -------- collect forward pairs --------
+    pairs = []  # list of (u_addr, v_addr)
+    for name, graph in function_graphs.items():
+        has_text = lambda a: 'text' in graph.nodes[a]
+        sequences = random_walk(graph, 40, has_text)
+        for seq in sequences:
+            for i in range(1, window_size + 1):
+                for idx in range(0, len(seq) - i):
+                    u, v = seq[idx], seq[idx + i]
+                    pairs.append((u, v))
 
-    # save the mapping (instr addr -> sentence id)
-    with open(pmap, "w", encoding="utf-8") as wm:
-        wm.write("# instruction_addr\tsentence_id\n")
-        for addr in instr_addrs_sorted:
-            wm.write(f"0x{addr:x}\t{instr_to_sid[addr]}\n")
+    # -------- FIRST PASS: build addr -> list of all line indices --------
+    addr_to_seqid = {}  # address -> list of line indices
+    for line_idx, (u, v) in enumerate(pairs):
+        addr_to_seqid.setdefault(u, []).append(line_idx)
+        addr_to_seqid.setdefault(v, []).append(line_idx)
 
-    # precompute node meta
-    node_meta = {}
-    for G in function_graphs.values():
-        for addr in G.nodes:
-            raw = G.nodes[addr]['text']
-            parsed = parse_instruction(raw, symbol_map, string_map)
-            raw_tok_count = len(tokenize_raw(raw))
-            addr_tok = per_token_echo_hex_or_zero(raw)                    # file #4
-            sid_tok  = per_token_sid_labels_all_hex(raw, instr_to_sid)    # file #5
-            node_meta[addr] = {
-                "raw": raw,
-                "parsed": parsed,
-                "raw_tok_count": raw_tok_count,
-                "addr_tok": addr_tok,
-                "sid_tok": sid_tok,
-            }
-
-    # emit files
+    # -------- SECOND PASS: write outputs --------
     with open(p1, "w", encoding="utf-8") as w_raw, \
          open(p2, "w", encoding="utf-8") as w_parsed, \
          open(p3, "w", encoding="utf-8") as w_instr, \
          open(p4, "w", encoding="utf-8") as w_addr_tok, \
-         open(p5, "w", encoding="utf-8") as w_sid_tok:
+         open(p5, "w", encoding="utf-8") as w_addr_seqid_tok:
 
-        for name, graph in function_graphs.items():
-            has_text = lambda a: 'text' in graph.nodes[a]
-            sequences = random_walk(graph, 40, has_text)
+        for line_idx, (u, v) in enumerate(pairs):
+            mu, mv = node_meta[u], node_meta[v]
 
-            for seq in sequences:
-                for idx in range(len(seq)):
-                    for i in range(1, window_size + 1):
-                        pairs = []
-                        if idx - i > 0:
-                            pairs.append((seq[idx - i], seq[idx]))
-                        if idx + i < len(seq):
-                            pairs.append((seq[idx], seq[idx + i]))
-                        for u, v in pairs:
-                            mu, mv = node_meta[u], node_meta[v]
+            # 1) raw pairs
+            w_raw.write(f"{mu['raw']}\t{mv['raw']}\n")
 
-                            # 1) raw pairs
-                            w_raw.write(f"{mu['raw']}\t{mv['raw']}\n")
+            # 2) parsed pairs
+            w_parsed.write(f"{mu['parsed']}\t{mv['parsed']}\n")
 
-                            # 2) parsed pairs
-                            w_parsed.write(f"{mu['parsed']}\t{mv['parsed']}\n")
+            # 3) instr_addr_per_token.txt (repeat each sentence's own instr address)
+            left_addr  = f"0x{u:x}"
+            right_addr = f"0x{v:x}"
+            left_rep   = " ".join([left_addr]  * max(1, mu["raw_tok_count"]))
+            right_rep  = " ".join([right_addr] * max(1, mv["raw_tok_count"]))
+            w_instr.write(f"{left_rep}\t{right_rep}\n")
 
-                            # 3) instruction address per token (repeat node address count)
-                            left_addr  = f"0x{u:x}"
-                            right_addr = f"0x{v:x}"
-                            left_rep   = " ".join([left_addr]  * max(1, mu["raw_tok_count"]))
-                            right_rep  = " ".join([right_addr] * max(1, mv["raw_tok_count"]))
-                            w_instr.write(f"{left_rep}\t{right_rep}\n")
+            # 4) addr_token_per_token.txt
+            w_addr_tok.write(
+                f"{' '.join(mu['addr_tok'])}\t{' '.join(mv['addr_tok'])}\n"
+            )
 
-                            # 4) for every addr-like token, echo the hex; else '0'
-                            w_addr_tok.write(
-                                f"{' '.join(mu['addr_tok'])}\t{' '.join(mv['addr_tok'])}\n"
-                            )
-
-                            # 5) for every addr-like token, output its sentence ID; else '-1'
-                            w_sid_tok.write(
-                                f"{' '.join(mu['sid_tok'])}\t{' '.join(mv['sid_tok'])}\n"
-                            )
+            # 5) addr_sent_seqid_per_token.txt (list all line indices where addr appears)
+            left_seqid_tokens  = per_token_addr_seqid(mu['raw'], addr_to_seqid)
+            right_seqid_tokens = per_token_addr_seqid(mv['raw'], addr_to_seqid)
+            w_addr_seqid_tok.write(
+                f"{' '.join(left_seqid_tokens)}\t{' '.join(right_seqid_tokens)}\n"
+            )
 
     print(f"[DONE] {out_dir}")
 
 def main():
+    random.seed(0)
     bin_folder = '/home/louie/PalmTree/src/data_generator/testbin'
     window_size = 1
     file_lst = []
