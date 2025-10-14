@@ -131,12 +131,12 @@ def random_walk(g, length, node_has_text):
     return sequences
 
 # ---------- per-binary processing ----------
-def process_file(f, window_size):
+def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun"):
     print(f"[INFO] Processing: %s" % f)
     bv = load(f)
 
     binary_name = Path(f).stem
-    out_dir = Path("output") / binary_name
+    out_dir = Path(output_root) / binary_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # outputs
