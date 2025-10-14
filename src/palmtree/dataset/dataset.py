@@ -6,7 +6,7 @@ import pickle as pkl
 
 
 class BERTDataset(Dataset):
-    def __init__(self, dfg_corpus_path, cfg_corpus_path, vocab, seq_len, encoding="utf-8", corpus_lines=None, on_memory=True):
+    def __init__(self, dfg_corpus_path, cfg_corpus_path, dfg_src_path, cfg_src_path, dfg_tgt_path, cfg_tgt_path, vocab, seq_len, encoding="utf-8", corpus_lines=None, on_memory=True):
         self.vocab = vocab
         self.seq_len = seq_len
 
@@ -16,6 +16,10 @@ class BERTDataset(Dataset):
         self.corpus_lines = corpus_lines
         self.dfg_corpus_path = dfg_corpus_path
         self.cfg_corpus_path = cfg_corpus_path
+        self.dfg_src_path = dfg_src_path
+        self.cfg_src_path = cfg_src_path
+        self.dfg_tgt_path = dfg_tgt_path
+        self.cfg_tgt_path = cfg_tgt_path
         self.encoding = encoding
 
         # load DFG sequences 
@@ -43,22 +47,70 @@ class BERTDataset(Dataset):
                 if self.corpus_lines > len(self.cfg_lines):    
                     self.corpus_lines = len(self.cfg_lines)
         
+        with  open(cfg_src_path, "r", encoding=encoding) as f:
+            if self.cfg_src_path is None and not on_memory:
+                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines):
+                    self.corpus_lines += 1
+
+            if on_memory:
+                self.cfg_src_lines = [line[:-1].split("\t")
+                              for line in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines)]
+                
+                if self.corpus_lines > len(self.cfg_lines):    
+                    self.corpus_lines = len(self.cfg_lines)
+            
+        with  open(dfg_src_path, "r", encoding=encoding) as f:
+            if self.dfg_src_path is None and not on_memory:
+                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines):
+                    self.corpus_lines += 1
+
+            if on_memory:
+                self.dfg_src_lines = [line[:-1].split("\t")
+                              for line in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines)]
+                
+                if self.corpus_lines > len(self.cfg_lines):    
+                    self.corpus_lines = len(self.cfg_lines)
+    
+        with  open(dfg_tgt_path, "r", encoding=encoding) as f:
+            if self.dfg_tgt_path is None and not on_memory:
+                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines):
+                    self.corpus_lines += 1
+
+            if on_memory:
+                self.dfg_tgt_lines = [line[:-1].split("\t")
+                              for line in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines)]
+                
+                if self.corpus_lines > len(self.dfg_lines):    
+                    self.corpus_lines = len(self.dfg_lines)
+            
+        with  open(cfg_tgt_path, "r", encoding=encoding) as f:
+            if self.cfg_tgt_path is None and not on_memory:
+                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines):
+                    self.corpus_lines += 1
+
+            if on_memory:
+                self.cfg_tgt_lines = [line[:-1].split("\t")
+                              for line in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines)]
+                
+                if self.corpus_lines > len(self.cfg_lines):    
+                    self.corpus_lines = len(self.cfg_lines)
+        
 
 
-        if not on_memory:
-            self.file = open(corpus_path, "r", encoding=encoding)
-            self.random_file = open(corpus_path, "r", encoding=encoding)
+        # if not on_memory:
+        #     self.file = open(corpus_path, "r", encoding=encoding)
+        #     self.random_file = open(corpus_path, "r", encoding=encoding)
 
-            for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
-                self.random_file.__next__()
+        #     for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
+        #         self.random_file.__next__()
 
-
+    #? question corpus_lines are the smaller one between CFG_line and DFG_line
     def __len__(self):
         return self.corpus_lines
 
 
     def __getitem__(self, item):
-        c1, c2, c_label, d1, d2, d_label = self.random_sent(item)
+        c1, c2, cs1, cs2,c_label, d1, d2, ds1, ds2, d_label = self.random_sent(item)
 
         d1_random, d1_label = self.random_word(d1)
         d2_random, d2_label = self.random_word(d2)
@@ -74,8 +126,11 @@ class BERTDataset(Dataset):
         d1_label = [self.vocab.pad_index] + d1_label + [self.vocab.pad_index]
         d2_label = d2_label + [self.vocab.pad_index]
 
-        dfg_segment_label = ([1 for _ in range(len(d1))] + [2 for _ in range(len(d2))])[:self.seq_len]
-        cfg_segment_label = ([1 for _ in range(len(c1))] + [2 for _ in range(len(c2))])[:self.seq_len]
+        # dfg_segment_label = ([1 for _ in range(len(d1))] + [2 for _ in range(len(d2))])[:self.seq_len]
+        # cfg_segment_label = ([1 for _ in range(len(c1))] + [2 for _ in range(len(c2))])[:self.seq_len]
+        dfg_segment_label = (ds1 + ds2)[:self.seq_len]
+        cfg_segment_label = (cs1 + cs2)[:self.seq_len]
+        
         dfg_bert_input = (d1 + d2)[:self.seq_len]
         dfg_bert_label = (d1_label + d2_label)[:self.seq_len]
 
@@ -183,21 +238,24 @@ class BERTDataset(Dataset):
 
 
     def random_sent(self, index):
-        c1, c2, d1, d2 = self.get_corpus_line(index)
+        c1, c2, d1, d2, cs1, cs2, ds1, ds2 = self.get_corpus_line(index)
+        #? Question here......  should make sure the get_random_line's result is not the same as the correct answer 
         dice = random.random() # TODO: should throw the dice twice here. 
-        if dice > 0.25:
-            return c1, c2, 1, d1, d2, 1
+        if dice < 0.25:
+            return c1, c2, cs1, cs2, 1, d1, d2, ds1, ds2, 1
         elif 0.25 <= dice < 0.5:
-            return c1, self.get_random_line(), 0, d1, d2, 1
+            cc2, ccs2 = self.get_random_line() 
+            return c1, cc2,cs1, ccs2,0, d1, d2, ds1, ds2, 1
         elif 0.5 <= dice < 0.75:
-            return c1, c2, 1, d2, d1, 0
+            return c1, c2,cs1, cs2,1, d2, d1, ds2, ds1,0
         else:
-            return c1, self.get_random_line(), 0, d2, d1, 0
+            cc2, ccs2 = self.get_random_line()
+            return c1, cc2, cs1, ccs2, 0, d2, d1, ds2, ds1,0
 
 
     def get_corpus_line(self, item):
         if self.on_memory:
-            return self.cfg_lines[item][0], self.cfg_lines[item][1], self.dfg_lines[item][0], self.dfg_lines[item][1]
+            return self.cfg_lines[item][0], self.cfg_lines[item][1], self.dfg_lines[item][0], self.dfg_lines[item][1], self.cfg_src_lines[item][0], self.cfg_src_lines[item][1], self.dfg_src_lines[item][0], self.dfg_src_lines[item][1]
 
         # now only on_memory copurs are supported
         # else:
@@ -211,10 +269,17 @@ class BERTDataset(Dataset):
         #     return t1, t2 
 
 
-    def get_random_line(self):
+    # def get_random_line(self):
+    #     if self.on_memory:
+    #         l = self.cfg_lines[random.randrange(len(self.cfg_lines))]
+    #         return l[1]
+    def get_random_line(self, idx):
+        """Return the line (and optionally the index) at given idx."""
         if self.on_memory:
-            l = self.cfg_lines[random.randrange(len(self.cfg_lines))]
-            return l[1]
+            idx = random.randrange(len(self.cfg_lines))
+            l = self.cfg_lines[idx]
+            s = self.cfg_src_lines[idx]
+            return l[1], s[1]
 
         # now only on_memory copurs are supported
         # line = self.file.__next__()
