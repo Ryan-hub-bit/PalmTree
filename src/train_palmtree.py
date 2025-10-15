@@ -40,7 +40,7 @@ print("Vocab Size: ", len(vocab))
 
 print("Loading Train Dataset")
 train_dataset = dataset.BERTDataset(train_cfg_dataset, train_dfg_dataset, train_cfg_srcaddr, train_dfg_srcaddr, train_cfg_tgtaddr, train_dfg_tgtaddr,vocab, seq_len=20,
-                            corpus_lines=None, on_memory=True)
+                            corpus_lines=None, on_memory=True,drive_mode="max")
 
 """ print("Loading Test Dataset", test_dataset)
 test_dataset = bert_pytorch.dataset.BERTDataset(test_dataset, test_dataset, vocab, seq_len=20, on_memory=True) \
@@ -58,6 +58,7 @@ print("Building BERT model")
 bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=12, attn_heads=8, dropout=0.0)
 
 print("Creating BERT Trainer")
+# the number of dfg and cfg are not the same
 trainer = trainer.BERTTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=None,
                         lr=1e-5, betas=(0.9, 0.999), weight_decay=0.0,
                         with_cuda=True, cuda_devices=[0], log_freq=100)

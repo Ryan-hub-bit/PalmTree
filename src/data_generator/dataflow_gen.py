@@ -141,16 +141,14 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
     out_dir = Path(output_root) / binary_name
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # outputs (mirroring CFG pipeline)
+    # outputs (keep original 5)
     p1 = out_dir / "raw_pairs.txt"
     p2 = out_dir / "parsed_pairs.txt"
     p3 = out_dir / "instr_addr_per_token.txt"
     p4 = out_dir / "addr_token_per_token.txt"
     p5 = out_dir / "addr_sent_seqid_per_token.txt"
-    # p_edges = out_dir / "dfg_edges.txt"     # ground-truth DFG edges
-    # p_pairs = out_dir / "addr_pairs.txt"    # sampled pairs (addresses)
 
-    # print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p3}\n 4) {p4}\n 5) {p5}\n 6) {p_edges}\n 7) {p_pairs}")
+    print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p3}\n 4) {p4}\n 5) {p5}")
 
     # parser maps
     symbol_map = {sym.address: sym.full_name for sym in bv.get_symbols()}
@@ -161,34 +159,28 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
     node_meta = {}  # addr -> {raw, parsed, raw_tok_count, addr_tok}
 
     for func in bv.functions:
-        # Some functions might not have MLIL; skip safely
         if func.mlil is None:
             continue
 
         G = nx.DiGraph()
-        # Optional entry node (not used in outputs)
-        G.add_node(-1, text="entry_point")
+        G.add_node(-1, text="entry_point")  # optional anchor
 
-        # Create nodes for each MLIL instruction and collect def-use edges
+        # Create nodes for each MLIL instruction
         for block in func.mlil:
             for ins in block:
                 addr = ins.address
-                # Skip weird MLIL items that lack an address
                 if addr is None:
                     continue
-
                 raw_text = bv.get_disassembly(addr)
                 G.add_node(addr, text=raw_text)
 
-        # Build DFG edges: defs -> uses; and defs of read vars -> current use
-        # We must loop again to populate edges because we need all nodes present
+        # Build DFG edges: defs -> uses and writes -> future uses
         for block in func.mlil:
             for ins in block:
                 cur_addr = ins.address
                 if cur_addr is None:
                     continue
 
-                # Edges from var definitions (that produce values read here) -> current
                 for var in ins.vars_read:
                     for idx in func.mlil.get_var_definitions(var):
                         def_i = func.mlil[idx]
@@ -196,7 +188,6 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
                         if def_addr is not None and def_addr != cur_addr:
                             G.add_edge(def_addr, cur_addr)
 
-                # Edges from current (when it defines/writes var) -> future uses of that var
                 for var in ins.vars_written:
                     for idx in func.mlil.get_var_uses(var):
                         use_i = func.mlil[idx]
@@ -204,14 +195,14 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
                         if use_addr is not None and use_addr != cur_addr:
                             G.add_edge(cur_addr, use_addr)
 
-        # Add an entry edge to any node with no predecessors (optional, keeps graph weakly connected)
+        # Optionally connect entry to roots (keeps graph weakly connected)
         for node in list(G.nodes):
             if node == -1:
                 continue
             if G.in_degree(node) == 0:
                 G.add_edge(-1, node)
 
-        # Fill node_meta for later file writing
+        # Fill node_meta
         for node in G.nodes:
             if node == -1:
                 continue
@@ -230,25 +221,16 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
             function_graphs[func.name] = G
 
     # -------- collect forward pairs from DFG random walks --------
-    pairs = []  # list of (u_addr, v_addr)
-    with open(p_edges, "w", encoding="utf-8") as w_edges:
-        for name, graph in function_graphs.items():
-            # Write out ground-truth DFG edges (address -> address)
-            for u, v in graph.edges():
-                if u == -1 or v == -1:
-                    continue
-                w_edges.write(f"{hex(u)}\t{hex(v)}\n")
-
-            # Sample sequences by random walks over DFG
-            has_text = lambda a: a in node_meta and node_meta[a]["raw"] != ""
-            sequences = dfg_random_walk(graph, 40, has_text)
-            for seq in sequences:
-                # Build skip-gram style pairs within window_size (like your CFG)
-                for i in range(1, window_size + 1):
-                    for idx in range(0, len(seq) - i):
-                        u, v = seq[idx], seq[idx + i]
-                        if u in node_meta and v in node_meta:
-                            pairs.append((u, v))
+    pairs = []
+    for name, graph in function_graphs.items():
+        has_text = lambda a: a in node_meta and node_meta[a]["raw"] != ""
+        sequences = dfg_random_walk(graph, 40, has_text)
+        for seq in sequences:
+            for i in range(1, window_size + 1):
+                for idx in range(0, len(seq) - i):
+                    u, v = seq[idx], seq[idx + i]
+                    if u in node_meta and v in node_meta:
+                        pairs.append((u, v))
 
     # -------- FIRST PASS: build addr -> set of line indices where it appears --------
     addr_to_seqid: dict[int, set[int]] = defaultdict(set)
@@ -261,14 +243,10 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
          open(p2, "w", encoding="utf-8") as w_parsed, \
          open(p3, "w", encoding="utf-8") as w_instr, \
          open(p4, "w", encoding="utf-8") as w_addr_tok, \
-         open(p5, "w", encoding="utf-8") as w_addr_seqid_tok, \
-         open(p_pairs, "w", encoding="utf-8") as w_pairs:
+         open(p5, "w", encoding="utf-8") as w_addr_seqid_tok:
 
         for line_idx, (u, v) in enumerate(pairs):
             mu, mv = node_meta[u], node_meta[v]
-
-            # 0) Address pairs (explicit)
-            w_pairs.write(f"{hex(u)}\t{hex(v)}\n")
 
             # 1) raw pairs
             w_raw.write(f"{mu['raw']}\t{mv['raw']}\n")
@@ -276,7 +254,7 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
             # 2) parsed pairs
             w_parsed.write(f"{mu['parsed']}\t{mv['parsed']}\n")
 
-            # 3) instr_addr_per_token.txt (repeat each sentence's own instr address)
+            # 3) instr_addr_per_token.txt
             left_addr  = f"0x{u:x}"
             right_addr = f"0x{v:x}"
             left_rep   = " ".join([left_addr]  * max(1, mu["raw_tok_count"]))
@@ -300,7 +278,6 @@ def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/df
 def main():
     random.seed(0)
     # Change these paths for your environment
-    # bin_folder = '/home/louie/PalmTree/src/data_generator/testbin'
     bin_folder = '/home/louie/smallbinary'
     output_root = '/home/louie/PalmTree/data/kun/dfg'
     window_size = 1
@@ -320,6 +297,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-

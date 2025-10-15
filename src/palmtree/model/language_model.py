@@ -4,6 +4,7 @@ import torch
 from .bert import BERT
 
 
+#shared encoder or not ? 
 class BERTLM(nn.Module):
     """
     BERT Language Model
@@ -12,8 +13,7 @@ class BERTLM(nn.Module):
 
     def __init__(self, bert: BERT, vocab_size):
         """
-        :param bert: BERT model which should be trained
-        :param vocab_size: total vocab size for masked_lm
+        :param bert: BERT model which should be trained        :param vocab_size: total vocab size for masked_lm
         """
 
         super().__init__()
