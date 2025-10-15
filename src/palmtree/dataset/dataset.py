@@ -110,7 +110,7 @@ class BERTDataset(Dataset):
 
 
     def __getitem__(self, item):
-        c1, c2, cs1, cs2,c_label, d1, d2, ds1, ds2, d_label = self.random_sent(item)
+        c1, c2, cs1, cs2, cd1, cd2, c_label, d1, d2, ds1, ds2, dd1, dd2, d_label = self.random_sent(item)
 
         d1_random, d1_label = self.random_word(d1)
         d2_random, d2_label = self.random_word(d2)
@@ -130,6 +130,10 @@ class BERTDataset(Dataset):
         # cfg_segment_label = ([1 for _ in range(len(c1))] + [2 for _ in range(len(c2))])[:self.seq_len]
         dfg_segment_label = (ds1 + ds2)[:self.seq_len]
         cfg_segment_label = (cs1 + cs2)[:self.seq_len]
+
+        
+        cfg_tgt_label = (dd1 + dd2)[:self.seq_len]
+        dfg_tgt_label = (cd1 + cd2)[:self.seq_len]
         
         dfg_bert_input = (d1 + d2)[:self.seq_len]
         dfg_bert_label = (d1_label + d2_label)[:self.seq_len]
@@ -144,9 +148,11 @@ class BERTDataset(Dataset):
         output = {"dfg_bert_input": dfg_bert_input,
                   "dfg_bert_label": dfg_bert_label,
                   "dfg_segment_label": dfg_segment_label,
+                  "dfg_tgt_label": dfg_tgt_label,
                   "dfg_is_next": d_label,
                   "cfg_bert_input": cfg_bert_input,
                   "cfg_segment_label": cfg_segment_label,
+                  "cfg_tgt_label": cfg_tgt_label,
                   "cfg_is_next": c_label
                   }
 
@@ -238,24 +244,24 @@ class BERTDataset(Dataset):
 
 
     def random_sent(self, index):
-        c1, c2, d1, d2, cs1, cs2, ds1, ds2 = self.get_corpus_line(index)
+        c1, c2, d1, d2, cs1, cs2, cd1, cd2, ds1, ds2, dd1, dd2 = self.get_corpus_line(index)
         #? Question here......  should make sure the get_random_line's result is not the same as the correct answer 
         dice = random.random() # TODO: should throw the dice twice here. 
         if dice < 0.25:
-            return c1, c2, cs1, cs2, 1, d1, d2, ds1, ds2, 1
+            return c1, c2, cs1, cs2, cd1, cd2, 1, d1, d2, ds1, ds2, dd1, dd2, 1
         elif 0.25 <= dice < 0.5:
-            cc2, ccs2 = self.get_random_line() 
-            return c1, cc2,cs1, ccs2,0, d1, d2, ds1, ds2, 1
+            cc2, ccs2, ccd2 = self.get_random_line() 
+            return c1, cc2,cs1, ccs2, cd1, ccd2, 0, d1, d2, ds1, ds2, dd1, dd2, 1
         elif 0.5 <= dice < 0.75:
-            return c1, c2,cs1, cs2,1, d2, d1, ds2, ds1,0
+            return c1, c2,cs1, cs2, cd1, cd2, 1, d2, d1, ds2, ds1,dd2, dd1, 0
         else:
-            cc2, ccs2 = self.get_random_line()
-            return c1, cc2, cs1, ccs2, 0, d2, d1, ds2, ds1,0
+            cc2, ccs2, ccd2 = self.get_random_line()
+            return c1, cc2, cs1, ccs2, cd1, ccd2,  0, d2, d1, ds2, ds1, dd2, dd1,0
 
 
     def get_corpus_line(self, item):
         if self.on_memory:
-            return self.cfg_lines[item][0], self.cfg_lines[item][1], self.dfg_lines[item][0], self.dfg_lines[item][1], self.cfg_src_lines[item][0], self.cfg_src_lines[item][1], self.dfg_src_lines[item][0], self.dfg_src_lines[item][1]
+            return self.cfg_lines[item][0], self.cfg_lines[item][1], self.dfg_lines[item][0], self.dfg_lines[item][1], self.cfg_src_lines[item][0], self.cfg_src_lines[item][1], self.cfg_tgt_lines[item][0], self.cfg_tgt_lines[item][1],self.dfg_src_lines[item][0], self.dfg_src_lines[item][1], self.dfg_tgt_lines[item][0], self.dfg_tgt_lines[item][1]
 
         # now only on_memory copurs are supported
         # else:
@@ -279,7 +285,8 @@ class BERTDataset(Dataset):
             idx = random.randrange(len(self.cfg_lines))
             l = self.cfg_lines[idx]
             s = self.cfg_src_lines[idx]
-            return l[1], s[1]
+            d = self.cfg_tgt_lines[idx]
+            return l[1], s[1], d[1]
 
         # now only on_memory copurs are supported
         # line = self.file.__next__()

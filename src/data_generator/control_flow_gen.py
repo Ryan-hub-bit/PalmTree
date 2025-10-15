@@ -131,7 +131,7 @@ def random_walk(g, length, node_has_text):
     return sequences
 
 # ---------- per-binary processing ----------
-def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun"):
+def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"):
     print(f"[INFO] Processing: %s" % f)
     bv = load(f)
 
@@ -237,7 +237,8 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun"):
 
 def main():
     random.seed(0)
-    bin_folder = '/home/louie/PalmTree/src/data_generator/testbin'
+    #bin_folder = '/home/louie/PalmTree/src/data_generator/testbin'
+    bin_folder = '/home/louie/smallbinary'
     window_size = 1
     file_lst = []
     for parent, subdirs, files in os.walk(bin_folder):
