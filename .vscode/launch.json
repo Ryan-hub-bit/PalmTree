@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug train_palmtree.py",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "/home/louie/PalmTree/src/train_palmtree.py",
+      "console": "integratedTerminal",
+      "cwd": "/home/louie/PalmTree",
+      "args": [],
+      "env": { "PYTHONPATH": "${workspaceFolder}" },
+      "justMyCode": true
+    }
+  ]
+}

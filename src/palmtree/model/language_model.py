@@ -4,7 +4,6 @@ import torch
 from .bert import BERT
 
 
-#shared encoder or not ? 
 class BERTLM(nn.Module):
     """
     BERT Language Model
