@@ -10,18 +10,22 @@ from palmtree import dataset
 from palmtree import trainer
 import pickle as pkl
 import bert_pytorch
+from pathlib import Path
+
 
 print(palmtree.__file__)
 vocab_path = "/home/louie/PalmTree/data/kunoutput/vocab"
-train_cfg_dataset = "/home/louie/PalmTree/data/kun/cfg_train.txt"
-train_cfg_srcaddr = "/home/louie/PalmTree/data/kun/cfg_train_src.txt"
-train_dfg_srcaddr = "/home/louie/PalmTree/data/kun/dfg_train_src.txt"
-train_cfg_tgtaddr = "/home/louie/PalmTree/data/kun/cfg_train_tgt.txt"
-train_dfg_tgtaddr = "/home/louie/PalmTree/data/kun/dfg_train_tgt.txt"
-train_dfg_dataset = "/home/louie/PalmTree/data/kun/dfg_train.txt"
+train_cfg_dataset = "/home/louie/PalmTree/data/kun/cfg/cfg_train.txt"
+train_cfg_srcaddr = "/home/louie/PalmTree/data/kun/cfg/cfg_train_src.txt"
+train_dfg_srcaddr = "/home/louie/PalmTree/data/kun/dfg/dfg_train_src.txt"
+train_cfg_tgtaddr = "/home/louie/PalmTree/data/kun/cfg/cfg_train_tgt.txt"
+train_dfg_tgtaddr = "/home/louie/PalmTree/data/kun/dfg/dfg_train_tgt.txt"
+train_dfg_dataset = "/home/louie/PalmTree/data/kun/dfg/dfg_train.txt"
 test_dataset = ""
 sent_dataset = ""
 output_path = "/home/louie/PalmTree/data/kunoutput" 
+
+Path(vocab_path).parent.mkdir(parents=True, exist_ok=True)
 
 with open(train_cfg_dataset, "r", encoding="utf-8") as f1:
     with open(train_dfg_dataset, "r", encoding="utf-8") as f2:
@@ -30,6 +34,7 @@ with open(train_cfg_dataset, "r", encoding="utf-8") as f1:
 
 print("VOCAB SIZE:", len(vocab))
 vocab.save_vocab(vocab_path)
+
 
 
 print("Loading Vocab", vocab_path)
