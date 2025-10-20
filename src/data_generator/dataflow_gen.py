@@ -1,278 +1,184 @@
-# -*- coding: utf-8 -*-
-from binaryninja import load
+from binaryninja import load 
 import networkx as nx
 import random
 import os
 import re
+import tqdm
+from collections import Counter
 from pathlib import Path
 
-# -------------------- tokenization & helpers (CFG-style spacing, no commas) --------------------
-TOK_RE = re.compile(r"0x[0-9A-Fa-f]+|[A-Za-z_.$][\w.$]*|[\[\]\+\-\*\(\),:]|\d+")
-HEX_TOKEN = re.compile(r"^0x[0-9A-Fa-f]+$")  # strict hex token check
+def _split_tokens(s: str):
+    return s.split()
 
-def tokenize_cfg_style(s: str) -> list[str]:
-    """CFG-style tokenizer: split and strip commas out completely."""
-    toks = TOK_RE.findall(s)
-    # drop literal ',' tokens so we never keep them
-    return [t for t in toks if t != ',']
+def parse_instruction(ins, symbol_map, string_map):
+    """
+    Return:
+      text        : normalized instruction string (unchanged format)
+      tokens      : text.split()
+      orig_tokens : original tokens (for real 0x... addresses)
+    """
+    ins_norm = re.sub(r'\s+', ', ', ins, 1)
+    parts = ins_norm.split(', ')
+    opcode = parts[0]
+    operand = parts[1:] if len(parts) > 1 else []
 
-def join_tokens(tokens: list[str]) -> str:
-    return " ".join(tokens)
+    replaced_operands = []
+    original_operands = []
 
-def normalize_cfg_style(s: str) -> str:
-    """CFG-style spacing: no commas, just single-space tokens."""
-    toks = tokenize_cfg_style(s)
-    return " ".join(toks)
+    for i in range(len(operand)):
+        symbols = re.split(r'([0-9A-Za-z]+)', operand[i])
+        orig_symbols = list(symbols)
 
-def parsed_tokens_keep_addrs(ins: str) -> list[str]:
-    """Like parsed but keep hex addresses, no commas."""
-    return tokenize_cfg_style(ins)
+        for j in range(len(symbols)):
+            tok = symbols[j]
+            if tok[:2] == '0x' and len(tok) >= 6:
+                try:
+                    hv = int(tok, 16)
+                    if hv in symbol_map:
+                        symbols[j] = "symbol"
+                    elif hv in string_map:
+                        symbols[j] = "string"
+                    else:
+                        symbols[j] = "address"
+                except ValueError:
+                    pass
 
-def parsed_tokens_symbolic(ins: str, symbol_map: dict[int, str], string_starts: set[int]) -> list[str]:
-    """Like parsed, but map hex to symbol/string/address, no commas."""
-    toks = tokenize_cfg_style(ins)
-    out = []
-    for t in toks:
-        if HEX_TOKEN.match(t) and len(t) >= 6:
-            try:
-                hv = int(t, 16)
-            except ValueError:
-                out.append(t)
-                continue
-            if hv in symbol_map:
-                out.append("symbol")
-            elif hv in string_starts:
-                out.append("string")
-            else:
-                out.append("address")
-        else:
-            out.append(t)
-    return out
+        replaced_operands.append(' '.join(symbols))
+        original_operands.append(' '.join(orig_symbols))
 
-def tokens_hex_or_zero(from_text: str) -> list[str]:
-    """For addr_token_per_token.txt: echo hex token or '0'."""
-    toks = from_text.split()
-    return [t if HEX_TOKEN.match(t) else "0" for t in toks]
+    text = ' '.join([opcode] + replaced_operands if replaced_operands else [opcode])
+    orig_text = ' '.join([opcode] + original_operands if original_operands else [opcode])
 
-# -------------------- DFG random walk (unchanged) --------------------
-def dfg_random_walk(g: nx.DiGraph, length: int, node_has_text):
-    sequences = []
+    tokens = _split_tokens(text)
+    orig_tokens = _split_tokens(orig_text)
+    if len(tokens) != len(orig_tokens):
+        orig_tokens = list(tokens)
+
+    return text, tokens, orig_tokens
+
+
+def random_walk(g, length, symbol_map, string_map):
+    seq = []
     for n in g:
-        if n != -1 and node_has_text(n):
-            seq = [n]
-            cur = n
+        if n != -1 and g.nodes[n].get('text') is not None:
+            s = []
             l = 0
+            t, toks, otoks = parse_instruction(g.nodes[n]['text'], symbol_map, string_map)
+            s.append({'text': t, 'tokens': toks, 'orig_tokens': otoks, 'addr': n})
+            cur = n
             while l < length:
                 nbs = list(g.successors(cur))
-                if not nbs:
-                    break
-                cur = random.choice(nbs)
-                if node_has_text(cur):
-                    seq.append(cur)
+                if nbs:
+                    cur = random.choice(nbs)
+                    t, toks, otoks = parse_instruction(g.nodes[cur]['text'], symbol_map, string_map)
+                    s.append({'text': t, 'tokens': toks, 'orig_tokens': otoks, 'addr': cur})
                     l += 1
                 else:
                     break
-            sequences.append(seq)
-        if len(sequences) > 100:
-            return sequences[:100]
-    return sequences
+            seq.append(s)
+    return seq
 
-# -------------------- per-binary DFG processing --------------------
-def process_file(f, window_size=1, output_root="/home/louie/PalmTree/data/kun/dfg"):
-    print(f"[INFO][DFG] Processing: {f}")
+
+def process_file(f):
+    symbol_map = {}
+    string_map = {}
+    print(f)
     bv = load(f)
 
-    binary_name = Path(f).stem
-    out_dir = Path(output_root) / binary_name
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    # outputs
-    p1  = out_dir / "raw_pairs.txt"
-    p2  = out_dir / "dfg_train.txt"
-    p2b = out_dir / "dfg_train_addr.txt"
-    p3  = out_dir / "dfg_train_src.txt"
-    p4  = out_dir / "dfg_train_tgt.txt"
-    p5  = out_dir / "tgt_id.txt"
-
-    print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p2b}\n 4) {p3}\n 5) {p4}\n 6) {p5}")
-
-    # symbol maps
-    symbol_map    = {sym.address: sym.full_name for sym in bv.get_symbols()}
-    string_starts = {s.start for s in bv.get_strings()}
+    # collect symbols and strings
+    for sym in bv.get_symbols():
+        symbol_map[sym.address] = sym.full_name
+    for string in bv.get_strings():
+        string_map[string.start] = string.value
 
     function_graphs = {}
-    node_meta = {}
-
-    # -------- DFG build (unchanged logic) --------
     for func in bv.functions:
-        if func.mlil is None:
-            continue
-
         G = nx.DiGraph()
-        G.add_node(-1, text="entry_point")
-
+        G.add_node(-1, text='entry_point')
         for block in func.mlil:
             for ins in block:
-                addr = ins.address
-                if addr is None:
-                    continue
-                raw_text = bv.get_disassembly(addr)
-                G.add_node(addr, text=raw_text)
-
-        # def-use edges
-        for block in func.mlil:
-            for ins in block:
-                cur_addr = ins.address
-                if cur_addr is None:
-                    continue
+                G.add_node(ins.address, text=bv.get_disassembly(ins.address))
+                depd = []
                 for var in ins.vars_read:
-                    for idx in func.mlil.get_var_definitions(var):
-                        def_i = func.mlil[idx]
-                        def_addr = getattr(def_i, "address", None)
-                        if def_addr is not None and def_addr != cur_addr:
-                            G.add_edge(def_addr, cur_addr)
+                    depd = [(func.mlil[i].address, ins.address)
+                            for i in func.mlil.get_var_definitions(var)
+                            if func.mlil[i].address != ins.address]
                 for var in ins.vars_written:
-                    for idx in func.mlil.get_var_uses(var):
-                        use_i = func.mlil[idx]
-                        use_addr = getattr(use_i, "address", None)
-                        if use_addr is not None and use_addr != cur_addr:
-                            G.add_edge(cur_addr, use_addr)
-
-        # connect entry to roots
+                    depd += [(ins.address, func.mlil[i].address)
+                             for i in func.mlil.get_var_uses(var)
+                             if func.mlil[i].address != ins.address]
+                if depd:
+                    G.add_edges_from(depd)
         for node in list(G.nodes):
-            if node == -1:
-                continue
-            if G.in_degree(node) == 0:
+            if not G.in_degree(node):
                 G.add_edge(-1, node)
-
-        # fill node_meta (CFG-style, comma-free)
-        for node in G.nodes:
-            if node == -1:
-                continue
-            raw_bn = G.nodes[node].get("text", "")
-
-            # CFG-style normalization and parsing
-            raw_norm = normalize_cfg_style(raw_bn)
-            parsed_sym = join_tokens(parsed_tokens_symbolic(raw_bn, symbol_map, string_starts))
-            parsed_keep = join_tokens(parsed_tokens_keep_addrs(raw_bn))
-            tok_count_keep = len(parsed_keep.split())
-            hex_or_zero = tokens_hex_or_zero(parsed_keep)
-
-            node_meta[node] = {
-                "raw_norm": raw_norm,
-                "parsed_sym": parsed_sym,
-                "parsed_keep": parsed_keep,
-                "tok_count": tok_count_keep,
-                "hex_or_zero": hex_or_zero,
-            }
-
         if len(G.nodes) > 2:
             function_graphs[func.name] = G
 
-    # collect pairs
-    pairs = []
-    for name, graph in function_graphs.items():
-        has_text = lambda a: a in node_meta and node_meta[a]["raw_norm"] != ""
-        sequences = dfg_random_walk(graph, 40, has_text)
-        for seq in sequences:
-            for i in range(1, window_size + 1):
-                for idx in range(0, len(seq) - i):
-                    u, v = seq[idx], seq[idx + i]
-                    if u in node_meta and v in node_meta:
-                        pairs.append((u, v))
+    out_dir = Path("/home/louie/PalmTree/data/dfg")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    binary_name = Path(f).stem
 
-    # --- First pass: write p1, p2, p2b, p3, p4 (all comma-free, CFG-style) ---
-    with open(p1,  "w", encoding="utf-8") as w_raw, \
-         open(p2,  "w", encoding="utf-8") as w_parsed, \
-         open(p2b, "w", encoding="utf-8") as w_parsed_keep, \
-         open(p3,  "w", encoding="utf-8") as w_instr, \
-         open(p4,  "w", encoding="utf-8") as w_addr_tok:
+    dfg_path = out_dir / f"{binary_name}_dfg.txt"
+    src_path = out_dir / f"{binary_name}_dfg_src.txt"   # SRC
+    tgt_path = out_dir / f"{binary_name}_dfg_tgt.txt"   # TGT
 
-        for line_idx, (u, v) in enumerate(pairs):
-            mu, mv = node_meta[u], node_meta[v]
+    print(f"[INFO] Writing to: {dfg_path}, {src_path}, {tgt_path}")
 
-            # 1) raw_pairs.txt (cfg-style, no commas)
-            w_raw.write(f"{mu['raw_norm']}\t{mv['raw_norm']}\n")
+    with open(dfg_path, 'w', encoding='utf-8') as w_dfg, \
+         open(src_path, 'w', encoding='utf-8') as w_src, \
+         open(tgt_path, 'w', encoding='utf-8') as w_tgt:
 
-            # 2) parsed_pairs.txt (cfg-style, no commas)
-            w_parsed.write(f"{mu['parsed_sym']}\t{mv['parsed_sym']}\n")
+        for name, graph in function_graphs.items():
+            seqs = random_walk(graph, 40, symbol_map, string_map)
+            for s in seqs:
+                if len(s) >= 2:
+                    for idx in range(1, len(s)):
+                        left = s[idx-1]
+                        right = s[idx]
 
-            # 3) parsed_pairs_withaddr.txt (cfg-style, keep hex, no commas)
-            w_parsed_keep.write(f"{mu['parsed_keep']}\t{mv['parsed_keep']}\n")
+                        # 1. DFG pairs (unchanged)
+                        w_dfg.write(left['text'] + '\t' + right['text'] + '\n')
 
-            # 4) instr_addr_per_token.txt (withaddr-style)
-            left_addr  = f"0x{u:x}"
-            right_addr = f"0x{v:x}"
-            left_rep   = " ".join([left_addr]  * max(1, mu["tok_count"]))
-            right_rep  = " ".join([right_addr] * max(1, mv["tok_count"]))
-            w_instr.write(f"{left_rep}\t{right_rep}\n")
+                        # 2. SRC = instruction address repeated per token (line-aligned)
+                        l_src = ' '.join([hex(left['addr'])] * len(left['tokens']))
+                        r_src = ' '.join([hex(right['addr'])] * len(right['tokens']))
+                        w_src.write(l_src + '\t' + r_src + '\n')
 
-            # 5) addr_token_per_token.txt (withaddr-style)
-            w_addr_tok.write(f"{' '.join(mu['hex_or_zero'])}\t{' '.join(mv['hex_or_zero'])}\n")
+                        # --- TGT: token-aligned actual literal addresses (0 if not address) ---
+                        # (no 'tags' needed; we key off the normalized token == 'address')
 
-    # --- Build addr_to_lines from instr_addr_per_token.txt (1-based line numbers) ---
-    addr_to_lines: dict[int, list[int]] = {}
-    with open(p3, "r", encoding="utf-8") as fin:
-        for line_num, line in enumerate(fin, start=1):
-            if "\t" not in line:
-                continue
-            left, right = line.strip().split("\t", 1)
-            seen = set()
-            for tok in (left.split() + right.split()):
-                if HEX_TOKEN.match(tok):
-                    try:
-                        k = int(tok, 16)
-                    except ValueError:
-                        continue
-                    if k in seen:
-                        continue
-                    seen.add(k)
-                    addr_to_lines.setdefault(k, []).append(line_num)
+                        # optional safety if lengths ever mismatch
+                        if len(left['tokens']) != len(left['orig_tokens']):
+                            left['orig_tokens'] = left['tokens']
+                        if len(right['tokens']) != len(right['orig_tokens']):
+                            right['orig_tokens'] = right['tokens']
 
-    # --- addr_sent_seqid_per_token.txt from parsed_pairs_withaddr.txt (withaddr tokens) ---
-    def line_list_for_tokens(sent_text: str) -> str:
-        out = []
-        for t in sent_text.split():
-            if HEX_TOKEN.match(t):
-                try:
-                    k = int(t, 16)
-                except ValueError:
-                    out.append("-1"); continue
-                lines = addr_to_lines.get(k)
-                out.append("[" + ",".join(map(str, lines)) + "]" if lines else "-2")
-            else:
-                out.append("-1")
-        return " ".join(out)
+                        l_tgt_items = [
+                            (ot if tok == 'address' and isinstance(ot, str) and ot.startswith('0x') and len(ot) >= 6 else '0')
+                            for tok, ot in zip(left['tokens'], left['orig_tokens'])
+                        ]
 
-    with open(p2b, "r", encoding="utf-8") as r_withaddr, \
-         open(p5,  "w", encoding="utf-8") as w_seqids:
-        for line in r_withaddr:
-            if "\t" not in line:
-                w_seqids.write("\t\n")
-                continue
-            l, r = line.strip("\n").split("\t", 1)
-            w_seqids.write(f"{line_list_for_tokens(l)}\t{line_list_for_tokens(r)}\n")
+                        r_tgt_items = [
+                            (ot if tok == 'address' and isinstance(ot, str) and ot.startswith('0x') and len(ot) >= 6 else '0')
+                            for tok, ot in zip(right['tokens'], right['orig_tokens'])
+                        ]
 
-    print(f"[DONE][DFG] {out_dir}")
+                        w_tgt.write(' '.join(l_tgt_items) + '\t' + ' '.join(r_tgt_items) + '\n')
+
+
+
+
 
 def main():
-    random.seed(0)
-    bin_folder  = '/home/louie/smallbinary'           # input binaries
-    output_root = '/home/louie/PalmTree/data/kun/dfg' # output root
-    window_size = 1
-
+    bin_folder = '/home/louie/smallbinary'
     file_lst = []
-    for parent, _subdirs, files in os.walk(bin_folder):
+    for parent, _, files in os.walk(bin_folder):
         for f in files:
             file_lst.append(os.path.join(parent, f))
+    for f in tqdm.tqdm(file_lst):
+        process_file(f)
 
-    total = len(file_lst)
-    for i, f in enumerate(file_lst, 1):
-        print(f"[{i}/{total}]")
-        try:
-            process_file(f, window_size=window_size, output_root=output_root)
-        except Exception as e:
-            print(f"[WARN] Failed on {f}: {e}")
 
 if __name__ == "__main__":
     main()

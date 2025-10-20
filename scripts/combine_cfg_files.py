@@ -1,27 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Merge all cfg_train*.txt files under /home/louie/PalmTree/data/kun/cfg
-into three unified files at the root:
-  - merged_cfg_train.txt
-  - merged_cfg_train_src.txt
-  - merged_cfg_train_tgt.txt
+Merge all *_dfg.txt, *_dfg_src.txt, and *_dfg_tgt.txt files
+under a given folder into unified files:
+  - dfg_train.txt
+  - dfg_train_src.txt
+  - dfg_train_tgt.txt
 """
+
 import os
 from pathlib import Path
 
-# root directory containing all subfolders
-root_dir = Path("/home/louie/PalmTree/data/kun/dfg")
+# Root directory containing all subfolders
+root_dir = Path("/home/louie/PalmTree/data/cfg")
 
-# output file paths (placed in root_dir)
-out_train = root_dir / "dfg_train.txt"
-out_src   = root_dir / "dfg_train_src.txt"
-out_tgt   = root_dir / "dfg_train_tgt.txt"
+# Output file paths (placed in root_dir)
+out_train = root_dir / "cfg_train.txt"
+out_src   = root_dir / "cfg_train_src.txt"
+out_tgt   = root_dir / "cfg_train_tgt.txt"
 
-# collect all matching files
-train_files = list(root_dir.rglob("dfg_train.txt"))
-src_files   = list(root_dir.rglob("dfg_train_src.txt"))
-tgt_files   = list(root_dir.rglob("dfg_train_tgt.txt"))
+# Collect all matching files recursively
+train_files = list(root_dir.rglob("*_cfg_train.txt"))
+src_files   = list(root_dir.rglob("*_cfg_train_src.txt"))
+tgt_files   = list(root_dir.rglob("*_cfg_train_tgt.txt"))
 
 def merge_files(file_list, output_file):
     """Concatenate all text files in file_list into output_file."""
@@ -37,9 +38,9 @@ def merge_files(file_list, output_file):
     print(f"[DONE] Wrote {output_file} ({len(file_list)} files)")
 
 def main():
-    print(f"[INFO] Found {len(train_files)} dfg_train.txt files")
-    print(f"[INFO] Found {len(src_files)} dfg_train_src.txt files")
-    print(f"[INFO] Found {len(tgt_files)} dfg_train_tgt.txt files")
+    print(f"[INFO] Found {len(train_files)} *_cfg.txt files")
+    print(f"[INFO] Found {len(src_files)} *_cfg_src.txt files")
+    print(f"[INFO] Found {len(tgt_files)} *_cfg_tgt.txt files")
 
     merge_files(train_files, out_train)
     merge_files(src_files, out_src)
@@ -47,3 +48,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
