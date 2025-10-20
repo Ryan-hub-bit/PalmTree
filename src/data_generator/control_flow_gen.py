@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 from binaryninja import load
 import networkx as nx
 import random
@@ -6,67 +5,159 @@ import os
 import re
 from pathlib import Path
 
-# -------------------- tokenization / normalization --------------------
-# Matches hex, identifiers/opcodes, punctuation like [], commas, etc., and numbers
-TOKENIZE_RE = re.compile(
-    r"0x[0-9A-Fa-f]+|[A-Za-z_.$][\w.$]*|[\[\]\+\-\*\(\),:]|\d+"
-)
+# -------- config: 1-based (editor-style) line numbers; set to 0 for zero-based --------
+LINE_BASE = 1
 
-def normalize_spacing(s: str) -> str:
-    """
-    Normalize raw disassembly so every symbol is separated by a single space.
-    Example: 'lea     rdi, [rel 0x406210]' -> 'lea rdi [ rel 0x406210 ]'
-    """
-    toks = TOKENIZE_RE.findall(s)
-    return " ".join(toks)
+# ---------- robust hex detection ----------
+# Matches: 0x1, 0XDEAD, -0x20, 1Ah, 0ffh; avoids identifiers like foo0x10bar
+HEX_RE = re.compile(r'(?<![A-Za-z0-9_])(?:-?0[xX][0-9A-Fa-f]+|[0-9A-Fa-f]+[hH])(?![A-Za-z0-9_])')
 
-# -------------------- instruction parser (kept for parsed_pairs.txt) --------------------
-HEX_RE = re.compile(r'0x[0-9a-fA-F]+')
+def normalize_hex_literal(lit: str) -> str:
+    """Normalize matched hex literal to 0x... form (handles ...h and uppercase). Keeps sign if present."""
+    lit = lit.strip()
+    sign = ''
+    if lit.startswith('-'):
+        sign, lit = '-', lit[1:]
+    if lit.lower().endswith('h'):  # e.g., '1A3h' -> '0x1A3'
+        core = lit[:-1]
+        return (sign + '0x' + core).lower()
+    return (sign + lit).lower()
 
-def parse_instruction(ins, symbol_map, string_map):
-    """
-    Replace address-like immediates with 'symbol' / 'string' / 'address'.
-    Keeps your previous parse format (first whitespace -> comma+space split).
-    """
-    ins = re.sub(r'\s+', ', ', ins, 1)
-    parts = ins.split(', ')
-    operand = []
-    if len(parts) > 1:
-        operand = parts[1:]
-    for i in range(len(operand)):
-        symbols = re.split(r'([0-9A-Za-z]+)', operand[i])
-        for j in range(len(symbols)):
-            if symbols[j][:2] == '0x' and len(symbols[j]) >= 6:
-                try:
-                    hv = int(symbols[j], 16)
-                    if hv in symbol_map:
-                        symbols[j] = "symbol"
-                    elif hv in string_map:
-                        symbols[j] = "string"
-                    else:
-                        symbols[j] = "address"
-                except ValueError:
-                    pass
-        operand[i] = ' '.join(symbols)
-    opcode = parts[0]
-    return ' '.join([opcode] + operand)
+def is_addr_like_str(s: str) -> bool:
+    s = s.lower().strip()
+    return s.startswith("0x") and len(s) >= 4  # accept small immediates, too
 
-# -------------------- space-split helpers (SRC/TGT alignment) --------------------
+# ---------- token helpers ----------
 def tokenize_raw(s: str):
-    """Split strictly by whitespace; each token gets one SRC and one TGT."""
     return s.split()
 
-def per_space_token_targets_zero(raw_text: str):
-    """File #4 (TGT): emit '0' once per space-split token."""
-    n = len(tokenize_raw(raw_text))
-    return ["0"] * max(1, n)
+def tokenize_with_spans(s: str):
+    toks = []
+    i = 0
+    n = len(s)
+    while i < n:
+        while i < n and s[i].isspace():
+            i += 1
+        if i >= n:
+            break
+        j = i
+        while j < n and not s[j].isspace():
+            j += 1
+        toks.append((s[i:j], i, j))
+        i = j
+    return toks
 
-def per_space_token_default(raw_text: str, default="-1"):
-    """File #5 (SeqID map placeholder): align to space-split tokens with a constant value."""
-    n = len(tokenize_raw(raw_text))
-    return [default] * max(1, n)
+# ---------- instruction formatting cores ----------
+def _format_parsed_style_tokens(ins: str):
+    """
+    Convert BN disasm into the same spacing/token layout used by 'parsed' output:
+    - first whitespace -> ', '
+    - split on ', ' into [opcode, operands...]
+    - split operands by alnum boundaries and re-join with spaces
+    Return list of tokens exactly as they'd appear space-separated.
+    """
+    ins2 = re.sub(r'\s+', ', ', ins, 1)
+    parts = ins2.split(', ')
+    opcode = parts[0] if parts else ''
+    out_toks = [opcode] if opcode else []
+    if len(parts) > 1:
+        for op in parts[1:]:
+            # break into [word][non-word]... so punctuation stays separated
+            pieces = re.split(r'([0-9A-Za-z]+)', op)
+            # re-join with single spaces (this mirrors parsed spacing)
+            joined = ' '.join(p for p in pieces if p != '')
+            # then split again to ensure clean tokens
+            out_toks.extend(joined.split())
+    return out_toks
 
-# -------------------- CFG random walk --------------------
+def parse_tokens_symbolic(ins: str, symbol_map, string_map):
+    """
+    Same tokenization as parsed, but map address-like literals (after normalization)
+    to 'symbol'/'string'/'address' based on maps.
+    """
+    toks = _format_parsed_style_tokens(ins)
+    mapped = []
+    for t in toks:
+        m = HEX_RE.fullmatch(t)
+        if m:
+            lit = normalize_hex_literal(m.group(0))
+            if is_addr_like_str(lit):
+                try:
+                    hv = int(lit, 16) if not lit.startswith('-') else int(lit, 16)
+                except ValueError:
+                    mapped.append(t)
+                    continue
+                if hv in symbol_map:
+                    mapped.append('symbol'); continue
+                if hv in string_map:
+                    mapped.append('string'); continue
+                mapped.append('address'); continue
+        mapped.append(t)
+    return mapped
+
+def parse_tokens_keep_addrs(ins: str):
+    """Same spacing/tokens as parsed, but DO NOT replace hex addresses."""
+    return _format_parsed_style_tokens(ins)
+
+# ---------- raw normalizer (space-separated, no commas) ----------
+def normalize_raw_instruction(ins: str) -> str:
+    toks = re.split(r'[,\s]+', ins.strip())
+    return ' '.join(t for t in toks if t)
+
+# ---------- per-token projections based on parsed_withaddr text ----------
+def per_token_echo_hex_or_zero(from_text: str):
+    """
+    For each token in from_text (already space-separated like parsed_withaddr), echo the hex literal if address-like else '0'.
+    """
+    toks = from_text.split()
+    out = []
+    for t in toks:
+        m = HEX_RE.fullmatch(t)
+        if m:
+            lit = normalize_hex_literal(m.group(0))
+            out.append(lit if is_addr_like_str(lit) else "0")
+        else:
+            out.append("0")
+    return out
+
+def per_token_line_of_addr(from_text: str,
+                           addr_to_seqid: dict[int, list[int]],
+                           current_line_idx: int,
+                           current_addrs: set[int]):
+    """
+    For each token in from_text:
+      - not address-like -> '-1'
+      - address-like AND is one of the current pair addresses -> current line number (same as instr_addr_per_token.txt)
+      - address-like but appears elsewhere -> the FIRST line number it appears on
+      - address-like but never used as a sentence address -> '-2'
+    Line numbers are offset by LINE_BASE.
+    """
+    toks = from_text.split()
+    out = []
+    for t in toks:
+        m = HEX_RE.fullmatch(t)
+        if not m:
+            out.append("-1"); continue
+        lit = normalize_hex_literal(m.group(0))
+        if not is_addr_like_str(lit):
+            out.append("-1"); continue
+        try:
+            addr = int(lit, 16)
+        except ValueError:
+            out.append("-1"); continue
+
+        if addr in current_addrs:
+            out.append(str(current_line_idx + LINE_BASE))
+            continue
+
+        seqids = addr_to_seqid.get(addr)
+        if seqids:
+            out.append(str(min(seqids) + LINE_BASE))
+        else:
+            out.append("-2")
+    return out
+
+# ---------- CFG random walk ----------
 def random_walk(g, length, node_has_text):
     sequences = []
     for n in g:
@@ -90,7 +181,7 @@ def random_walk(g, length, node_has_text):
             return sequences[:100]
     return sequences
 
-# -------------------- per-binary processing --------------------
+# ---------- per-binary processing ----------
 def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"):
     print(f"[INFO] Processing: {f}")
     bv = load(f)
@@ -100,13 +191,14 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # outputs
-    p1 = out_dir / "raw_pairs.txt"
-    p2 = out_dir / "parsed_pairs.txt"
-    p3 = out_dir / "instr_addr_per_token.txt"       # SRC per token = instruction address
-    p4 = out_dir / "addr_token_per_token.txt"       # TGT per token = "0"
-    p5 = out_dir / "addr_sent_seqid_per_token.txt"  # placeholder aligned to space tokens
+    p1  = out_dir / "raw_pairs.txt"
+    p2  = out_dir / "cfg_train.txt"
+    p2b = out_dir / "cfg_train_addr.txt"
+    p3  = out_dir / "cfg_train_src.txt"
+    p4  = out_dir / "cfg_train_tgt.txt"
+    p5  = out_dir / "tgt_id.txt"
 
-    print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p3}\n 4) {p4}\n 5) {p5}")
+    print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p2b}\n 4) {p3}\n 5) {p4}\n 6) {p5}")
 
     # parser maps
     symbol_map = {sym.address: sym.full_name for sym in bv.get_symbols()}
@@ -121,34 +213,45 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
             curr = block.start
             predecessor = curr
             for inst in block:
-                # get disassembly and normalize spacing for raw_pairs + token counts
-                raw_original = bv.get_disassembly(curr)
-                raw = normalize_spacing(raw_original)
-                parsed = parse_instruction(raw_original, symbol_map, string_map)
+                raw = bv.get_disassembly(curr)
 
-                # SPACE-SPLIT token count and TGT=0s sized to it
-                raw_tok_count = len(tokenize_raw(raw))
-                addr_tgt_zero = per_space_token_targets_zero(raw)
+                # 1) raw variants
+                raw_norm = normalize_raw_instruction(raw)
 
-                # store normalized raw
+                # 2) parsed (symbol/string/address) tokens & string
+                parsed_sym_toks = parse_tokens_symbolic(raw, symbol_map, string_map)
+                parsed_sym_str = ' '.join(parsed_sym_toks)
+
+                # 3) parsed_withaddr tokens & string (same spacing/tokens as parsed, but keep addresses)
+                parsed_keep_toks = parse_tokens_keep_addrs(raw)
+                parsed_keep_str = ' '.join(parsed_keep_toks)
+
+                # counts and addr token projections are based on parsed_withaddr
+                parsed_withaddr_tok_count = len(parsed_keep_toks)
+                addr_tok_from_parsed_withaddr = per_token_echo_hex_or_zero(parsed_keep_str)
+
                 G.add_node(curr, text=raw)
                 node_meta[curr] = {
-                    "raw": raw,                      # normalized spaced raw
-                    "parsed": parsed,               # your parsed format
-                    "raw_tok_count": raw_tok_count, # per-token counts (space-split)
-                    "addr_tok": addr_tgt_zero,      # zeros per token
+                    # raw outputs
+                    "raw_norm": raw_norm,
+
+                    # parsed variants
+                    "parsed_sym": parsed_sym_str,
+                    "parsed_keep": parsed_keep_str,
+
+                    # token counts for per-token projections
+                    "tok_count_for_per_token": parsed_withaddr_tok_count,
+
+                    # per-token address echoes (from parsed_withaddr)
+                    "addr_tok_from_parsed_withaddr": addr_tok_from_parsed_withaddr,
                 }
 
                 if curr != block.start:
                     G.add_edge(predecessor, curr)
                 predecessor = curr
-
-                # Advance by instruction length; Binary Ninja's block iteration yields tuples (il, len)
                 curr += inst[1]
-
             for edge in block.outgoing_edges:
                 G.add_edge(predecessor, edge.target.start)
-
         if len(G.nodes) > 2:
             function_graphs[func.name] = G
 
@@ -163,9 +266,16 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
                     u, v = seq[idx], seq[idx + i]
                     pairs.append((u, v))
 
+    # -------- FIRST PASS: build addr -> list of all line indices --------
+    addr_to_seqid = {}  # address -> list of line indices (0- or 1-based handled when writing)
+    for line_idx, (u, v) in enumerate(pairs):
+        addr_to_seqid.setdefault(u, []).append(line_idx)
+        addr_to_seqid.setdefault(v, []).append(line_idx)
+
     # -------- SECOND PASS: write outputs --------
     with open(p1, "w", encoding="utf-8") as w_raw, \
          open(p2, "w", encoding="utf-8") as w_parsed, \
+         open(p2b, "w", encoding="utf-8") as w_parsed_keep, \
          open(p3, "w", encoding="utf-8") as w_instr, \
          open(p4, "w", encoding="utf-8") as w_addr_tok, \
          open(p5, "w", encoding="utf-8") as w_addr_seqid_tok:
@@ -173,44 +283,56 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
         for line_idx, (u, v) in enumerate(pairs):
             mu, mv = node_meta[u], node_meta[v]
 
-            # 1) raw_pairs.txt (normalized with one space between all symbols)
-            w_raw.write(f"{mu['raw']}\t{mv['raw']}\n")
+            # 1) raw_pairs.txt (normalized, single spaces, commas removed)
+            w_raw.write(f"{mu['raw_norm']}\t{mv['raw_norm']}\n")
 
-            # 2) parsed_pairs.txt
-            w_parsed.write(f"{mu['parsed']}\t{mv['parsed']}\n")
+            # 2) parsed_pairs.txt (symbol/string/address abstraction)
+            w_parsed.write(f"{mu['parsed_sym']}\t{mv['parsed_sym']}\n")
 
-            # 3) instr_addr_per_token.txt (SRC per token = instruction address, repeated per space token)
+            # 3) parsed_pairs_withaddr.txt (same spacing/tokens as parsed, but keep hex literals)
+            w_parsed_keep.write(f"{mu['parsed_keep']}\t{mv['parsed_keep']}\n")
+
+            # --- All per-token artifacts below are based on parsed_pairs_withaddr.txt ---
+
+            # 4) instr_addr_per_token.txt:
+            # repeat each sentence's *instruction address* for the number of tokens in parsed_withaddr
             left_addr  = f"0x{u:x}"
             right_addr = f"0x{v:x}"
-            left_rep   = " ".join([left_addr]  * max(1, mu["raw_tok_count"]))
-            right_rep  = " ".join([right_addr] * max(1, mv["raw_tok_count"]))
+            left_rep   = " ".join([left_addr]  * max(1, mu["tok_count_for_per_token"]))
+            right_rep  = " ".join([right_addr] * max(1, mv["tok_count_for_per_token"]))
             w_instr.write(f"{left_rep}\t{right_rep}\n")
 
-            # 4) addr_token_per_token.txt (TGT per token = "0", sized to space tokens)
-            w_addr_tok.write(
-                f"{' '.join(mu['addr_tok'])}\t{' '.join(mv['addr_tok'])}\n"
-            )
+            # 5) addr_token_per_token.txt:
+            # echo hex literal per token from parsed_withaddr, else '0'
+            left_addr_toks  = ' '.join(mu['addr_tok_from_parsed_withaddr'])
+            right_addr_toks = ' '.join(mv['addr_tok_from_parsed_withaddr'])
+            w_addr_tok.write(f"{left_addr_toks}\t{right_addr_toks}\n")
 
-            # 5) addr_sent_seqid_per_token.txt (aligned to space tokens; default "-1")
-            left_seqid_tokens  = per_space_token_default(mu['raw'], default="-1")
-            right_seqid_tokens = per_space_token_default(mv['raw'], default="-1")
-            w_addr_seqid_tok.write(
-                f"{' '.join(left_seqid_tokens)}\t{' '.join(right_seqid_tokens)}\n"
-            )
+            """ # 6) addr_sent_seqid_per_token.txt:
+            # For address-like tokens: output a SINGLE line number.
+            # Prefer the current pair's line number if the token's address is u or v.
+            current_addrs = {u, v}
+            left_seqids  = ' '.join(per_token_line_of_addr(mu['parsed_keep'],
+                                                           addr_to_seqid,
+                                                           current_line_idx=line_idx,
+                                                           current_addrs=current_addrs))
+            right_seqids = ' '.join(per_token_line_of_addr(mv['parsed_keep'],
+                                                           addr_to_seqid,
+                                                           current_line_idx=line_idx,
+                                                           current_addrs=current_addrs))
+            w_addr_seqid_tok.write(f"{left_seqids}\t{right_seqids}\n") """
 
     print(f"[DONE] {out_dir}")
 
 def main():
     random.seed(0)
-    #bin_folder = '/home/louie/PalmTree/src/data_generator/testbin'
-    bin_folder = '/home/louie/smallbinary'
+    # bin_folder = '/home/louie/PalmTree/src/data_generator/testbin'
+    bin_folder = '/home/louie/smallbinary'  # <-- set your input folder
     window_size = 1
-
     file_lst = []
     for parent, subdirs, files in os.walk(bin_folder):
         for f in files:
             file_lst.append(os.path.join(parent, f))
-
     total = len(file_lst)
     for i, f in enumerate(file_lst, 1):
         print(f"[{i}/{total}]")
