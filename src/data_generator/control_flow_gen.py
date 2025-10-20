@@ -112,8 +112,6 @@ def process_file(f, window_size):
                         for i in range(1, window_size + 1):
                             if idx - i > 0:
                                 w.write(s[idx - i] + "\t" + s[idx] + "\n")
-                            if idx + i < len(s):
-                                w.write(s[idx] + "\t" + s[idx + i] + "\n")
     print(f"[DONE] {out_path}")
 
 

@@ -1,7 +1,7 @@
 import os
 
 # def merge_files(input_folder, output_file="dfg_train.txt"):
-def merge_files(input_folder, output_file="cfg_train.txt"):
+def merge_files(input_folder, output_file="dfg_train.txt"):
     with open(output_file, "w", encoding="utf-8") as outfile:
         for root, _, files in os.walk(input_folder):
             for fname in sorted(files):

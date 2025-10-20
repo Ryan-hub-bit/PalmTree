@@ -1,4 +1,3 @@
-from binaryninja import *
 from binaryninja import load 
 import networkx as nx
 import numpy as np

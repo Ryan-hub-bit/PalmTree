@@ -13,12 +13,12 @@ import bert_pytorch
 
 
 print(palmtree.__file__)
-vocab_path = "/home/louie/PalmTree/output/vocab"
-train_cfg_dataset = "/home/louie/PalmTree/data/cfg_train.txt"
-train_dfg_dataset = "/home/louie/PalmTree/data/dfg_train.txt"
+vocab_path = "/home/louie/PalmTree/baseoutput/vocab"
+train_cfg_dataset = "/home/louie/PalmTree/data/base/cfg_train.txt"
+train_dfg_dataset = "/home/louie/PalmTree/data/base/dfg_train.txt"
 test_dataset = "/home/louie/PalmTree/data/test.txt"
 sent_dataset = "data/sentence.pkl"
-output_path = "/home/louie/PalmTree/output/transformer"
+output_path = "/home/louie/PalmTree/baseoutput/transformer"
 
 with open(train_cfg_dataset, "r", encoding="utf-8") as f1:
     with open(train_dfg_dataset, "r", encoding="utf-8") as f2:
