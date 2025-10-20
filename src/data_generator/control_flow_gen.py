@@ -1,4 +1,4 @@
-from binaryninja import *
+# -*- coding: utf-8 -*-
 from binaryninja import load
 import networkx as nx
 import random
@@ -6,15 +6,28 @@ import os
 import re
 from pathlib import Path
 
-# ---------- regex ----------
+# -------------------- tokenization / normalization --------------------
+# Matches hex, identifiers/opcodes, punctuation like [], commas, etc., and numbers
+TOKENIZE_RE = re.compile(
+    r"0x[0-9A-Fa-f]+|[A-Za-z_.$][\w.$]*|[\[\]\+\-\*\(\),:]|\d+"
+)
+
+def normalize_spacing(s: str) -> str:
+    """
+    Normalize raw disassembly so every symbol is separated by a single space.
+    Example: 'lea     rdi, [rel 0x406210]' -> 'lea rdi [ rel 0x406210 ]'
+    """
+    toks = TOKENIZE_RE.findall(s)
+    return " ".join(toks)
+
+# -------------------- instruction parser (kept for parsed_pairs.txt) --------------------
 HEX_RE = re.compile(r'0x[0-9a-fA-F]+')
 
-# ---------- address-like heuristic ----------
-def is_addr_like_str(s: str) -> bool:
-    return s.startswith("0x") and len(s) >= 6
-
-# ---------- instruction parser ----------
 def parse_instruction(ins, symbol_map, string_map):
+    """
+    Replace address-like immediates with 'symbol' / 'string' / 'address'.
+    Keeps your previous parse format (first whitespace -> comma+space split).
+    """
     ins = re.sub(r'\s+', ', ', ins, 1)
     parts = ins.split(', ')
     operand = []
@@ -38,75 +51,22 @@ def parse_instruction(ins, symbol_map, string_map):
     opcode = parts[0]
     return ' '.join([opcode] + operand)
 
-# ---------- token helpers ----------
+# -------------------- space-split helpers (SRC/TGT alignment) --------------------
 def tokenize_raw(s: str):
+    """Split strictly by whitespace; each token gets one SRC and one TGT."""
     return s.split()
 
-def tokenize_with_spans(s: str):
-    toks = []
-    i = 0
-    n = len(s)
-    while i < n:
-        while i < n and s[i].isspace():
-            i += 1
-        if i >= n:
-            break
-        j = i
-        while j < n and not s[j].isspace():
-            j += 1
-        toks.append((s[i:j], i, j))
-        i = j
-    return toks
+def per_space_token_targets_zero(raw_text: str):
+    """File #4 (TGT): emit '0' once per space-split token."""
+    n = len(tokenize_raw(raw_text))
+    return ["0"] * max(1, n)
 
-def per_token_echo_hex_or_zero(raw_text: str):
-    """File #4: echo the hex for address-like tokens (0x..., len>=6), else '0'"""
-    toks = tokenize_with_spans(raw_text)
-    if not toks:
-        return []
-    out = ["0"] * len(toks)
-    for m in HEX_RE.finditer(raw_text):
-        lit = m.group(0)
-        if not is_addr_like_str(lit):
-            continue
-        hs, he = m.span()
-        for idx, (_tok, ts, te) in enumerate(toks):
-            if not (te <= hs or ts >= he):
-                out[idx] = lit
-                break
-    return out
+def per_space_token_default(raw_text: str, default="-1"):
+    """File #5 (SeqID map placeholder): align to space-split tokens with a constant value."""
+    n = len(tokenize_raw(raw_text))
+    return [default] * max(1, n)
 
-def per_token_addr_seqid(raw_text: str, addr_to_seqid: dict[int, list[int]]):
-    """
-    File #5: for every token:
-      - not address-like -> '-1'
-      - address-like -> list of all line indices where this address appears
-        as a sentence address; if none, '-2'
-    """
-    toks = tokenize_with_spans(raw_text)
-    if not toks:
-        return []
-    out = ["-1"] * len(toks)
-    for m in HEX_RE.finditer(raw_text):
-        lit = m.group(0)
-        if not is_addr_like_str(lit):
-            continue
-        try:
-            addr = int(lit, 16)
-        except ValueError:
-            continue
-        seqids = addr_to_seqid.get(addr)
-        if seqids:
-            val = "[" + ",".join(str(x) for x in sorted(set(seqids))) + "]"
-        else:
-            val = "-2"
-        hs, he = m.span()
-        for idx, (_tok, ts, te) in enumerate(toks):
-            if not (te <= hs or ts >= he):
-                out[idx] = val
-                break
-    return out
-
-# ---------- CFG random walk ----------
+# -------------------- CFG random walk --------------------
 def random_walk(g, length, node_has_text):
     sequences = []
     for n in g:
@@ -130,9 +90,9 @@ def random_walk(g, length, node_has_text):
             return sequences[:100]
     return sequences
 
-# ---------- per-binary processing ----------
+# -------------------- per-binary processing --------------------
 def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"):
-    print(f"[INFO] Processing: %s" % f)
+    print(f"[INFO] Processing: {f}")
     bv = load(f)
 
     binary_name = Path(f).stem
@@ -142,9 +102,9 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
     # outputs
     p1 = out_dir / "raw_pairs.txt"
     p2 = out_dir / "parsed_pairs.txt"
-    p3 = out_dir / "instr_addr_per_token.txt"
-    p4 = out_dir / "addr_token_per_token.txt"
-    p5 = out_dir / "addr_sent_seqid_per_token.txt"
+    p3 = out_dir / "instr_addr_per_token.txt"       # SRC per token = instruction address
+    p4 = out_dir / "addr_token_per_token.txt"       # TGT per token = "0"
+    p5 = out_dir / "addr_sent_seqid_per_token.txt"  # placeholder aligned to space tokens
 
     print(f"[INFO] Writing:\n 1) {p1}\n 2) {p2}\n 3) {p3}\n 4) {p4}\n 5) {p5}")
 
@@ -161,23 +121,34 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
             curr = block.start
             predecessor = curr
             for inst in block:
-                raw = bv.get_disassembly(curr)
-                parsed = parse_instruction(raw, symbol_map, string_map)
+                # get disassembly and normalize spacing for raw_pairs + token counts
+                raw_original = bv.get_disassembly(curr)
+                raw = normalize_spacing(raw_original)
+                parsed = parse_instruction(raw_original, symbol_map, string_map)
+
+                # SPACE-SPLIT token count and TGT=0s sized to it
                 raw_tok_count = len(tokenize_raw(raw))
-                addr_tok = per_token_echo_hex_or_zero(raw)
+                addr_tgt_zero = per_space_token_targets_zero(raw)
+
+                # store normalized raw
                 G.add_node(curr, text=raw)
                 node_meta[curr] = {
-                    "raw": raw,
-                    "parsed": parsed,
-                    "raw_tok_count": raw_tok_count,
-                    "addr_tok": addr_tok,
+                    "raw": raw,                      # normalized spaced raw
+                    "parsed": parsed,               # your parsed format
+                    "raw_tok_count": raw_tok_count, # per-token counts (space-split)
+                    "addr_tok": addr_tgt_zero,      # zeros per token
                 }
+
                 if curr != block.start:
                     G.add_edge(predecessor, curr)
                 predecessor = curr
+
+                # Advance by instruction length; Binary Ninja's block iteration yields tuples (il, len)
                 curr += inst[1]
+
             for edge in block.outgoing_edges:
                 G.add_edge(predecessor, edge.target.start)
+
         if len(G.nodes) > 2:
             function_graphs[func.name] = G
 
@@ -192,12 +163,6 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
                     u, v = seq[idx], seq[idx + i]
                     pairs.append((u, v))
 
-    # -------- FIRST PASS: build addr -> list of all line indices --------
-    addr_to_seqid = {}  # address -> list of line indices
-    for line_idx, (u, v) in enumerate(pairs):
-        addr_to_seqid.setdefault(u, []).append(line_idx)
-        addr_to_seqid.setdefault(v, []).append(line_idx)
-
     # -------- SECOND PASS: write outputs --------
     with open(p1, "w", encoding="utf-8") as w_raw, \
          open(p2, "w", encoding="utf-8") as w_parsed, \
@@ -208,27 +173,27 @@ def process_file(f, window_size, output_root="/home/louie/PalmTree/data/kun/cfg"
         for line_idx, (u, v) in enumerate(pairs):
             mu, mv = node_meta[u], node_meta[v]
 
-            # 1) raw pairs
+            # 1) raw_pairs.txt (normalized with one space between all symbols)
             w_raw.write(f"{mu['raw']}\t{mv['raw']}\n")
 
-            # 2) parsed pairs
+            # 2) parsed_pairs.txt
             w_parsed.write(f"{mu['parsed']}\t{mv['parsed']}\n")
 
-            # 3) instr_addr_per_token.txt (repeat each sentence's own instr address)
+            # 3) instr_addr_per_token.txt (SRC per token = instruction address, repeated per space token)
             left_addr  = f"0x{u:x}"
             right_addr = f"0x{v:x}"
             left_rep   = " ".join([left_addr]  * max(1, mu["raw_tok_count"]))
             right_rep  = " ".join([right_addr] * max(1, mv["raw_tok_count"]))
             w_instr.write(f"{left_rep}\t{right_rep}\n")
 
-            # 4) addr_token_per_token.txt
+            # 4) addr_token_per_token.txt (TGT per token = "0", sized to space tokens)
             w_addr_tok.write(
                 f"{' '.join(mu['addr_tok'])}\t{' '.join(mv['addr_tok'])}\n"
             )
 
-            # 5) addr_sent_seqid_per_token.txt (list all line indices where addr appears)
-            left_seqid_tokens  = per_token_addr_seqid(mu['raw'], addr_to_seqid)
-            right_seqid_tokens = per_token_addr_seqid(mv['raw'], addr_to_seqid)
+            # 5) addr_sent_seqid_per_token.txt (aligned to space tokens; default "-1")
+            left_seqid_tokens  = per_space_token_default(mu['raw'], default="-1")
+            right_seqid_tokens = per_space_token_default(mv['raw'], default="-1")
             w_addr_seqid_tok.write(
                 f"{' '.join(left_seqid_tokens)}\t{' '.join(right_seqid_tokens)}\n"
             )
@@ -240,10 +205,12 @@ def main():
     #bin_folder = '/home/louie/PalmTree/src/data_generator/testbin'
     bin_folder = '/home/louie/smallbinary'
     window_size = 1
+
     file_lst = []
     for parent, subdirs, files in os.walk(bin_folder):
         for f in files:
             file_lst.append(os.path.join(parent, f))
+
     total = len(file_lst)
     for i, f in enumerate(file_lst, 1):
         print(f"[{i}/{total}]")
@@ -251,3 +218,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

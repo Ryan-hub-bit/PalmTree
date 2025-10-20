@@ -449,11 +449,6 @@ class BERTDataset(Dataset):
         unk = self.vocab.unk_index
         return [stoi.get(t, unk) for t in sentence.split()]
 
-    # def _to_int_list(self, s: str):
-    #     """Parse a space-separated string of ints into a list of ints."""
-    #     if not s:
-    #         return []
-    #     return [int(x, 16) for x in s.split()]
 
     # _to_int_list: parse tokens as unsigned then wrap to signed for tensors
     def _to_int_list(self, s: str):
@@ -648,14 +643,15 @@ class BERTDataset(Dataset):
 
         # Segment/target labels -> lists of ints (your _to_int_list already does unsigned→signed64 wrap)
         cs1 = self._to_int_list(cs1); cs2 = self._to_int_list(cs2)
-        cd1 = self._to_int_list(cd1); cd2 = self._to_int_list(cd2)
+        cd1 = [0] + self._to_int_list(cd1) + [0]; cd2 = self._to_int_list(cd2)  + [0]
 
         ds1 = self._to_int_list(ds1); ds2 = self._to_int_list(ds2)
-        dd1 = self._to_int_list(dd1); dd2 = self._to_int_list(dd2)
+        dd1 = [0] + self._to_int_list(dd1) + [0]; dd2 = self._to_int_list(dd2) + [0]
 
         # Concatenate then truncate to seq_len (we'll pad to exact length below)
-        dfg_segment_label = (ds1 + ds2)[:self.seq_len]
-        cfg_segment_label = (cs1 + cs2)[:self.seq_len]
+        # dfg_segment_label = (ds1 + ds2)[:self.seq_len]
+        dfg_segment_label = ([ds1[0] for _ in range(len(dfg_left))] + [ds2[0] for _ in range(len(dfg_right))])[:self.seq_len]
+        cfg_segment_label = ([cs1[0] for _ in range(len(cfg_left))] + [cs2[0] for _ in range(len(cfg_right))])[:self.seq_len]
 
         cfg_tgt_label = (cd1 + cd2)[:self.seq_len]
         dfg_tgt_label = (dd1 + dd2)[:self.seq_len]
@@ -678,25 +674,13 @@ class BERTDataset(Dataset):
         cfg_segment_label = _pad_to(cfg_segment_label, L, pad)
         cfg_tgt_label     = _pad_to(cfg_tgt_label,     L, pad)
 
-        # (Optional) strict checks during debugging
-        # for key, arr in {
-        #     "dfg_bert_input": dfg_bert_input,
-        #     "dfg_bert_label": dfg_bert_label,
-        #     "dfg_segment_label": dfg_segment_label,
-        #     "dfg_tgt_label": dfg_tgt_label,
-        #     "cfg_bert_input": cfg_bert_input,
-        #     "cfg_segment_label": cfg_segment_label,
-        #     "cfg_tgt_label": cfg_tgt_label,
-        # }.items():
-        #     assert len(arr) == L, f"{key} len={len(arr)} != {L}"
 
         output = {
             "dfg_bert_input": dfg_bert_input,
             "dfg_bert_label": dfg_bert_label,
-            "dfg_segment_label": dfg_segment_label,
+            "dfg_segment_label": dfg_segment_label, # src addr
             "dfg_tgt_label": dfg_tgt_label,
             "dfg_is_next": d_label,  # scalar (0/1)
-
             "cfg_bert_input": cfg_bert_input,
             "cfg_segment_label": cfg_segment_label,
             "cfg_tgt_label": cfg_tgt_label,
