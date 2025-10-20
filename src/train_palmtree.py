@@ -45,7 +45,7 @@ print("Vocab Size: ", len(vocab))
 
 print("Loading Train Dataset")
 train_dataset = dataset.BERTDataset(train_cfg_dataset, train_dfg_dataset, train_cfg_srcaddr, train_dfg_srcaddr, train_cfg_tgtaddr, train_dfg_tgtaddr,vocab, seq_len=20,
-                            corpus_lines=None, on_memory=True,drive_mode="max")
+                            corpus_lines=None, on_memory=True,drive_mode="min")
 
 """ print("Loading Test Dataset", test_dataset)
 test_dataset = bert_pytorch.dataset.BERTDataset(test_dataset, test_dataset, vocab, seq_len=20, on_memory=True) \
