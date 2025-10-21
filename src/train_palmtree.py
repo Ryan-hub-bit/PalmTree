@@ -14,8 +14,8 @@ import bert_pytorch
 
 print(palmtree.__file__)
 vocab_path = "/home/louie/PalmTree/baseoutput/vocab"
-train_cfg_dataset = "/home/louie/PalmTree/data/base/cfg_train.txt"
-train_dfg_dataset = "/home/louie/PalmTree/data/base/dfg_train.txt"
+train_cfg_dataset = "/home/louie/PalmTree/data/cfg_train.txt"
+train_dfg_dataset = "/home/louie/PalmTree/data/dfg_train.txt"
 test_dataset = "/home/louie/PalmTree/data/test.txt"
 sent_dataset = "data/sentence.pkl"
 output_path = "/home/louie/PalmTree/baseoutput/transformer"
