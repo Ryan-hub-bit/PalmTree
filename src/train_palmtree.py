@@ -15,15 +15,15 @@ from pathlib import Path
 
 print(palmtree.__file__)
 vocab_path = "/home/louie/PalmTree/data/kunoutput/vocab"
-train_cfg_dataset = "/home/louie/PalmTree/data/kun/cfg/cfg_train.txt"
-train_cfg_srcaddr = "/home/louie/PalmTree/data/kun/cfg/cfg_train_src.txt"
-train_dfg_srcaddr = "/home/louie/PalmTree/data/kun/dfg/dfg_train_src.txt"
-train_cfg_tgtaddr = "/home/louie/PalmTree/data/kun/cfg/cfg_train_tgt.txt"
-train_dfg_tgtaddr = "/home/louie/PalmTree/data/kun/dfg/dfg_train_tgt.txt"
-train_dfg_dataset = "/home/louie/PalmTree/data/kun/dfg/dfg_train.txt"
+train_cfg_dataset = "/home/louie/PalmTree/data/cfg_train.txt"
+train_cfg_srcaddr = "/home/louie/PalmTree/data/cfg_train_src.txt"
+train_dfg_srcaddr = "/home/louie/PalmTree/data/dfg_train_src.txt"
+train_cfg_tgtaddr = "/home/louie/PalmTree/data/cfg_train_tgt.txt"
+train_dfg_tgtaddr = "/home/louie/PalmTree/data/dfg_train_tgt.txt"
+train_dfg_dataset = "/home/louie/PalmTree/data/dfg_train.txt"
 test_dataset = ""
 sent_dataset = ""
-output_path = "/home/louie/PalmTree/data/kunoutput" 
+output_path = "/home/louie/PalmTree/data/kunoutput/transformer_mlp" 
 
 Path(vocab_path).parent.mkdir(parents=True, exist_ok=True)
 
