@@ -55,9 +55,8 @@ print("Creating Dataloader")
 train_data_loader = DataLoader(train_dataset, batch_size=256, num_workers=10)
 
 
-""" 
 test_data_loader = DataLoader(test_dataset, batch_size=256, num_workers=10) \
-    if test_dataset is not None else None """
+    if test_dataset is not None else None
 
 print("Building BERT model")
 bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=12, attn_heads=8, dropout=0.0)
@@ -73,5 +72,5 @@ print("Training Start")
 for epoch in range(20):
     trainer.train(epoch)
     trainer.save(epoch, output_path)
-#    if test_data_loader is not None:
-#        trainer.test(epoch)     
+    if test_data_loader is not None:
+       trainer.test(epoch)     
