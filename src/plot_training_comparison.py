@@ -2,9 +2,11 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from palmtree.trainer.pretrain import BERTTrainer
-from palmtree.model import BERT
+import bert_pytorch
+from bert_pytorch import BERT
 import json
 import os
+
 
 def evaluate_epoch(trainer, test_dataloader):
     """Evaluate model on test dataset and return metrics."""
@@ -62,7 +64,11 @@ def evaluate_epoch(trainer, test_dataloader):
     cfg_nsp_acc = total_cfg_correct / total_samples
     perplexity = np.exp(avg_mlm_loss)
     
+    # Calculate total loss the same way as in training
+    total_loss = avg_dfg_nsp_loss + avg_cfg_nsp_loss + avg_mlm_loss
+    
     return {
+        'total_loss': total_loss,
         'mlm_loss': avg_mlm_loss,
         'perplexity': perplexity,
         'dfg_nsp_loss': avg_dfg_nsp_loss,
@@ -81,17 +87,16 @@ def create_test_dataloader(data_path, vocab_path, batch_size=32, model_type="bas
     # Load vocabulary
     vocab = WordVocab.load_vocab(vocab_path)
     
-    # Parse the base path to construct paths for all needed files
-    base_dir = os.path.dirname(data_path)
-    base_name = os.path.splitext(os.path.basename(data_path))[0]
+    # Use the test directory directly
+    base_dir = data_path  # This should be 'data/test'
     
     # Construct paths for all required files
-    cfg_dataset = os.path.join(base_dir, f"cfg_{base_name}.txt")
-    dfg_dataset = os.path.join(base_dir, f"dfg_{base_name}.txt")
-    cfg_srcaddr = os.path.join(base_dir, f"cfg_{base_name}_src.txt")
-    dfg_srcaddr = os.path.join(base_dir, f"dfg_{base_name}_src.txt")
-    cfg_tgtaddr = os.path.join(base_dir, f"cfg_{base_name}_tgt.txt")
-    dfg_tgtaddr = os.path.join(base_dir, f"dfg_{base_name}_tgt.txt")
+    cfg_dataset = os.path.join(base_dir, f"cfg_test.txt")
+    dfg_dataset = os.path.join(base_dir, f"dfg_test.txt")
+    cfg_srcaddr = os.path.join(base_dir, f"cfg_test_src.txt")
+    dfg_srcaddr = os.path.join(base_dir, f"dfg_test_src.txt")
+    cfg_tgtaddr = os.path.join(base_dir, f"cfg_test_tgt.txt")
+    dfg_tgtaddr = os.path.join(base_dir, f"dfg_test_tgt.txt")
     
     if model_type == "address_aware":
         # Use BERTDataset for address-aware model
@@ -111,7 +116,6 @@ def create_test_dataloader(data_path, vocab_path, batch_size=32, model_type="bas
             vocab, seq_len=20,
             corpus_lines=None, 
             on_memory=True,
-            drive_mode="min"
         )
     
     return torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
@@ -119,22 +123,26 @@ def create_test_dataloader(data_path, vocab_path, batch_size=32, model_type="bas
 def load_and_evaluate_model(model_path, test_data_path, vocab_path, model_type="baseline"):
     """Load model and evaluate it with appropriate dataloader."""
     from palmtree.dataset import WordVocab  # Import WordVocab class
+    from palmtree.model import BERTLM  # Import BERTLM wrapper
     
     # Load vocabulary and create a fresh BERT model
     vocab = WordVocab.load_vocab(vocab_path)
     vocab_size = len(vocab)
     
-    # Create a new BERT model with the same architecture
-    bert = BERT(vocab_size=vocab_size)
+    # Create a new BERT model with the same architecture as used in training
+    bert = bert_pytorch.BERT(vocab_size, hidden=128, n_layers=12, attn_heads=8, dropout=0.0)
     
-    # Load the state dict from checkpoint
-    checkpoint = torch.load(model_path)
+    # Load the state dict from checkpoint with weights_only=False for trusted model
+    checkpoint = torch.load(model_path, weights_only=False)
     if isinstance(checkpoint, dict):
         # If checkpoint is a state dict
         bert.load_state_dict(checkpoint)
     else:
         # If checkpoint is the full model
-        bert.load_state_dict(checkpoint.state_dict())
+        bert = checkpoint
+        
+    # Wrap the BERT model with BERTLM as done in training
+    model = BERTLM(bert, vocab_size)
     
     test_dataloader = create_test_dataloader(test_data_path, vocab_path, 
                                            model_type=model_type)
@@ -146,6 +154,10 @@ def load_and_evaluate_model(model_path, test_data_path, vocab_path, model_type="
         test_dataloader=test_dataloader,
         with_cuda=torch.cuda.is_available()
     )
+    
+    # Set the loaded model as trainer's model
+    trainer.model = model.to(trainer.device)
+    
     return evaluate_epoch(trainer, test_dataloader)
 
 if __name__ == "__main__":
@@ -166,7 +178,7 @@ if __name__ == "__main__":
 
     # Initialize metrics collection
     metrics = {
-        'mlm_loss': [], 'perplexity': [], 
+        'total_loss': [], 'mlm_loss': [], 'perplexity': [], 
         'dfg_nsp_loss': [], 'cfg_nsp_loss': [],
         'dfg_nsp_acc': [], 'cfg_nsp_acc': []
     }
@@ -177,7 +189,8 @@ if __name__ == "__main__":
     
     # Evaluate each epoch
     for checkpoint in checkpoints:
-        epoch = int(checkpoint.split('.')[-1])
+        # Extract the epoch number by removing 'ep' from the end
+        epoch = int(checkpoint.split('ep')[-1])
         print(f"Evaluating {args.model_type} model - epoch {epoch}")
         
         # Evaluate model

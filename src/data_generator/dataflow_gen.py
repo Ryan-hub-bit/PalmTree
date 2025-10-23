@@ -115,13 +115,13 @@ def process_file(f):
         if len(G.nodes) > 2:
             function_graphs[func.name] = G
 
-    out_dir = Path("/home/louie/PalmTree/data/dfg")
+    out_dir = Path("/home/louie/PalmTree/data/test/dfg")
     out_dir.mkdir(parents=True, exist_ok=True)
     binary_name = Path(f).stem
 
-    dfg_path = out_dir / f"{binary_name}_dfg.txt"
-    src_path = out_dir / f"{binary_name}_dfg_src.txt"   # SRC
-    tgt_path = out_dir / f"{binary_name}_dfg_tgt.txt"   # TGT
+    dfg_path = out_dir / f"{binary_name}_dfg_test.txt"
+    src_path = out_dir / f"{binary_name}_dfg_test_src.txt"   # SRC
+    tgt_path = out_dir / f"{binary_name}_dfg_test_tgt.txt"   # TGT
 
     print(f"[INFO] Writing to: {dfg_path}, {src_path}, {tgt_path}")
 
@@ -171,7 +171,7 @@ def process_file(f):
 
 
 def main():
-    bin_folder = '/home/louie/smallbinary'
+    bin_folder = '/home/louie/testbinary'
     file_lst = []
     for parent, _, files in os.walk(bin_folder):
         for f in files:

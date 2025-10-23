@@ -12,17 +12,17 @@ import os
 from pathlib import Path
 
 # Root directory containing all subfolders
-root_dir = Path("/home/louie/PalmTree/data/cfg")
+root_dir = Path("/home/louie/PalmTree/data/test/dfg")
 
-# Output file paths (placed in root_dir)
-out_train = root_dir / "cfg_train.txt"
-out_src   = root_dir / "cfg_train_src.txt"
-out_tgt   = root_dir / "cfg_train_tgt.txt"
+parent_dir = root_dir.parent  # removes the last element
 
+out_train = parent_dir / "dfg_test.txt"
+out_src   = parent_dir / "dfg_test_src.txt"
+out_tgt   = parent_dir / "dfg_test_tgt.txt"
 # Collect all matching files recursively
-train_files = list(root_dir.rglob("*_cfg_train.txt"))
-src_files   = list(root_dir.rglob("*_cfg_train_src.txt"))
-tgt_files   = list(root_dir.rglob("*_cfg_train_tgt.txt"))
+train_files = list(root_dir.rglob("*_dfg_test.txt"))
+src_files   = list(root_dir.rglob("*_dfg_test_src.txt"))
+tgt_files   = list(root_dir.rglob("*_dfg_test_tgt.txt"))
 
 def merge_files(file_list, output_file):
     """Concatenate all text files in file_list into output_file."""
@@ -38,9 +38,9 @@ def merge_files(file_list, output_file):
     print(f"[DONE] Wrote {output_file} ({len(file_list)} files)")
 
 def main():
-    print(f"[INFO] Found {len(train_files)} *_cfg.txt files")
-    print(f"[INFO] Found {len(src_files)} *_cfg_src.txt files")
-    print(f"[INFO] Found {len(tgt_files)} *_cfg_tgt.txt files")
+    print(f"[INFO] Found {len(train_files)} *_dfg.txt files")
+    print(f"[INFO] Found {len(src_files)} *_dfg_src.txt files")
+    print(f"[INFO] Found {len(tgt_files)} *_dfg_tgt.txt files")
 
     merge_files(train_files, out_train)
     merge_files(src_files, out_src)
