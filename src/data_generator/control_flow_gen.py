@@ -100,15 +100,15 @@ def process_file(f: str, window_size: int):
     bv = load(f)
 
     # Create an output directory (once)
-    out_dir = Path("/home/louie/PalmTree/data/cfg/")
+    out_dir = Path("/home/louie/PalmTree/data/test/cfg/")
     out_dir.mkdir(parents=True, exist_ok=True)
      # Get the binary name without extension
     binary_name = Path(f).stem
 
     # Aggregate *train* files (append-only) to mirror your original logic
-    out_pairs = out_dir / f"{binary_name}_cfg_train.txt"
-    out_src = out_dir / f"{binary_name}_cfg_train_src.txt"
-    out_tgt = out_dir / f"{binary_name}_cfg_train_tgt.txt"
+    out_pairs = out_dir / f"{binary_name}_cfg_test.txt"
+    out_src = out_dir / f"{binary_name}_cfg_test_src.txt"
+    out_tgt = out_dir / f"{binary_name}_cfg_test_tgt.txt"
     # Collect symbols and strings
     for sym in bv.get_symbols():
         symbol_map[sym.address] = sym.full_name
@@ -166,7 +166,7 @@ def process_file(f: str, window_size: int):
 
 
 def main():
-    bin_folder = "/home/louie/smallbinary"
+    bin_folder = "/home/louie/testbinary"
     file_lst = []
     window_size = 1  # minimal change: same default as before
 
