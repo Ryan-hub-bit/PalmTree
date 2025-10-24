@@ -64,3 +64,31 @@ class MaskedLanguageModel(nn.Module):
         return self.softmax(self.linear(x))
 
 
+
+class BERTLM2(nn.Module):
+    """
+    BERT Language Model
+    Next Sentence Prediction Model + Masked Language Model
+    """
+
+    def __init__(self, bert: BERT, vocab_size):
+        """
+        :param bert: BERT model which should be trained        :param vocab_size: total vocab size for masked_lm
+        """
+
+        super().__init__()
+        self.bert = bert
+        self.CWP= NextSentencePrediction(self.bert.hidden)
+        self.DUP = NextSentencePrediction(self.bert.hidden)
+        self.MLM = MaskedLanguageModel(self.bert.hidden, vocab_size)
+
+    # def forward(self, d, d_segment_label, d_tgt_label, c, c_segment_label, c_tgt_label):
+    #     d = self.bert(d, d_segment_label, d_tgt_label)
+    #     c = self.bert(c, c_segment_label, c_tgt_label)
+
+    #     return self.DUP(d), self.CWP(c), self.MLM(d)
+    def forward(self, d, d_segment_label, c, c_segment_label):
+        d = self.bert(d, d_segment_label)
+        c = self.bert(c, c_segment_label)
+
+        return self.DUP(d), self.CWP(c), self.MLM(d)

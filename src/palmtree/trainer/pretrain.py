@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam, AdamW
 from torch.utils.data import DataLoader
+import os
+import json
 
 from ..model import BERTLM, BERT
 from .optim_schedule import ScheduledOptim
@@ -94,49 +96,110 @@ class BERTTrainer:
                               total=len(data_loader),
                               bar_format="{l_bar}{r_bar}")
 
-
-        avg_loss = 0.0
-        total_correct = 0
-        total_element = 0
+        # Initialize metrics tracking
+        total_mask_loss = 0
+        total_dfg_next_loss = 0
+        total_cfg_next_loss = 0
+        total_dfg_correct = 0
+        total_cfg_correct = 0
+        total_samples = 0
 
         for i, data in data_iter:
             # 0. batch_data will be sent into the device(GPU or cpu)
             data = {key: value.to(self.device) for key, value in data.items()}
 
             # 1. forward the next_sentence_prediction and masked_lm model
-            dfg_next_sent_output, cfg_next_sent_output, mask_lm_output= self.model(data["dfg_bert_input"], data["dfg_segment_label"], data["dfg_tgt_label"], data["cfg_bert_input"], data["cfg_segment_label"], data["cfg_tgt_label"])
+            dfg_next_sent_output, cfg_next_sent_output, mask_lm_output = self.model(
+                data["dfg_bert_input"], 
+                data["dfg_segment_label"], 
+                data["dfg_tgt_label"], 
+                data["cfg_bert_input"], 
+                data["cfg_segment_label"], 
+                data["cfg_tgt_label"]
+            )
+            
             # 2-1. NLL(negative log likelihood) loss of is_next classification result
             dfg_next_loss = self.dfg_next_criterion(dfg_next_sent_output, data["dfg_is_next"])
             cfg_next_loss = self.cfg_next_criterion(cfg_next_sent_output, data["cfg_is_next"])
 
-
             # 2-2. NLLLoss of predicting masked token word
             mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["dfg_bert_label"])
 
-            # 2-3 NLLloss of instruction component prediction
-            #comp_loss = self.comp_criterion(inst_comp_output.transpose(1, 2), data["component"])
+            # Calculate metrics for both train and test
+            dfg_pred = torch.argmax(dfg_next_sent_output, dim=1)
+            cfg_pred = torch.argmax(cfg_next_sent_output, dim=1)
+            dfg_correct = (dfg_pred == data["dfg_is_next"]).sum().item()
+            cfg_correct = (cfg_pred == data["cfg_is_next"]).sum().item()
             
+            # Accumulate batch metrics
+            batch_size = data["dfg_bert_input"].size(0)
+            total_mask_loss += mask_loss.item() * batch_size
+            total_dfg_next_loss += dfg_next_loss.item() * batch_size
+            total_cfg_next_loss += cfg_next_loss.item() * batch_size
+            total_dfg_correct += dfg_correct
+            total_cfg_correct += cfg_correct
+            total_samples += batch_size
 
-            
             # 2-5. Adding next_loss and mask_loss : 3.4 Pre-training Procedure
-            loss = dfg_next_loss + cfg_next_loss  + mask_loss
+            loss = dfg_next_loss + cfg_next_loss + mask_loss
 
             # 3. backward and optimization only in train
             if train:
                 self.optim_schedule.zero_grad()
                 loss.backward()
                 self.optim_schedule.step_and_update_lr()
-
+            
+            # Show current metrics
+            current_mlm_loss = total_mask_loss / total_samples
+            current_dfg_acc = total_dfg_correct / total_samples
+            current_cfg_acc = total_cfg_correct / total_samples
+            
             post_fix = {
                 "epoch": epoch,
                 "iter": i,
-                "CWP:": cfg_next_loss.item(),
-                "DUP:": dfg_next_loss.item(),
-                "MLM:": mask_loss.item(),
+                "MLM Loss": f"{current_mlm_loss:.4f}",
+                "DFG Acc": f"{current_dfg_acc:.4f}",
+                "CFG Acc": f"{current_cfg_acc:.4f}",
+                "CWP Loss": f"{cfg_next_loss.item():.4f}",
+                "DUP Loss": f"{dfg_next_loss.item():.4f}"
             }
 
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
+                
+        # Calculate and save metrics at the end of epoch
+        avg_mlm_loss = total_mask_loss / total_samples
+        avg_dfg_nsp_loss = total_dfg_next_loss / total_samples
+        avg_cfg_nsp_loss = total_cfg_next_loss / total_samples
+        dfg_nsp_acc = total_dfg_correct / total_samples
+        cfg_nsp_acc = total_cfg_correct / total_samples
+        perplexity = torch.exp(torch.tensor(avg_mlm_loss)).item()
+
+        metrics = {
+            'epoch': epoch,
+            'mode': str_code,
+            'total_loss': avg_mlm_loss + avg_dfg_nsp_loss + avg_cfg_nsp_loss,
+            'mlm_loss': avg_mlm_loss,
+            'perplexity': perplexity,
+            'dfg_nsp_loss': avg_dfg_nsp_loss,
+            'cfg_nsp_loss': avg_cfg_nsp_loss,
+            'dfg_nsp_acc': dfg_nsp_acc,
+            'cfg_nsp_acc': cfg_nsp_acc
+        }
+        
+        # Save metrics to file
+        output_dir = "evaluation_results"
+        os.makedirs(output_dir, exist_ok=True)
+        output_file = os.path.join(output_dir, f'epoch_{epoch:02d}_{str_code}.json')
+        with open(output_file, 'w') as f:
+            json.dump(metrics, f, indent=2)
+        
+        print(f"\nEpoch {epoch} {str_code.capitalize()} Metrics:")
+        print(f"MLM Loss: {avg_mlm_loss:.4f}")
+        print(f"Perplexity: {perplexity:.4f}")
+        print(f"DFG NSP Loss: {avg_dfg_nsp_loss:.4f} (Accuracy: {dfg_nsp_acc:.4f})")
+        print(f"CFG NSP Loss: {avg_cfg_nsp_loss:.4f} (Accuracy: {cfg_nsp_acc:.4f})")
+        print(f"Metrics saved to {output_file}")
 
 
     def save(self, epoch, file_path="output/bert_trained.model"):
