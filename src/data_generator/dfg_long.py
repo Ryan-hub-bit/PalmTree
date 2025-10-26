@@ -10,7 +10,7 @@ from pathlib import Path
 # ---------------------------
 # Config
 # ---------------------------
-SEG_LEN  = 8   # one output line = 8 instructions
+SEG_LEN  = 2   # one output line = 8 instructions
 WALK_LEN = 40  # max steps per random walk
 
 
@@ -56,7 +56,7 @@ def parse_instruction(ins, symbol_map, string_map):
                     elif hv in string_map:
                         symbols[j] = "string"
                     else:
-                        symbols[j] = "address"
+                        symbols[j] = "addr"
                 except ValueError:
                     pass
 
@@ -244,7 +244,7 @@ def process_file(f):
             function_graphs[func.name] = G
 
     # Output paths
-    out_dir = Path("/home/louie/PalmTree/datalong/dfg")
+    out_dir = Path("/home/louie/PalmTree/data/test/dfg")
     out_dir.mkdir(parents=True, exist_ok=True)
     binary_name = Path(f).name
 
@@ -286,7 +286,7 @@ def process_file(f):
 # Main
 # ---------------------------
 def main():
-    bin_folder = '/home/louie/smallbinary'
+    bin_folder = '/home/louie/testbinary'
     file_lst = []
     for parent, _, files in os.walk(bin_folder):
         for f in files:

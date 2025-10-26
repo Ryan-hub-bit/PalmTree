@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Merge all *_dfg.txt, *_dfg_src.txt, and *_dfg_tgt.txt files
+Merge all *_cfg.txt, *_cfg_src.txt, and *_cfg_tgt.txt files
 under a given folder into unified files:
-  - dfg_train.txt
-  - dfg_train_src.txt
-  - dfg_train_tgt.txt
+  - cfg_train.txt
+  - cfg_train_src.txt
+  - cfg_train_tgt.txt
 """
 
 import os
 from pathlib import Path
 
 # Root directory containing all subfolders
-root_dir = Path("/home/louie/PalmTree/data/test/dfg")
+root_dir = Path("/home/louie/PalmTree/data/test/cfg")
+seg_len = 2
 
 parent_dir = root_dir.parent  # removes the last element
 
-out_train = parent_dir / "dfg_test.txt"
-out_src   = parent_dir / "dfg_test_src.txt"
-out_tgt   = parent_dir / "dfg_test_tgt.txt"
+out_train = parent_dir / f"cfg_{seg_len}.txt"
+out_src   = parent_dir / f"cfg_{seg_len}_src.txt"
+out_tgt   = parent_dir / f"cfg_{seg_len}_tgt.txt"
 # Collect all matching files recursively
-train_files = list(root_dir.rglob("*_dfg_test.txt"))
-src_files   = list(root_dir.rglob("*_dfg_test_src.txt"))
-tgt_files   = list(root_dir.rglob("*_dfg_test_tgt.txt"))
+train_files = list(root_dir.rglob(f"*_cfg_{seg_len}.txt"))
+src_files   = list(root_dir.rglob(f"*_cfg_{seg_len}_src.txt"))
+tgt_files   = list(root_dir.rglob(f"*_cfg_{seg_len}_tgt.txt"))
 
 def merge_files(file_list, output_file):
     """Concatenate all text files in file_list into output_file."""
@@ -38,9 +39,9 @@ def merge_files(file_list, output_file):
     print(f"[DONE] Wrote {output_file} ({len(file_list)} files)")
 
 def main():
-    print(f"[INFO] Found {len(train_files)} *_dfg.txt files")
-    print(f"[INFO] Found {len(src_files)} *_dfg_src.txt files")
-    print(f"[INFO] Found {len(tgt_files)} *_dfg_tgt.txt files")
+    print(f"[INFO] Found {len(train_files)} *_cfg.txt files")
+    print(f"[INFO] Found {len(src_files)} *_cfg_src.txt files")
+    print(f"[INFO] Found {len(tgt_files)} *_cfg_tgt.txt files")
 
     merge_files(train_files, out_train)
     merge_files(src_files, out_src)

@@ -8,7 +8,7 @@ from pathlib import Path
 # =========================
 # Config
 # =========================
-SEG_LEN = 8  # each output line = 8 consecutive instructions on a CFG path
+SEG_LEN = 2  # each output line = 8 consecutive instructions on a CFG path
 
 # =========================
 # Address-aware normalization
@@ -53,7 +53,7 @@ def normalize_and_mask(ins_raw: str, symbol_map: dict, string_map: dict):
                     out_tokens.append("string")
                     mask_tokens.append(tok)
                 else:
-                    out_tokens.append("[addr]")  # replace AFTER recording mask
+                    out_tokens.append("addr")  # replace AFTER recording mask
                     mask_tokens.append(tok)
             else:
                 out_tokens.append(tok)
@@ -133,7 +133,7 @@ def process_file(fpath: str):
         return
 
     # Output files (one line per 8-instruction window)
-    out_dir = Path("/home/louie/PalmTree/datalong/cfg")
+    out_dir = Path("/home/louie/PalmTree/data/test/cfg")
     out_dir.mkdir(parents=True, exist_ok=True)
     binary_name = Path(fpath).name
 
@@ -195,13 +195,13 @@ def is_output_file(fname: str) -> bool:
         return False
     base = Path(fname).name
     return (
-        base.endswith("_cfg_test.txt")
-        or base.endswith("_cfg_test_src.txt")
-        or base.endswith("_cfg_test_tgt.txt")
+        base.endswith("_cfg_train.txt")
+        or base.endswith("_cfg_train_src.txt")
+        or base.endswith("_cfg_train_tgt.txt")
     )
 
 def main():
-    bin_folder = "/home/louie/smallbinary"
+    bin_folder = "/home/louie/testbinary"
     file_lst = []
 
     for parent, _, files in os.walk(bin_folder):

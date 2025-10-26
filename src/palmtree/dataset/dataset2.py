@@ -6,7 +6,21 @@ import pickle as pkl
 
 
 class BERTDataset2(Dataset):
-    def __init__(self, cfg_corpus_path, dfg_corpus_path, vocab, seq_len, encoding="utf-8", corpus_lines=None, on_memory=True):
+    def __init__(
+        self,
+        cfg_corpus_path,
+        dfg_corpus_path,
+        vocab,
+        seq_len,
+        encoding="utf-8",
+        corpus_lines=None,
+        on_memory=True,
+        # Optional semantic augmentation
+        cfg_semantic_path=None,
+        dfg_semantic_path=None,
+        use_semantic: str = "none",  # one of {"none", "semantic-only", "augment"}
+        augment_ratio: float = 0.5,
+    ):
         self.vocab = vocab
         self.seq_len = seq_len
 
@@ -17,6 +31,18 @@ class BERTDataset2(Dataset):
         self.dfg_corpus_path = cfg_corpus_path
         self.cfg_corpus_path = dfg_corpus_path
         self.encoding = encoding
+
+        # Semantic options
+        self.use_semantic = (use_semantic or "none").lower()
+        if self.use_semantic not in {"none", "semantic-only", "augment"}:
+            self.use_semantic = "none"
+        # clamp ratio
+        try:
+            self.augment_ratio = max(0.0, min(1.0, float(augment_ratio)))
+        except Exception:
+            self.augment_ratio = 0.5
+        self.cfg_semantic_path = cfg_semantic_path
+        self.dfg_semantic_path = dfg_semantic_path
 
         # load DFG sequences 
         with open(dfg_corpus_path, "r", encoding=encoding) as f:
@@ -42,6 +68,23 @@ class BERTDataset2(Dataset):
                 
                 if self.corpus_lines > len(self.cfg_lines):    
                     self.corpus_lines = len(self.cfg_lines)
+
+        # Optionally load semantic variants (must be aligned line-by-line)
+        self.cfg_sem_lines = None
+        self.dfg_sem_lines = None
+        if on_memory and self.use_semantic in {"semantic-only", "augment"}:
+            if self.cfg_semantic_path:
+                try:
+                    with open(self.cfg_semantic_path, "r", encoding=encoding) as f:
+                        self.cfg_sem_lines = [line[:-1].split("\t") for line in f]
+                except Exception:
+                    self.cfg_sem_lines = None
+            if self.dfg_semantic_path:
+                try:
+                    with open(self.dfg_semantic_path, "r", encoding=encoding) as f:
+                        self.dfg_sem_lines = [line[:-1].split("\t") for line in f]
+                except Exception:
+                    self.dfg_sem_lines = None
         
 
 
@@ -197,8 +240,22 @@ class BERTDataset2(Dataset):
 
     def get_corpus_line(self, item):
         try:
-            c_line = self.cfg_lines[item]
-            d_line = self.dfg_lines[item]
+            # Choose original or semantic based on mode
+            use_sem_cfg = False
+            use_sem_dfg = False
+
+            if self.use_semantic == "semantic-only":
+                use_sem_cfg = self.cfg_sem_lines is not None
+                use_sem_dfg = self.dfg_sem_lines is not None
+            elif self.use_semantic == "augment":
+                use_sem_cfg = (self.cfg_sem_lines is not None) and (random.random() < self.augment_ratio)
+                use_sem_dfg = (self.dfg_sem_lines is not None) and (random.random() < self.augment_ratio)
+
+            c_src = self.cfg_sem_lines if use_sem_cfg else self.cfg_lines
+            d_src = self.dfg_sem_lines if use_sem_dfg else self.dfg_lines
+
+            c_line = c_src[item]
+            d_line = d_src[item]
 
             # sanity check: both should have at least 2 items
             if len(c_line) < 2 or len(d_line) < 2:
@@ -214,7 +271,8 @@ class BERTDataset2(Dataset):
             print(f"[IndexError @ item={item}]")
             print(f"  len(cfg_lines)={len(self.cfg_lines)} len(dfg_lines)={len(self.dfg_lines)}")
             # wrap around instead of crashing
-            return self.get_corpus_line(item % min(len(self.cfg_lines), len(self.dfg_lines)))
+            total_len = min(len(self.cfg_lines), len(self.dfg_lines))
+            return self.get_corpus_line(item % max(1, total_len))
 
     # def get_corpus_line(self, item):
     #     if self.on_memory:

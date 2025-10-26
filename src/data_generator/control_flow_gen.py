@@ -1,4 +1,3 @@
-from binaryninja import *
 from binaryninja import load
 import networkx as nx
 import random
@@ -11,49 +10,70 @@ from collections import Counter
 HEX_RE = re.compile(r"0x[0-9a-fA-F]+")
 
 
-def parse_instruction(ins: str, symbol_map: dict, string_map: dict) -> str:
-    """Normalize a Binary Ninja disassembly line and replace address constants with [addr]."""
-    ins = re.sub(r"\s+", ", ", ins, 1)
-    parts = ins.split(", ")
-    operand = parts[1:] if len(parts) > 1 else []
-    for i in range(len(operand)):
-        symbols = re.split(r"([0-9A-Za-z]+)", operand[i])
-        for j in range(len(symbols)):
-            if symbols[j][:2] == "0x" and len(symbols[j]) >= 6:
-                try:
-                    hv = int(symbols[j], 16)
-                except ValueError:
-                    continue
+def parse_instruction(ins: str, symbol_map: dict, string_map: dict) -> tuple:
+    """Normalize a Binary Ninja disassembly line and replace address constants with [addr].
+    Returns: (normalized_instruction, address_mask)
+    where address_mask contains the original hex values or '0' for each token.
+    """
+    ins = re.sub(r"\s+", " ", ins.strip())
+    tokens = ins.split()
+    
+    normalized_tokens = []
+    address_tokens = []
+    
+    for token in tokens:
+        # Check if this token is a hex address
+        if token.startswith("0x") and len(token) >= 6:
+            original_hex = token
+            try:
+                hv = int(token, 16)
+                # Normalize the token
                 if hv in symbol_map:
-                    symbols[j] = "symbol"
+                    normalized_tokens.append("symbol")
                 elif hv in string_map:
-                    symbols[j] = "string"
+                    normalized_tokens.append("string")
                 else:
-                    # Replace all numeric address-like immediates with [addr]
-                    symbols[j] = "address"
-        operand[i] = " ".join(symbols)
-    opcode = parts[0]
-    return " ".join([opcode] + operand)
+                    normalized_tokens.append("address")
+                # Keep original hex in address mask
+                address_tokens.append(original_hex)
+            except ValueError:
+                # Not a valid hex, treat as regular token
+                normalized_tokens.append(token)
+                address_tokens.append("0")
+        else:
+            # Not an address token
+            normalized_tokens.append(token)
+            address_tokens.append("0")
+    
+    normalized_instr = " ".join(normalized_tokens)
+    address_mask = " ".join(address_tokens)
+    
+    return (normalized_instr, address_mask)
 
 
 
 def random_walk(g: nx.DiGraph, length: int, symbol_map: dict, string_map: dict):
     """Collect short instruction sequences by walking each function CFG.
-    Returns a list of (addr:int, text:str) tuples so we can emit per-token address lines like DFG.
+    Returns a list of (addr:int, text:str, mask:str) tuples where:
+    - addr: instruction address
+    - text: normalized instruction (with 'address', 'symbol', 'string' labels)
+    - mask: address mask (original hex values or '0')
     """
     sequence = []
     for n in g:
         if n != -1 and 'text' in g.nodes[n]:
             s = []
             l = 0
-            s.append((n, parse_instruction(g.nodes[n]['text'], symbol_map, string_map)))
+            text, mask = parse_instruction(g.nodes[n]['text'], symbol_map, string_map)
+            s.append((n, text, mask))
             cur = n
             while l < length:
                 nbs = list(g.successors(cur))
                 if len(nbs):
                     cur = random.choice(nbs)
                     if 'text' in g.nodes[cur]:
-                        s.append((cur, parse_instruction(g.nodes[cur]['text'], symbol_map, string_map)))
+                        text, mask = parse_instruction(g.nodes[cur]['text'], symbol_map, string_map)
+                        s.append((cur, text, mask))
                         l += 1
                     else:
                         break
@@ -70,15 +90,7 @@ def tokens_of(line: str):
     return line.strip().split()
 
 
-def addr_mask_of(line: str):
-    """Per-token address mask: keep hex like 0x..., else '0'."""
-    out = []
-    for tok in tokens_of(line):
-        if tok.startswith("0x") and len(tok) >= 6:
-            out.append(tok)
-        else:
-            out.append("0")
-    return " ".join(out)
+# addr_mask_of is no longer needed since we capture masks during parsing
 
 
 def instr_addr_line(addr: int, line: str) -> str:
@@ -97,15 +109,15 @@ def process_file(f: str, window_size: int):
     bv = load(f)
 
     # Create an output directory (once)
-    out_dir = Path("/home/louie/PalmTree/src/data_generator/testbin")
+    out_dir = Path("/home/louie/PalmTree/data/cfg")
     out_dir.mkdir(parents=True, exist_ok=True)
      # Get the binary name without extension
     binary_name = Path(f).stem
 
     # Aggregate *train* files (append-only) to mirror your original logic
-    out_pairs = out_dir / f"{binary_name}_cfg_test.txt"
-    out_src = out_dir / f"{binary_name}_cfg_test_src.txt"
-    out_tgt = out_dir / f"{binary_name}_cfg_test_tgt.txt"
+    out_pairs = out_dir / f"{binary_name}_cfg_train.txt"
+    out_src = out_dir / f"{binary_name}_cfg_train_src.txt"
+    out_tgt = out_dir / f"{binary_name}_cfg_train_tgt.txt"
     # Collect symbols and strings
     for sym in bv.get_symbols():
         symbol_map[sym.address] = sym.full_name
@@ -143,29 +155,30 @@ def process_file(f: str, window_size: int):
                         for i in range(1, window_size + 1):
                             # backward pairs (strictly idx - i > 0, per your snippet)
                             if idx - i > 0:
-                                (src_addr, src_txt) = s[idx - i]
-                                (tgt_addr, tgt_txt) = s[idx]
+                                (src_addr, src_txt, src_mask) = s[idx - i]
+                                (tgt_addr, tgt_txt, tgt_mask) = s[idx]
                                 w_pairs.write(src_txt + "\t" + tgt_txt + "\n")
                                 # SRC: instruction address repeated per token (DFG-style)
                                 w_src.write(instr_addr_line(src_addr, src_txt) + "\t" + instr_addr_line(tgt_addr, tgt_txt) + "\n")
-                                # TGT: address-if-token-else-0 mask
-                                w_tgt.write(addr_mask_of(src_txt) + "\t" + addr_mask_of(tgt_txt) + "\n")
+                                # TGT: use the pre-captured address mask
+                                w_tgt.write(src_mask + "\t" + tgt_mask + "\n")
                             # forward pairs
                             if idx + i < len(s):
-                                (src2_addr, src2_txt) = s[idx]
-                                (tgt2_addr, tgt2_txt) = s[idx + i]
+                                (src2_addr, src2_txt, src2_mask) = s[idx]
+                                (tgt2_addr, tgt2_txt, tgt2_mask) = s[idx + i]
                                 w_pairs.write(src2_txt + "\t" + tgt2_txt + "\n")
                                 w_src.write(instr_addr_line(src2_addr, src2_txt) + "\t" + instr_addr_line(tgt2_addr, tgt2_txt) + "\n")
-                                # TGT: address-if-token-else-0 mask
-                                w_tgt.write(addr_mask_of(src2_txt) + "\t" + addr_mask_of(tgt2_txt) + "\n")
+                                # TGT: use the pre-captured address mask
+                                w_tgt.write(src2_mask + "\t" + tgt2_mask + "\n")
 
     print(f"[DONE] {out_pairs}")
 
 
 def main():
-    bin_folder = "/home/louie/PalmTree/src/data_generator/testbin"
+    bin_folder = "/home/louie/smallbinary"
     file_lst = []
-    window_size = 8  # minimal change: same default as before
+    print(1)
+    window_size = 1  # minimal change: same default as before
 
     for parent, subdirs, files in os.walk(bin_folder):
         for f in files:
