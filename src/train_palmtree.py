@@ -59,7 +59,7 @@ test_data_loader = DataLoader(test_dataset, batch_size=256, num_workers=10) \
     if test_dataset is not None else None
 
 print("Building BERT model")
-bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=12, attn_heads=8, dropout=0.0)
+bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=12, attn_heads=8)
 
 print("Creating BERT Trainer")
 # the number of dfg and cfg are not the same
