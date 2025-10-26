@@ -12,15 +12,10 @@ HEX_RE = re.compile(r"0x[0-9a-fA-F]+")
 
 
 def parse_instruction(ins: str, symbol_map: dict, string_map: dict) -> str:
-    """Normalize a Binary Ninja disassembly line.
-
-    Minimal edits vs your original: keep whitespace compaction + symbol/string/address tagging.
-    """
-    ins = re.sub(r"\s+", ", ", ins, 1)  # compact the first run of spaces between mnemonic and operands
+    """Normalize a Binary Ninja disassembly line and replace address constants with [addr]."""
+    ins = re.sub(r"\s+", ", ", ins, 1)
     parts = ins.split(", ")
-    operand = []
-    if len(parts) > 1:
-        operand = parts[1:]
+    operand = parts[1:] if len(parts) > 1 else []
     for i in range(len(operand)):
         symbols = re.split(r"([0-9A-Za-z]+)", operand[i])
         for j in range(len(symbols)):
@@ -34,10 +29,12 @@ def parse_instruction(ins: str, symbol_map: dict, string_map: dict) -> str:
                 elif hv in string_map:
                     symbols[j] = "string"
                 else:
-                    pass  # keep real hex addresses so we can emit address/0 masks later
+                    # Replace all numeric address-like immediates with [addr]
+                    symbols[j] = "address"
         operand[i] = " ".join(symbols)
     opcode = parts[0]
     return " ".join([opcode] + operand)
+
 
 
 def random_walk(g: nx.DiGraph, length: int, symbol_map: dict, string_map: dict):
@@ -100,7 +97,7 @@ def process_file(f: str, window_size: int):
     bv = load(f)
 
     # Create an output directory (once)
-    out_dir = Path("/home/louie/PalmTree/data/test/cfg/")
+    out_dir = Path("/home/louie/PalmTree/src/data_generator/testbin")
     out_dir.mkdir(parents=True, exist_ok=True)
      # Get the binary name without extension
     binary_name = Path(f).stem
@@ -166,9 +163,9 @@ def process_file(f: str, window_size: int):
 
 
 def main():
-    bin_folder = "/home/louie/testbinary"
+    bin_folder = "/home/louie/PalmTree/src/data_generator/testbin"
     file_lst = []
-    window_size = 1  # minimal change: same default as before
+    window_size = 8  # minimal change: same default as before
 
     for parent, subdirs, files in os.walk(bin_folder):
         for f in files:
