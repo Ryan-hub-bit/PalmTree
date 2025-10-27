@@ -12,18 +12,18 @@ import os
 from pathlib import Path
 
 # Root directory containing all subfolders
-root_dir = Path("/home/louie/PalmTree/data/test/cfg")
-seg_len = 2
+root_dir = Path("/home/louie/PalmTree/datalong/dfg")
+seg_len = 8
 
 parent_dir = root_dir.parent  # removes the last element
 
-out_train = parent_dir / f"cfg_{seg_len}.txt"
-out_src   = parent_dir / f"cfg_{seg_len}_src.txt"
-out_tgt   = parent_dir / f"cfg_{seg_len}_tgt.txt"
+out_train = parent_dir / f"dfg_{seg_len}.txt"
+out_src   = parent_dir / f"dfg_{seg_len}_src.txt"
+out_tgt   = parent_dir / f"dfg_{seg_len}_tgt.txt"
 # Collect all matching files recursively
-train_files = list(root_dir.rglob(f"*_cfg_{seg_len}.txt"))
-src_files   = list(root_dir.rglob(f"*_cfg_{seg_len}_src.txt"))
-tgt_files   = list(root_dir.rglob(f"*_cfg_{seg_len}_tgt.txt"))
+train_files = list(root_dir.rglob(f"*_dfg_{seg_len}.txt"))
+src_files   = list(root_dir.rglob(f"*_dfg_{seg_len}_src.txt"))
+tgt_files   = list(root_dir.rglob(f"*_dfg_{seg_len}_tgt.txt"))
 
 def merge_files(file_list, output_file):
     """Concatenate all text files in file_list into output_file."""

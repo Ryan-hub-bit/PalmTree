@@ -110,12 +110,12 @@ class BERTTrainer:
 
             # 1. forward the next_sentence_prediction and masked_lm model
             dfg_next_sent_output, cfg_next_sent_output, mask_lm_output = self.model(
-                data["dfg_bert_input"], 
-                data["dfg_segment_label"], 
-                data["dfg_tgt_label"], 
                 data["cfg_bert_input"], 
                 data["cfg_segment_label"], 
-                data["cfg_tgt_label"]
+                data["cfg_tgt_label"], 
+                data["dfg_bert_input"], 
+                data["dfg_segment_label"], 
+                data["dfg_tgt_label"]
             )
             
             # 2-1. NLL(negative log likelihood) loss of is_next classification result
@@ -123,7 +123,7 @@ class BERTTrainer:
             cfg_next_loss = self.cfg_next_criterion(cfg_next_sent_output, data["cfg_is_next"])
 
             # 2-2. NLLLoss of predicting masked token word
-            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["dfg_bert_label"])
+            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["cfg_bert_label"])
 
             # Calculate metrics for both train and test
             dfg_pred = torch.argmax(dfg_next_sent_output, dim=1)
