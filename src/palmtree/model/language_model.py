@@ -22,11 +22,11 @@ class BERTLM(nn.Module):
         self.DUP = NextSentencePrediction(self.bert.hidden)
         self.MLM = MaskedLanguageModel(self.bert.hidden, vocab_size)
 
-    def forward(self, d, d_segment_label, c, c_segment_label):
+    def forward(self, c, c_segment_label, d, d_segment_label):
         d = self.bert(d, d_segment_label)
         c = self.bert(c, c_segment_label)
 
-        return self.DUP(d), self.CWP(c), self.MLM(d)
+        return self.DUP(c), self.CWP(d), self.MLM(c)
 
 
 class NextSentencePrediction(nn.Module):

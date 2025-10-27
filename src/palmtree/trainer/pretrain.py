@@ -104,12 +104,12 @@ class BERTTrainer:
             data = {key: value.to(self.device) for key, value in data.items()}
 
             # 1. forward the next_sentence_prediction and masked_lm model
-            dfg_next_sent_output, cfg_next_sent_output, mask_lm_output= self.model(data["dfg_bert_input"], data["dfg_segment_label"], data["cfg_bert_input"], data["cfg_segment_label"])
+            dfg_next_sent_output, cfg_next_sent_output, mask_lm_output= self.model(data["cfg_bert_input"], data["cfg_segment_label"], data["dfg_bert_input"], data["dfg_segment_label"])
             # 2-1. NLL(negative log likelihood) loss of is_next classification result
             dfg_next_loss = self.dfg_next_criterion(dfg_next_sent_output, data["dfg_is_next"])
             cfg_next_loss = self.cfg_next_criterion(cfg_next_sent_output, data["cfg_is_next"])
             # 2-2. NLLLoss of predicting masked token word
-            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["dfg_bert_label"])
+            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["cfg_bert_label"])
             # 2-3 NLLloss of instruction component prediction
             #comp_loss = self.comp_criterion(inst_comp_output.transpose(1, 2), data["component"])
 
