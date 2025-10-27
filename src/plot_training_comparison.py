@@ -25,17 +25,17 @@ def evaluate_epoch(trainer, test_dataloader):
             
             # Forward pass
             dfg_next_sent_output, cfg_next_sent_output, mask_lm_output = trainer.model(
-                data["dfg_bert_input"],
-                data["dfg_segment_label"],
-                data["dfg_tgt_label"],
                 data["cfg_bert_input"],
                 data["cfg_segment_label"],
-                data["cfg_tgt_label"]
+                data["cfg_tgt_label"],
+                data["dfg_bert_input"],
+                data["dfg_segment_label"],
+                data["dfg_tgt_label"]
             )
             
             # Calculate losses
             mlm_loss = trainer.masked_criterion(mask_lm_output.transpose(1, 2), 
-                                             data["dfg_bert_label"])
+                                             data["cfg_bert_label"])
             dfg_nsp_loss = trainer.dfg_next_criterion(dfg_next_sent_output, 
                                                     data["dfg_is_next"])
             cfg_nsp_loss = trainer.cfg_next_criterion(cfg_next_sent_output, 
@@ -82,7 +82,6 @@ def evaluate_epoch(trainer, test_dataloader):
 def create_test_dataloader(data_path, vocab_path, batch_size=32, model_type="baseline"):
     """Create appropriate test dataloader based on model type."""
     from palmtree.dataset import BERTDataset, WordVocab
-    from palmtree.dataset.dataset2 import BERTDataset2
     
     # Load vocabulary
     vocab = WordVocab.load_vocab(vocab_path)
@@ -109,15 +108,6 @@ def create_test_dataloader(data_path, vocab_path, batch_size=32, model_type="bas
             on_memory=True,
             drive_mode="min"
         )
-    else:
-        # Use BERTDataset2 for baseline model
-        test_dataset = BERTDataset2(
-            cfg_dataset, dfg_dataset,
-            vocab, seq_len=20,
-            corpus_lines=None, 
-            on_memory=True,
-        )
-    
     return torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
 
 def load_and_evaluate_model(model_path, test_data_path, vocab_path, model_type="baseline"):

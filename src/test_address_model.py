@@ -29,17 +29,17 @@ def evaluate_epoch(trainer, test_dataloader):
             
             # Forward pass
             dfg_next_sent_output, cfg_next_sent_output, mask_lm_output = trainer.model(
-                data["dfg_bert_input"],
-                data["dfg_segment_label"],
-                data["dfg_tgt_label"],
                 data["cfg_bert_input"],
                 data["cfg_segment_label"],
-                data["cfg_tgt_label"]
+                data["cfg_tgt_label"],
+                data["dfg_bert_input"],
+                data["dfg_segment_label"],
+                data["dfg_tgt_label"]
             )
             
             # Calculate losses
             mlm_loss = trainer.masked_criterion(mask_lm_output.transpose(1, 2), 
-                                             data["dfg_bert_label"])
+                                             data["cfg_bert_label"])
             dfg_nsp_loss = trainer.dfg_next_criterion(dfg_next_sent_output, 
                                                     data["dfg_is_next"])
             cfg_nsp_loss = trainer.cfg_next_criterion(cfg_next_sent_output, 

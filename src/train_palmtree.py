@@ -8,7 +8,6 @@ import numpy as np
 import palmtree
 from palmtree import dataset
 from palmtree import trainer
-from palmtree.trainer.pretrain2 import BERTTrainer2
 import pickle as pkl
 import bert_pytorch
 from pathlib import Path

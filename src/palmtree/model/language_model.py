@@ -87,8 +87,8 @@ class BERTLM2(nn.Module):
     #     c = self.bert(c, c_segment_label, c_tgt_label)
 
     #     return self.DUP(d), self.CWP(c), self.MLM(d)
-    def forward(self, d, d_segment_label, c, c_segment_label):
-        d = self.bert(d, d_segment_label)
+    def forward(self, c, c_segment_label, d, d_segment_label):
         c = self.bert(c, c_segment_label)
+        d = self.bert(d, d_segment_label)
 
-        return self.DUP(d), self.CWP(c), self.MLM(d)
+        return self.DUP(d), self.CWP(c), self.MLM(c)

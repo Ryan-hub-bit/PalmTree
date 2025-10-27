@@ -71,14 +71,14 @@ class BERTDataset(Dataset):
         self.dfg_tgt_path = dfg_tgt_path
 
         # ---------- loaders ----------
-        self.dfg_lines = self._load_pairs(dfg_corpus_path, desc="Loading DFG")
-        self.cfg_lines = self._load_pairs(cfg_corpus_path, desc="Loading CFG")
+        self.dfg_lines = self._load_instruction_pairs(dfg_corpus_path, desc="Loading DFG")
+        self.cfg_lines = self._load_instruction_pairs(cfg_corpus_path, desc="Loading CFG")
 
-        self.cfg_src_lines = self._load_pairs(cfg_src_path, desc="Loading CFG SRC")
-        self.cfg_tgt_lines = self._load_pairs(cfg_tgt_path, desc="Loading CFG TGT")
+        self.cfg_src_lines = self._load_address_pairs(cfg_src_path, self.cfg_lines, desc="Loading CFG SRC")
+        self.cfg_tgt_lines = self._load_address_pairs(cfg_tgt_path, self.cfg_lines, desc="Loading CFG TGT")
 
-        self.dfg_src_lines = self._load_pairs(dfg_src_path, desc="Loading DFG SRC")
-        self.dfg_tgt_lines = self._load_pairs(dfg_tgt_path, desc="Loading DFG TGT")
+        self.dfg_src_lines = self._load_address_pairs(dfg_src_path, self.dfg_lines, desc="Loading DFG SRC")
+        self.dfg_tgt_lines = self._load_address_pairs(dfg_tgt_path, self.dfg_lines, desc="Loading DFG TGT")
 
         # sizes (make sure aux files aren't shorter than corpus)
         self.n_cfg = min(len(self.cfg_lines), len(self.cfg_src_lines), len(self.cfg_tgt_lines))
@@ -100,8 +100,8 @@ class BERTDataset(Dataset):
             raise RuntimeError("Empty dataset after size checks; please verify your input files.")
 
     # -------- utilities --------
-    def _load_pairs(self, path, desc="Loading"):
-        """Load a tab-separated 'left<TAB>right' file into a list of [left, right]."""
+    def _load_instruction_pairs(self, path, desc="Loading"):
+        """Load a tab-separated file with 8 instructions per line into a list of 8 separate instructions."""
         lines = []
         with open(path, "r", encoding=self.encoding) as f:
             for line in tqdm.tqdm(f, desc=desc):
@@ -109,10 +109,53 @@ class BERTDataset(Dataset):
                 if not line:
                     continue
                 parts = line.split("\t")
-                if len(parts) < 2:
-                    # pad if malformed
-                    parts = [parts[0], ""]
-                lines.append(parts[:2])
+                
+                # Expect 8 instructions per line
+                if len(parts) < 8:
+                    # Pad with empty strings if malformed
+                    parts = parts + [""] * (8 - len(parts))
+                
+                # Keep all 8 instructions separate
+                lines.append(parts[:8])
+        return lines
+
+    def _load_address_pairs(self, path, instruction_lines, desc="Loading"):
+        """
+        Load address file and split addresses to match instruction token counts.
+        Each line has space-separated addresses for all tokens across 8 instructions.
+        We split them to match each of the 8 instructions.
+        """
+        lines = []
+        with open(path, "r", encoding=self.encoding) as f:
+            for idx, line in enumerate(tqdm.tqdm(f, desc=desc)):
+                line = line.rstrip("\n")
+                if not line:
+                    lines.append([""] * 8)
+                    continue
+                
+                # All addresses are space-separated
+                addresses = line.split()
+                
+                if idx < len(instruction_lines):
+                    # Split addresses for each of the 8 instructions
+                    addr_groups = []
+                    addr_idx = 0
+                    for ins in instruction_lines[idx]:
+                        token_count = len(ins.split())
+                        ins_addrs = " ".join(addresses[addr_idx:addr_idx + token_count])
+                        addr_groups.append(ins_addrs)
+                        addr_idx += token_count
+                    lines.append(addr_groups)
+                else:
+                    # Fallback if instruction line doesn't exist - split evenly
+                    chunk_size = len(addresses) // 8
+                    addr_groups = []
+                    for i in range(8):
+                        start = i * chunk_size
+                        end = start + chunk_size if i < 7 else len(addresses)
+                        addr_groups.append(" ".join(addresses[start:end]))
+                    lines.append(addr_groups)
+        
         return lines
 
     def __len__(self):
@@ -176,29 +219,29 @@ class BERTDataset(Dataset):
     # ---------- main fetchers ----------
     def get_corpus_line(self, item):
         """
-        Return:
-          c1, c2,
-          d1, d2,
-          cs1, cs2,  (CFG src/segment labels as space-separated ints)
-          cd1, cd2,  (CFG target labels as space-separated ints)
-          ds1, ds2,  (DFG src/segment labels)
-          dd1, dd2   (DFG target labels)
+        Return 8 instructions and their corresponding addresses:
+          cfg_insts: list of 8 CFG instructions
+          dfg_insts: list of 8 DFG instructions
+          cfg_src: list of 8 CFG src address strings
+          cfg_tgt: list of 8 CFG tgt address strings
+          dfg_src: list of 8 DFG src address strings
+          dfg_tgt: list of 8 DFG tgt address strings
         """
         i_cfg, i_dfg = self._map_indices(item)
 
-        c1, c2 = self.cfg_lines[i_cfg]
-        d1, d2 = self.dfg_lines[i_dfg]
+        cfg_insts = self.cfg_lines[i_cfg]  # list of 8 instructions
+        dfg_insts = self.dfg_lines[i_dfg]  # list of 8 instructions
 
-        cs1, cs2 = self.cfg_src_lines[i_cfg]
-        cd1, cd2 = self.cfg_tgt_lines[i_cfg]
+        cfg_src = self.cfg_src_lines[i_cfg]  # list of 8 address strings
+        cfg_tgt = self.cfg_tgt_lines[i_cfg]  # list of 8 address strings
 
-        ds1, ds2 = self.dfg_src_lines[i_dfg]
-        dd1, dd2 = self.dfg_tgt_lines[i_dfg]
+        dfg_src = self.dfg_src_lines[i_dfg]  # list of 8 address strings
+        dfg_tgt = self.dfg_tgt_lines[i_dfg]  # list of 8 address strings
 
-        return c1, c2, d1, d2, cs1, cs2, cd1, cd2, ds1, ds2, dd1, dd2
+        return cfg_insts, dfg_insts, cfg_src, cfg_tgt, dfg_src, dfg_tgt
 
     def get_random_line_not_idx(self, forbid_idx):
-        """Pick a random CFG line whose index != forbid_idx; return right side + src/tgt right labels."""
+        """Pick a random CFG line whose index != forbid_idx; return all 8 instructions + addresses."""
         if self.n_cfg <= 1:
             # fallback: just return some line
             idx = 0
@@ -207,26 +250,26 @@ class BERTDataset(Dataset):
                 idx = random.randrange(self.n_cfg)
                 if idx != forbid_idx:
                     break
-        l = self.cfg_lines[idx]
-        s = self.cfg_src_lines[idx]
-        d = self.cfg_tgt_lines[idx]
-        return l[1], s[1], d[1]
+        cfg_insts = self.cfg_lines[idx]
+        cfg_src = self.cfg_src_lines[idx]
+        cfg_tgt = self.cfg_tgt_lines[idx]
+        return cfg_insts, cfg_src, cfg_tgt
 
     def get_random_line_dfg(self, forbid_idx):
-        """Pick a random DFG line whose index != forbid_idx and content is different; return right side + src/tgt right labels."""
+        """Pick a random DFG line whose index != forbid_idx and content is different; return all 8 instructions + addresses."""
         if self.n_dfg <= 1:
             # fallback: just return some line
             idx = 0
         else:
             # Get the original content at forbid_idx to compare
-            original_content = self.dfg_lines[forbid_idx][1] if forbid_idx < self.n_dfg else None
+            original_content = self.dfg_lines[forbid_idx] if forbid_idx < self.n_dfg else None
             
             max_attempts = 100  # prevent infinite loop
             attempts = 0
             while attempts < max_attempts:
                 idx = random.randrange(self.n_dfg)
                 # Ensure different index AND different content
-                if idx != forbid_idx and self.dfg_lines[idx][1] != original_content:
+                if idx != forbid_idx and self.dfg_lines[idx] != original_content:
                     break
                 attempts += 1
             
@@ -237,10 +280,10 @@ class BERTDataset(Dataset):
                     if idx != forbid_idx:
                         break
         
-        l = self.dfg_lines[idx]
-        s = self.dfg_src_lines[idx]
-        d = self.dfg_tgt_lines[idx]
-        return l[1], s[1], d[1]
+        dfg_insts = self.dfg_lines[idx]
+        dfg_src = self.dfg_src_lines[idx]
+        dfg_tgt = self.dfg_tgt_lines[idx]
+        return dfg_insts, dfg_src, dfg_tgt
 
     def random_word(self, sentence):
         """
@@ -275,31 +318,47 @@ class BERTDataset(Dataset):
     def random_sent(self, index):
         """
         Create NSP-style variants by mixing CFG/DFG orders or negative pairs.
-        Returns:
-          c1, c2, cs1, cs2, cd1, cd2, c_label,
-          d1, d2, ds1, ds2, dd1, dd2, d_label
-        where labels are 1 for positive, 0 for negative.
+        Returns 8 instructions for each stream with their addresses and labels.
         
-        CFG negatives: swap order (c2, c1)
-        DFG negatives: random line replacement
+        CFG: 4/4 split - tests if second half follows first half in correct order
+        DFG: 7/1 split - tests if last instruction belongs to same trace as first 7
         """
-        c1, c2, d1, d2, cs1, cs2, cd1, cd2, ds1, ds2, dd1, dd2 = self.get_corpus_line(index)
+        cfg_insts, dfg_insts, cfg_src, cfg_tgt, dfg_src, dfg_tgt = self.get_corpus_line(index)
 
         dice = random.random()
         if dice < 0.25:
             # both positives
-            return c1, c2, cs1, cs2, cd1, cd2, 1, d1, d2, ds1, ds2, dd1, dd2, 1
+            # CFG: correct order (1-4, then 5-8)
+            # DFG: same trace (1-7, then 8)
+            return cfg_insts, cfg_src, cfg_tgt, 1, dfg_insts, dfg_src, dfg_tgt, 1
         elif dice < 0.5:
-            # negative CFG (swap order)
-            return c2, c1, cs2, cs1, cd2, cd1, 0, d1, d2, ds1, ds2, dd1, dd2, 1
+            # negative CFG (swap order: 5-8 first, then 1-4), positive DFG
+            cfg_swapped = cfg_insts[4:] + cfg_insts[:4]
+            cfg_src_swapped = cfg_src[4:] + cfg_src[:4]
+            cfg_tgt_swapped = cfg_tgt[4:] + cfg_tgt[:4]
+            return cfg_swapped, cfg_src_swapped, cfg_tgt_swapped, 0, \
+                   dfg_insts, dfg_src, dfg_tgt, 1
         elif dice < 0.75:
-            # negative DFG (random line)
-            dd2_rand, dds2_rand, ddd2_rand = self.get_random_line_dfg(index)
-            return c1, c2, cs1, cs2, cd1, cd2, 1, d1, dd2_rand, ds1, dds2_rand, dd1, ddd2_rand, 0
+            # positive CFG, negative DFG (replace last instruction with random)
+            dfg_rand, dfg_src_rand, dfg_tgt_rand = self.get_random_line_dfg(index)
+            dfg_mixed = dfg_insts[:7] + [dfg_rand[7]]  # keep first 7, replace 8th
+            dfg_src_mixed = dfg_src[:7] + [dfg_src_rand[7]]
+            dfg_tgt_mixed = dfg_tgt[:7] + [dfg_tgt_rand[7]]
+            return cfg_insts, cfg_src, cfg_tgt, 1, \
+                   dfg_mixed, dfg_src_mixed, dfg_tgt_mixed, 0
         else:
-            # negative CFG (swap) and negative DFG (random)
-            dd2_rand, dds2_rand, ddd2_rand = self.get_random_line_dfg(index)
-            return c2, c1, cs2, cs1, cd2, cd1, 0, d1, dd2_rand, ds1, dds2_rand, dd1, ddd2_rand, 0
+            # both negative
+            cfg_swapped = cfg_insts[4:] + cfg_insts[:4]
+            cfg_src_swapped = cfg_src[4:] + cfg_src[:4]
+            cfg_tgt_swapped = cfg_tgt[4:] + cfg_tgt[:4]
+            
+            dfg_rand, dfg_src_rand, dfg_tgt_rand = self.get_random_line_dfg(index)
+            dfg_mixed = dfg_insts[:7] + [dfg_rand[7]]
+            dfg_src_mixed = dfg_src[:7] + [dfg_src_rand[7]]
+            dfg_tgt_mixed = dfg_tgt[:7] + [dfg_tgt_rand[7]]
+            
+            return cfg_swapped, cfg_src_swapped, cfg_tgt_swapped, 0, \
+                   dfg_mixed, dfg_src_mixed, dfg_tgt_mixed, 0
 
     # ---------- optional BB helpers from your original (kept intact) ----------
     def random_bb(self):
@@ -361,43 +420,64 @@ class BERTDataset(Dataset):
                 xs = xs[:n]
             return xs
 
-        # Compose positive/negative sample
-        c1, c2, cs1, cs2, cd1, cd2, c_label, d1, d2, ds1, ds2, dd1, dd2, d_label = self.random_sent(item)
+        # Compose positive/negative sample - now returns 8 instructions each
+        cfg_insts, cfg_src, cfg_tgt, c_label, dfg_insts, dfg_src, dfg_tgt, d_label = self.random_sent(item)
 
-        # Masking for CFG sentence pair
-        c1_masked, c1_label = self.random_word(c1)
-        c2_masked, c2_label = self.random_word(c2)
+        # Build CFG sequence: <cls> ins1 <sep> ins2 <sep> ... ins8 <sep>
+        # Build DFG sequence: <cls> ins1 <sep> ins2 <sep> ... ins8 <sep>
+        cfg_tokens = [self.vocab.sos_index]  # <cls>
+        cfg_addrs_src = [0]  # dummy for <cls>
+        cfg_addrs_tgt = [0]  # dummy for <cls>
+        cfg_mask_labels = [self.vocab.pad_index]  # no mask for <cls>
+        
+        for i, ins in enumerate(cfg_insts):
+            # Apply masking to each instruction
+            ins_masked, ins_label = self.random_word(ins)
+            cfg_tokens.extend(ins_masked)
+            cfg_mask_labels.extend(ins_label)
+            
+            # Add addresses for this instruction
+            ins_addrs_src = self._to_int_list(cfg_src[i])
+            ins_addrs_tgt = self._to_int_list(cfg_tgt[i])
+            cfg_addrs_src.extend(ins_addrs_src)
+            cfg_addrs_tgt.extend(ins_addrs_tgt)
+            
+            # Add <sep> token
+            cfg_tokens.append(self.vocab.eos_index)
+            cfg_mask_labels.append(self.vocab.pad_index)
+            cfg_addrs_src.append(0)
+            cfg_addrs_tgt.append(0)
+        
+        # Build DFG sequence (no masking)
+        dfg_tokens = [self.vocab.sos_index]  # <cls>
+        dfg_addrs_src = [0]  # dummy for <cls>
+        dfg_addrs_tgt = [0]  # dummy for <cls>
+        
+        for i, ins in enumerate(dfg_insts):
+            # No masking for DFG
+            ins_tokens = self._to_ids(ins)
+            dfg_tokens.extend(ins_tokens)
+            
+            # Add addresses for this instruction
+            ins_addrs_src = self._to_int_list(dfg_src[i])
+            ins_addrs_tgt = self._to_int_list(dfg_tgt[i])
+            dfg_addrs_src.extend(ins_addrs_src)
+            dfg_addrs_tgt.extend(ins_addrs_tgt)
+            
+            # Add <sep> token
+            dfg_tokens.append(self.vocab.eos_index)
+            dfg_addrs_src.append(0)
+            dfg_addrs_tgt.append(0)
 
-        # Add SOS/EOS to inputs
-        cfg_left  = [self.vocab.sos_index] + c1_masked + [self.vocab.eos_index]
-        cfg_right = c2_masked + [self.vocab.eos_index]
-
-        dfg_left  = [self.vocab.sos_index] + self._to_ids(d1) + [self.vocab.eos_index]
-        dfg_right = self._to_ids(d2) + [self.vocab.eos_index]
-
-        # Mask labels (0 for non-masked positions); pad at ends to match SOS/EOS
-        c1_label = [self.vocab.pad_index] + c1_label + [self.vocab.pad_index]
-        c2_label = c2_label + [self.vocab.pad_index]
-
-        # Segment/target labels -> lists of ints (your _to_int_list already does unsigned→signed64 wrap)
-        cs1 = self._to_int_list(cs1); cs2 = self._to_int_list(cs2)
-        cd1 = [0] + self._to_int_list(cd1) + [0]; cd2 = self._to_int_list(cd2)  + [0]
-
-        ds1 = self._to_int_list(ds1); ds2 = self._to_int_list(ds2)
-        dd1 = [0] + self._to_int_list(dd1) + [0]; dd2 = self._to_int_list(dd2) + [0]
-
-        # Concatenate then truncate to seq_len (we'll pad to exact length below)
-        # dfg_segment_label = (ds1 + ds2)[:self.seq_len]
-        dfg_segment_label = ([ds1[0] for _ in range(len(dfg_left))] + [ds2[0] for _ in range(len(dfg_right))])[:self.seq_len]
-        cfg_segment_label = ([cs1[0] for _ in range(len(cfg_left))] + [cs2[0] for _ in range(len(cfg_right))])[:self.seq_len]
-
-        cfg_tgt_label = (cd1 + cd2)[:self.seq_len]
-        dfg_tgt_label = (dd1 + dd2)[:self.seq_len]
-
-        # Truncate BERT inputs (we'll pad to exact length below)
-        cfg_bert_input = (cfg_left + cfg_right)[:self.seq_len]
-        cfg_bert_label = (c1_label + c2_label)[:self.seq_len]
-        dfg_bert_input = (dfg_left + dfg_right)[:self.seq_len]
+        # Truncate to seq_len
+        cfg_bert_input = cfg_tokens[:self.seq_len]
+        cfg_bert_label = cfg_mask_labels[:self.seq_len]
+        cfg_segment_label = cfg_addrs_src[:self.seq_len]
+        cfg_tgt_label = cfg_addrs_tgt[:self.seq_len]
+        
+        dfg_bert_input = dfg_tokens[:self.seq_len]
+        dfg_segment_label = dfg_addrs_src[:self.seq_len]
+        dfg_tgt_label = dfg_addrs_tgt[:self.seq_len]
 
         # ---- Pad EVERYTHING to self.seq_len so collate can stack ----
         pad = self.vocab.pad_index

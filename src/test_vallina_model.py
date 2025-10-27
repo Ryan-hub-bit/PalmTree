@@ -146,15 +146,15 @@ def evaluate_epoch(model, data_loader, device):
             batch = {k: v.to(device) for k, v in batch.items()}
 
             dfg_next_out, cfg_next_out, mask_lm_out = model(
-                batch["dfg_bert_input"],
-                batch["dfg_segment_label"],
                 batch["cfg_bert_input"],
                 batch["cfg_segment_label"],
+                batch["dfg_bert_input"],
+                batch["dfg_segment_label"],
             )
 
             # MLM loss (expects [N, C, L]); mask_lm_out is [N, L, C]
             mask_loss = masked_criterion(
-                mask_lm_out.transpose(1, 2), batch["dfg_bert_label"]
+                mask_lm_out.transpose(1, 2), batch["cfg_bert_label"]
             )
             dfg_next_loss = dfg_next_criterion(dfg_next_out, batch["dfg_is_next"])
             cfg_next_loss = cfg_next_criterion(cfg_next_out, batch["cfg_is_next"])
