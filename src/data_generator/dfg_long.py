@@ -10,7 +10,7 @@ from pathlib import Path
 # ---------------------------
 # Config
 # ---------------------------
-SEG_LEN  = 2   # one output line = 8 instructions
+SEG_LEN  = 8   # one output line = 8 instructions
 WALK_LEN = 40  # max steps per random walk
 
 
@@ -244,7 +244,7 @@ def process_file(f):
             function_graphs[func.name] = G
 
     # Output paths
-    out_dir = Path("/home/louie/PalmTree/data/test/dfg")
+    out_dir = Path("/home/louie/PalmTree/datalong/test/dfg")
     out_dir.mkdir(parents=True, exist_ok=True)
     binary_name = Path(f).name
 

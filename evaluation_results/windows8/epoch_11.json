@@ -1,0 +1,11 @@
+{
+  "epoch": 11,
+  "checkpoint": "transformer_mlp.ep11",
+  "total_loss": 10.514876006343574,
+  "mlm_loss": 8.714137271701242,
+  "perplexity": 6088.379733550654,
+  "dfg_nsp_loss": 0.7494357343257579,
+  "cfg_nsp_loss": 1.0513030003165746,
+  "dfg_nsp_acc": 0.6040431940261218,
+  "cfg_nsp_acc": 0.4686454675420212
+}

@@ -45,7 +45,7 @@ print("Vocab Size: ", len(vocab))
 
 
 print("Loading Train Dataset")
-train_dataset = dataset.BERTDataset(train_cfg_dataset, train_dfg_dataset, train_cfg_srcaddr, train_dfg_srcaddr, train_cfg_tgtaddr, train_dfg_tgtaddr,vocab, seq_len=20,
+train_dataset = dataset.BERTDataset(train_cfg_dataset, train_dfg_dataset, train_cfg_srcaddr, train_dfg_srcaddr, train_cfg_tgtaddr, train_dfg_tgtaddr,vocab, seq_len=100,
                             corpus_lines=None, on_memory=True,drive_mode="min")
 
 """ print("Loading Test Dataset", test_dataset)
@@ -53,14 +53,14 @@ test_dataset = bert_pytorch.dataset.BERTDataset(test_dataset, test_dataset, voca
     if test_dataset is not None else None """
 
 print("Creating Dataloader")
-train_data_loader = DataLoader(train_dataset, batch_size=256, num_workers=10)
+train_data_loader = DataLoader(train_dataset, batch_size=32, num_workers=4)
 
 
-test_data_loader = DataLoader(test_dataset, batch_size=256, num_workers=10) \
+test_data_loader = DataLoader(test_dataset, batch_size=32, num_workers=10) \
     if test_dataset is not None else None
 
 print("Building BERT model")
-bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=12, attn_heads=8, dropout=0.1)
+bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=6, attn_heads=8, dropout=0.1)
 
 print("Creating BERT Trainer")
 # the number of dfg and cfg are not the same

@@ -1,3 +1,12 @@
+"""
+Test script for address-aware BERT model.
+MUST match train_palmtree.py configuration exactly:
+- Model: bert_pytorch.BERT (address-aware)
+- hidden=128, n_layers=6, attn_heads=8, dropout=0.1
+- seq_len=100 (for 8 instructions)
+- batch_size=32
+- Dataset: BERTDataset with drive_mode="min"
+"""
 import torch
 import numpy as np
 from palmtree.trainer.pretrain import BERTTrainer
@@ -99,7 +108,7 @@ def verify_files_exist(*file_paths):
     if missing_files:
         raise FileNotFoundError(f"Missing required files: {', '.join(missing_files)}")
 
-def create_test_dataloader(data_path, vocab_path, batch_size=32):
+def create_test_dataloader(data_path, vocab_path, batch_size=32, seq_len=100):
     """Create test dataloader for address-aware model."""
     # Load vocabulary
     if not os.path.exists(vocab_path):
@@ -108,13 +117,13 @@ def create_test_dataloader(data_path, vocab_path, batch_size=32):
     vocab = WordVocab.load_vocab(vocab_path)
     print(f"Loaded vocabulary with size: {len(vocab)}")
     
-    # Construct paths for all required files
-    cfg_dataset = os.path.join(data_path, "cfg_test.txt")
-    dfg_dataset = os.path.join(data_path, "dfg_test.txt")
-    cfg_srcaddr = os.path.join(data_path, "cfg_test_src.txt")
-    dfg_srcaddr = os.path.join(data_path, "dfg_test_src.txt")
-    cfg_tgtaddr = os.path.join(data_path, "cfg_test_tgt.txt")
-    dfg_tgtaddr = os.path.join(data_path, "dfg_test_tgt.txt")
+    # Construct paths for all required files (8-instruction format)
+    cfg_dataset = os.path.join(data_path, "cfg_8.txt")
+    dfg_dataset = os.path.join(data_path, "dfg_8.txt")
+    cfg_srcaddr = os.path.join(data_path, "cfg_8_src.txt")
+    dfg_srcaddr = os.path.join(data_path, "dfg_8_src.txt")
+    cfg_tgtaddr = os.path.join(data_path, "cfg_8_tgt.txt")
+    dfg_tgtaddr = os.path.join(data_path, "dfg_8_tgt.txt")
     
     # Verify all required files exist
     verify_files_exist(
@@ -123,12 +132,19 @@ def create_test_dataloader(data_path, vocab_path, batch_size=32):
         cfg_tgtaddr, dfg_tgtaddr
     )
     
+    print(f"Using sequence length: {seq_len}")
+    
     # Create test dataloader
+    # Match train_palmtree.py: BERTDataset with all 6 parameters, drive_mode="min"
     test_dataset = BERTDataset(
-        cfg_dataset, dfg_dataset,
-        cfg_srcaddr, dfg_srcaddr,
-        cfg_tgtaddr, dfg_tgtaddr,
-        vocab, seq_len=20,
+        cfg_dataset,
+        dfg_dataset,
+        cfg_srcaddr,
+        dfg_srcaddr,
+        cfg_tgtaddr,
+        dfg_tgtaddr,
+        vocab,
+        seq_len=seq_len,
         corpus_lines=None, 
         on_memory=True,
         drive_mode="min"
@@ -141,7 +157,7 @@ def create_test_dataloader(data_path, vocab_path, batch_size=32):
     
     return torch.utils.data.DataLoader(test_dataset, batch_size=batch_size)
 
-def load_and_evaluate_model(model_path, test_data_path, vocab_path):
+def load_and_evaluate_model(model_path, test_data_path, vocab_path, batch_size=32, seq_len=100):
     """Load model and evaluate it."""
     # Check if model file exists
     if not os.path.exists(model_path):
@@ -161,7 +177,9 @@ def load_and_evaluate_model(model_path, test_data_path, vocab_path):
         
         # Create a new BERT model with the same architecture as used in training
         print("Initializing BERT model...")
-        bert = bert_pytorch.BERT(vocab_size, hidden=128, n_layers=12, attn_heads=8, dropout=0.0)
+        # IMPORTANT: Must match train_palmtree.py config exactly
+        # hidden=128, n_layers=6, attn_heads=8, dropout=0.1
+        bert = bert_pytorch.BERT(vocab_size, hidden=128, n_layers=6, attn_heads=8, dropout=0.1)
         
         # Load the state dict from checkpoint
         print("Loading checkpoint...")
@@ -179,7 +197,7 @@ def load_and_evaluate_model(model_path, test_data_path, vocab_path):
     model = BERTLM(bert, vocab_size)
     
     # Create test dataloader
-    test_dataloader = create_test_dataloader(test_data_path, vocab_path)
+    test_dataloader = create_test_dataloader(test_data_path, vocab_path, batch_size, seq_len)
     
     # Create trainer
     trainer = BERTTrainer(
@@ -213,6 +231,7 @@ if __name__ == "__main__":
     parser.add_argument('--test_data', required=True, help='Directory containing test data files')
     parser.add_argument('--vocab_path', required=True, help='Path to vocabulary file')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size for evaluation')
+    parser.add_argument('--seq_len', type=int, default=100, help='Sequence length (100 for 8 instructions)')
     parser.add_argument('--output_dir', default='evaluation_results', help='Directory to save results')
     args = parser.parse_args()
     try:
@@ -261,7 +280,9 @@ if __name__ == "__main__":
                 epoch_metrics = load_and_evaluate_model(
                     os.path.join(args.model_dir, checkpoint),
                     args.test_data,
-                    args.vocab_path
+                    args.vocab_path,
+                    args.batch_size,
+                    args.seq_len
                 )
                 
                 # Save per-epoch results
