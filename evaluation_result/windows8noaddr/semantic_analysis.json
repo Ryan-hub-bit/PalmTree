@@ -1,0 +1,31 @@
+{
+  "semantic_groups": {
+    "arithmetic": {
+      "opcodes": [
+        "add",
+        "inc"
+      ],
+      "intra_distance_mean": 41.495445251464844,
+      "intra_distance_std": 4.456773281097412
+    },
+    "data_movement": {
+      "opcodes": [
+        "mov",
+        "lea"
+      ],
+      "intra_distance_mean": 60.688907623291016,
+      "intra_distance_std": 7.227441310882568
+    },
+    "control_flow": {
+      "opcodes": [
+        "je",
+        "jne"
+      ],
+      "intra_distance_mean": 23.096513748168945,
+      "intra_distance_std": 0.0
+    }
+  },
+  "inter_group_distance_mean": 51.82083511352539,
+  "inter_group_distance_std": 7.269355773925781,
+  "inter_intra_ratio": 1.240911841392517
+}
