@@ -26,7 +26,7 @@ class BERTLM(nn.Module):
         d = self.bert(d, d_segment_label)
         c = self.bert(c, c_segment_label)
 
-        return self.DUP(c), self.CWP(d), self.MLM(c)
+        return self.DUP(d), self.CWP(c), self.MLM(c)
 
 
 class NextSentencePrediction(nn.Module):
