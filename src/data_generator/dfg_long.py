@@ -143,7 +143,7 @@ def build_chunk(seq, start, k):
     src_line = " ".join(addr_line_for(s) for s in seq[start:end])
 
     # tgt: record real hex for normalized token in {'address','symbol','string'}, else 0
-    INTERESTING = {"address", "symbol", "string"}
+    INTERESTING = {"addr", "symbol", "string"}
 
     def mask_for(node):
         toks, otoks = node['tokens'], node['orig_tokens']
@@ -244,7 +244,7 @@ def process_file(f):
             function_graphs[func.name] = G
 
     # Output paths
-    out_dir = Path("/home/louie/PalmTree/datalong/test/dfg")
+    out_dir = Path("/home/louie/PalmTree/datalong/dfg")
     out_dir.mkdir(parents=True, exist_ok=True)
     binary_name = Path(f).name
 
@@ -286,7 +286,7 @@ def process_file(f):
 # Main
 # ---------------------------
 def main():
-    bin_folder = '/home/louie/testbinary'
+    bin_folder = '/home/louie/smallbinary'
     file_lst = []
     for parent, _, files in os.walk(bin_folder):
         for f in files:
