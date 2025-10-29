@@ -1,11 +1,11 @@
 {
   "epoch": 1,
   "checkpoint": "transformer_mlp.ep1",
-  "total_loss": 10.333874150695136,
-  "mlm_loss": 8.599604844375227,
-  "perplexity": 5429.513664539051,
-  "dfg_nsp_loss": 0.9364596545710323,
-  "cfg_nsp_loss": 0.7978096517488766,
-  "dfg_nsp_acc": 0.46012672283370576,
-  "cfg_nsp_acc": 0.5157536052854387
+  "total_loss": 11.486286264934881,
+  "mlm_loss": 9.42768124737814,
+  "perplexity": 12427.676588688846,
+  "dfg_nsp_loss": 1.218263707437012,
+  "cfg_nsp_loss": 0.8403413101197276,
+  "dfg_nsp_acc": 0.4960786449539785,
+  "cfg_nsp_acc": 0.6356407603071728
 }
