@@ -1,15 +1,26 @@
 
 
-endbr64  	sub       rsp ,  0x8	mov       rax ,   qword  [ rel  0x403fe8  ]	test      rax ,  rax	je        0x401016 -> add       rsp ,  0x8	retn    
+1. endbr64  	sub       rsp ,  0x8	mov       rax ,   qword  [ rel  0x403fe8  ]	test      rax ,  rax	je        0x401016 -> add       rsp ,  0x8	retn    
 
 
 
 <addr_start> endbr64  	sub       rsp <seq>  0x8	mov       rax    qword  [ rel  <addr_code>/addr_data  ] <seq> test      rax ,  rax <seq>	je <addr_tgt> <addr_end> ->  <addr_start> add       rsp ,  0x8 <seq>	retn <addr_end>
 
-addr_emb(addr_start)                                                                addr_emb(addr_code)
 
+2. <addr_start> retn <addr_end> -> <addr_start> mov byte [ rel 0x404010], 0x1, pop rbp retn <addr_end>
 
-<addr_start> retn <addr_end> -> <addr_start> mov byte [ rel 0x404010], 0x1, pop rbp retn <addr_end>
+3. call      rax -> [Unknown]
+<addr_start> call rax <addr_end> -> <addr_unknown> [Unknown] <addr_unknown>
+
+<addr_start>, <addr_end>, <addr_code> <addr_data>  <addr_unknown> relationships
+
+<addr_end> -> next basic block's <addr_start> 
+<addr_tgt> -> next basic block's <addr_start>
+<addr_code> -> global <addr_start>/<addr_end>/<addr_code>/<addr_tgt>
+<addr_data> -> long away from the any <addr_start> <addr_end>
+<addr_start> and <addr_end> represent the relative position in a binary
+how a basic block's instruction from <addr_start> to <addr_end>  each token take how many bytes or something like this
+
 
 endbr64  	sub       rsp ,  0x8	mov       rax ,   qword  [ rel  0x403fe8  ]	test      rax ,  rax	je        0x401016 -> add       rsp ,  0x8	retn     
 endbr64  	sub       rsp ,  0x8	mov       rax ,   qword  [ rel  0x403fe8  ]	test      rax ,  rax	je        0x401016 -> call      rax
