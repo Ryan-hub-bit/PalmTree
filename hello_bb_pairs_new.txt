@@ -1,3 +1,16 @@
+
+
+endbr64  	sub       rsp ,  0x8	mov       rax ,   qword  [ rel  0x403fe8  ]	test      rax ,  rax	je        0x401016 -> add       rsp ,  0x8	retn    
+
+
+
+<addr_start> endbr64  	sub       rsp <seq>  0x8	mov       rax    qword  [ rel  <addr_code>/addr_data  ] <seq> test      rax ,  rax <seq>	je <addr_tgt> <addr_end> ->  <addr_start> add       rsp ,  0x8 <seq>	retn <addr_end>
+
+addr_emb(addr_start)                                                                addr_emb(addr_code)
+
+
+<addr_start> retn <addr_end> -> <addr_start> mov byte [ rel 0x404010], 0x1, pop rbp retn <addr_end>
+
 endbr64  	sub       rsp ,  0x8	mov       rax ,   qword  [ rel  0x403fe8  ]	test      rax ,  rax	je        0x401016 -> add       rsp ,  0x8	retn     
 endbr64  	sub       rsp ,  0x8	mov       rax ,   qword  [ rel  0x403fe8  ]	test      rax ,  rax	je        0x401016 -> call      rax
 call      rax -> [Unknown]
