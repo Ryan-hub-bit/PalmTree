@@ -14,46 +14,40 @@ sys.path.append(os.path.dirname(__file__))
 
 import config
 from data_loader import create_dataloaders
+from streaming_data_loader import create_streaming_dataloader
 from models.addr_palmtree import AddressAwarePalmTree, load_pretrained_palmtree
 
 
 class MultiTaskLoss(nn.Module):
-    """Combined loss for multiple tasks"""
+    """Combined loss for multiple tasks focused on address semantics"""
     
     def __init__(self, task_weights=None):
         super().__init__()
         self.task_weights = task_weights or config.TASK_WEIGHTS
-        self.ce_loss = nn.CrossEntropyLoss(ignore_index=1)  # Ignore PAD token
+        self.ce_loss = nn.CrossEntropyLoss(ignore_index=-100)  # Ignore masked positions
         
-    def forward(self, outputs, targets):
+    def forward(self, outputs, targets, model=None):
         """
         Args:
             outputs: dict with task predictions
             targets: dict with ground truth
+            model: model instance for computing address distance
         """
         losses = {}
         total_loss = 0
         
-        # Next BB prediction loss
-        if 'next_bb_logits' in outputs:
-            next_bb_loss = self.ce_loss(
-                outputs['next_bb_logits'].view(-1, outputs['next_bb_logits'].size(-1)),
-                targets['next_bb_ids'].view(-1)
-            )
-            losses['next_bb'] = next_bb_loss
-            total_loss += self.task_weights['next_bb'] * next_bb_loss
-        
-        # Address type classification loss
-        if 'addr_type_logits' in outputs:
+        # Task 1: Masked Address Type Prediction (PRIMARY TASK)
+        # Only compute loss on masked positions
+        if 'addr_type_logits' in outputs and 'masked_addr_type_labels' in targets:
             addr_type_loss = self.ce_loss(
                 outputs['addr_type_logits'].view(-1, outputs['addr_type_logits'].size(-1)),
-                targets['addr_type_labels'].view(-1)
+                targets['masked_addr_type_labels'].view(-1)
             )
             losses['addr_type'] = addr_type_loss
             total_loss += self.task_weights['addr_type'] * addr_type_loss
         
-        # Edge type classification loss
-        if 'edge_type_logits' in outputs:
+        # Task 2: Edge Type Classification
+        if 'edge_type_logits' in outputs and 'edge_type' in targets:
             edge_type_loss = self.ce_loss(
                 outputs['edge_type_logits'],
                 targets['edge_type']
@@ -61,8 +55,124 @@ class MultiTaskLoss(nn.Module):
             losses['edge_type'] = edge_type_loss
             total_loss += self.task_weights['edge_type'] * edge_type_loss
         
+        # Task 3: Address Distance Prediction
+        if model is not None and 'addr_pairs' in targets:
+            # Compute distance logits for sampled address pairs
+            addr_pairs = targets['addr_pairs']  # [num_pairs, 2] positions
+            batch_indices = targets['addr_batch_indices']  # [num_pairs] batch indices
+            if addr_pairs.size(0) > 0:
+                distance_logits = model.compute_address_distance_logits(
+                    outputs['hidden_states'],
+                    batch_indices,
+                    addr_pairs[:, 0],
+                    addr_pairs[:, 1]
+                )
+                distance_loss = self.ce_loss(
+                    distance_logits,
+                    targets['addr_distance_labels']
+                )
+                losses['addr_distance'] = distance_loss
+                total_loss += self.task_weights['addr_distance'] * distance_loss
+        
+        # Task 4: Next BB prediction (optional, lower weight)
+        if 'next_bb_logits' in outputs and 'next_bb_ids' in targets:
+            next_bb_loss = self.ce_loss(
+                outputs['next_bb_logits'].view(-1, outputs['next_bb_logits'].size(-1)),
+                targets['next_bb_ids'].view(-1)
+            )
+            losses['next_bb'] = next_bb_loss
+            total_loss += self.task_weights['next_bb'] * next_bb_loss
+        
         losses['total'] = total_loss
         return losses
+
+
+def mask_address_types(addr_type_ids, mask_prob=0.15):
+    """
+    Mask address types for prediction (like BERT masked LM)
+    
+    Args:
+        addr_type_ids: [B, L] - address type IDs
+        mask_prob: probability of masking each address
+    
+    Returns:
+        masked_ids: [B, L] - address types with some masked (set to unknown=5)
+        labels: [B, L] - original types (-100 for non-masked positions)
+    """
+    masked_ids = addr_type_ids.clone()
+    labels = torch.full_like(addr_type_ids, -100)  # -100 = ignore in loss
+    
+    # Only mask positions that actually have addresses (not unknown=5)
+    has_address = (addr_type_ids != 5)  # 5 = unknown/no-address
+    
+    # Random mask
+    mask = (torch.rand_like(addr_type_ids.float()) < mask_prob) & has_address
+    
+    # Set masked positions to unknown
+    masked_ids[mask] = 5  # unknown type
+    labels[mask] = addr_type_ids[mask]  # store original for loss
+    
+    return masked_ids, labels
+
+
+def sample_address_pairs(addr_type_ids, address_values=None, num_pairs=1):
+    """
+    Sample pairs of addresses for distance prediction
+    
+    Args:
+        addr_type_ids: [B, L] - address type IDs
+        address_values: [B, L] - actual address values (optional)
+        num_pairs: number of pairs to sample per batch
+    
+    Returns:
+        pairs: [num_pairs, 2] - positions of address pairs
+        batch_indices: [num_pairs] - which batch each pair belongs to
+        distance_labels: [num_pairs] - distance class (0=same_bb, 1=near, 2=medium, 3=far)
+    """
+    batch_size, seq_len = addr_type_ids.shape
+    
+    # Find positions with addresses
+    has_address = (addr_type_ids != 5)  # not unknown
+    
+    pairs_list = []
+    batch_indices_list = []
+    labels_list = []
+    
+    for b in range(min(batch_size, num_pairs)):  # Sample from first few batches
+        addr_positions = torch.where(has_address[b])[0]
+        
+        if len(addr_positions) < 2:
+            continue
+        
+        # Sample two random address positions
+        indices = torch.randperm(len(addr_positions))[:2]
+        pos1, pos2 = addr_positions[indices[0]], addr_positions[indices[1]]
+        
+        # Determine distance class
+        type1, type2 = addr_type_ids[b, pos1].item(), addr_type_ids[b, pos2].item()
+        
+        # Simple heuristic for distance (can be improved with actual address values)
+        if type1 == 2 and type2 == 3:  # addr_start and addr_end
+            distance_class = 0  # same_bb
+        elif type1 == type2:
+            distance_class = 1  # near (same type, likely nearby)
+        elif (type1 == 0 or type2 == 0):  # involves code address
+            distance_class = 2  # medium
+        else:
+            distance_class = 3  # far
+        
+        pairs_list.append(torch.tensor([pos1, pos2]))
+        batch_indices_list.append(b)
+        labels_list.append(distance_class)
+    
+    if len(pairs_list) == 0:
+        return None, None, None
+    
+    pairs = torch.stack(pairs_list)
+    batch_indices = torch.tensor(batch_indices_list, dtype=torch.long)
+    labels = torch.tensor(labels_list, dtype=torch.long)
+    
+    return pairs, batch_indices, labels
 
 
 def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
@@ -79,25 +189,44 @@ def train_epoch(model, dataloader, optimizer, criterion, device, epoch):
         addr_type_ids = batch['addr_type_ids'].to(device)
         edge_type = batch['edge_type'].to(device)
         
-        # Forward pass with 3-level embeddings
-        outputs = model(input_ids, attention_mask, address_encodings, addr_type_ids)
+        # Mask some address types for prediction (like BERT masked LM)
+        masked_addr_type_ids, masked_labels = mask_address_types(
+            addr_type_ids, 
+            mask_prob=config.ADDR_MASK_PROB
+        )
+        masked_addr_type_ids = masked_addr_type_ids.to(device)
+        masked_labels = masked_labels.to(device)
         
-        # Prepare targets for next BB prediction
-        # Shift target by 1 for autoregressive prediction
+        # Sample address pairs for distance prediction
+        addr_pairs, batch_indices, distance_labels = sample_address_pairs(
+            addr_type_ids,
+            batch.get('address_values', None)
+        )
+        if addr_pairs is not None:
+            addr_pairs = addr_pairs.to(device)
+            batch_indices = batch_indices.to(device)
+            distance_labels = distance_labels.to(device)
+        
+        # Forward pass with 3-level embeddings (use masked address types)
+        outputs = model(input_ids, attention_mask, address_encodings, masked_addr_type_ids)
+        
+        # Prepare targets
         next_bb_ids = input_ids[:, 1:].contiguous()
-        next_bb_ids = torch.cat([next_bb_ids, torch.zeros_like(input_ids[:, :1])], dim=1)
-        
-        # Address type labels (already provided in addr_type_ids)
-        addr_type_labels = addr_type_ids
+        next_bb_ids = torch.cat([next_bb_ids, torch.full_like(input_ids[:, :1], -100)], dim=1)
         
         targets = {
-            'next_bb_ids': next_bb_ids,
-            'addr_type_labels': addr_type_labels,
+            'masked_addr_type_labels': masked_labels,
             'edge_type': edge_type,
+            'next_bb_ids': next_bb_ids,
         }
         
-        # Compute loss
-        losses = criterion(outputs, targets)
+        if addr_pairs is not None:
+            targets['addr_pairs'] = addr_pairs
+            targets['addr_batch_indices'] = batch_indices
+            targets['addr_distance_labels'] = distance_labels
+        
+        # Compute loss (pass model for address distance computation)
+        losses = criterion(outputs, targets, model=model)
         loss = losses['total']
         
         # Backward pass
@@ -129,19 +258,39 @@ def evaluate(model, dataloader, criterion, device):
             addr_type_ids = batch['addr_type_ids'].to(device)
             edge_type = batch['edge_type'].to(device)
             
-            outputs = model(input_ids, attention_mask, address_encodings, addr_type_ids)
+            # Mask address types (same as training)
+            masked_addr_type_ids, masked_labels = mask_address_types(
+                addr_type_ids, 
+                mask_prob=config.ADDR_MASK_PROB
+            )
+            masked_addr_type_ids = masked_addr_type_ids.to(device)
+            masked_labels = masked_labels.to(device)
+            
+            # Sample address pairs
+            addr_pairs, distance_labels = sample_address_pairs(
+                addr_type_ids,
+                batch.get('address_values', None)
+            )
+            if addr_pairs is not None:
+                addr_pairs = addr_pairs.to(device)
+                distance_labels = distance_labels.to(device)
+            
+            outputs = model(input_ids, attention_mask, address_encodings, masked_addr_type_ids)
             
             next_bb_ids = input_ids[:, 1:].contiguous()
-            next_bb_ids = torch.cat([next_bb_ids, torch.zeros_like(input_ids[:, :1])], dim=1)
-            addr_type_labels = addr_type_ids
+            next_bb_ids = torch.cat([next_bb_ids, torch.full_like(input_ids[:, :1], -100)], dim=1)
             
             targets = {
-                'next_bb_ids': next_bb_ids,
-                'addr_type_labels': addr_type_labels,
+                'masked_addr_type_labels': masked_labels,
                 'edge_type': edge_type,
+                'next_bb_ids': next_bb_ids,
             }
             
-            losses = criterion(outputs, targets)
+            if addr_pairs is not None:
+                targets['addr_pairs'] = addr_pairs
+                targets['addr_distance_labels'] = distance_labels
+            
+            losses = criterion(outputs, targets, model=model)
             total_loss += losses['total'].item()
     
     return total_loss / len(dataloader)
@@ -154,12 +303,32 @@ def main(args):
     
     # Load vocabulary and create dataloaders
     print('Loading data...')
-    train_loader, val_loader, test_loader, palmtree_vocab, addr_vocab = create_dataloaders(
-        bb_pairs_file=args.bb_pairs_file,
-        vocab_file=args.vocab_file,
-        batch_size=config.BATCH_SIZE
-    )
-    print(f'Train: {len(train_loader.dataset)}, Val: {len(val_loader.dataset)}, Test: {len(test_loader.dataset)}')
+    
+    if args.use_streaming:
+        # Use streaming dataloader for large files
+        print("Using streaming dataloader (memory efficient)")
+        train_loader = create_streaming_dataloader(
+            bb_pairs_file=args.bb_pairs_file,
+            vocab_file=args.vocab_file,
+            batch_size=config.BATCH_SIZE,
+            num_workers=4,
+            shuffle_buffer_size=10000
+        )
+        # For streaming, we'll skip val/test for now (or create separate streaming loaders)
+        val_loader = None
+        test_loader = None
+        palmtree_vocab = train_loader.dataset.palmtree_vocab
+        addr_vocab = train_loader.dataset.addr_vocab
+        print(f'Train: Streaming from file')
+    else:
+        # Regular dataloader (loads everything into memory)
+        print("Using regular dataloader (loads into memory)")
+        train_loader, val_loader, test_loader, palmtree_vocab, addr_vocab = create_dataloaders(
+            bb_pairs_file=args.bb_pairs_file,
+            vocab_file=args.vocab_file,
+            batch_size=config.BATCH_SIZE
+        )
+        print(f'Train: {len(train_loader.dataset)}, Val: {len(val_loader.dataset)}, Test: {len(test_loader.dataset)}')
     
     # Get vocab size (handle both dict and WordVocab object)
     if hasattr(palmtree_vocab, '__len__'):
@@ -208,13 +377,17 @@ def main(args):
         train_loss = train_epoch(model, train_loader, optimizer, criterion, device, epoch)
         print(f'Train Loss: {train_loss:.4f}')
         
-        # Validate
-        val_loss = evaluate(model, val_loader, criterion, device)
-        print(f'Val Loss: {val_loss:.4f}')
+        # Validate (skip if streaming without val set)
+        if val_loader is not None:
+            val_loss = evaluate(model, val_loader, criterion, device)
+            print(f'Val Loss: {val_loss:.4f}')
+        else:
+            val_loss = train_loss  # Use train loss if no val set
         
         # Log to tensorboard
         writer.add_scalar('Loss/train', train_loss, epoch)
-        writer.add_scalar('Loss/val', val_loss, epoch)
+        if val_loader is not None:
+            writer.add_scalar('Loss/val', val_loss, epoch)
         
         # Save best model
         if val_loss < best_val_loss:
@@ -224,15 +397,18 @@ def main(args):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_loss': val_loss,
-            }, os.path.join(config.OUTPUT_DIR, 'best_model.pt'))
-            print('Saved best model')
+            }, os.path.join(config.OUTPUT_DIR, 'best_model_sum.pt'))
+            print('Saved best model (sum fusion)')
     
-    # Test
-    print('\nTesting...')
-    checkpoint = torch.load(os.path.join(config.OUTPUT_DIR, 'best_model.pt'))
-    model.load_state_dict(checkpoint['model_state_dict'])
-    test_loss = evaluate(model, test_loader, criterion, device)
-    print(f'Test Loss: {test_loss:.4f}')
+    # Test (skip if streaming without test set)
+    if test_loader is not None:
+        print('\nTesting...')
+        checkpoint = torch.load(os.path.join(config.OUTPUT_DIR, 'best_model_sum.pt'))
+        model.load_state_dict(checkpoint['model_state_dict'])
+        test_loss = evaluate(model, test_loader, criterion, device)
+        print(f'Test Loss: {test_loss:.4f}')
+    else:
+        print('\nSkipping test (no test set for streaming mode)')
     
     writer.close()
 
@@ -244,6 +420,8 @@ if __name__ == '__main__':
     parser.add_argument('--vocab_file', type=str, 
                         default=os.path.join(config.PRETRAINED_MODEL_PATH, 'vocab.txt'),
                         help='Path to vocabulary file')
+    parser.add_argument('--use_streaming', action='store_true',
+                        help='Use streaming dataloader for large files')
     
     args = parser.parse_args()
     

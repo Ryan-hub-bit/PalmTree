@@ -43,10 +43,10 @@ MAX_GRAD_NORM = 1.0
 
 # Task Weights (multi-task learning)
 TASK_WEIGHTS = {
-    "next_bb": 1.0,           # Next BB prediction
-    "addr_type": 0.5,         # Address type classification
-    "addr_target": 0.3,       # Address target prediction
-    "edge_type": 0.3,         # Edge type classification
+    "addr_type": 1.0,         # Masked address type prediction (PRIMARY)
+    "edge_type": 0.8,         # Edge type classification
+    "addr_distance": 0.5,     # Address distance prediction (spatial relationships)
+    "next_bb": 0.3,           # Next BB prediction (optional, lower weight)
 }
 
 # Data Configuration
@@ -74,6 +74,17 @@ EDGE_TYPE_LABELS = {
     "return": 3,
     "indirect": 4,
 }
+
+# Address Distance Labels (for learning spatial relationships)
+ADDR_DISTANCE_LABELS = {
+    "same_bb": 0,      # Within same BB (addr_start to addr_end)
+    "near": 1,         # < 1KB distance
+    "medium": 2,       # 1KB - 64KB distance  
+    "far": 3,          # > 64KB distance
+}
+
+# Masking probability for address type prediction
+ADDR_MASK_PROB = 0.15  # 15% of addresses will be masked during training
 
 # Logging
 LOG_INTERVAL = 100

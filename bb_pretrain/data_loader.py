@@ -50,36 +50,39 @@ class BBPairDataset(Dataset):
         
         # Try loading as pickle first (PalmTree format)
         try:
+            import pickle
+            with open(vocab_file, 'rb') as f:
+                vocab_obj = pickle.load(f)
+                print(f"Loaded vocab from pickle: {len(vocab_obj)} tokens")
+                return vocab_obj
+        except Exception as e:
+            print(f"Failed to load as pickle: {e}")
+        
+        # Try WordVocab loader
+        try:
             import sys
             sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'pre-trained_model'))
             from vocab import WordVocab
             
             vocab_obj = WordVocab.load_vocab(vocab_file)
+            print(f"Loaded vocab with WordVocab: {len(vocab_obj)} tokens")
             return vocab_obj
         except Exception as e:
             print(f"Failed to load vocab with WordVocab: {e}")
-            # Fall back to dictionary format
+        
+        # Fall back to text format
+        try:
             vocab = {}
-            try:
-                import pickle
-                with open(vocab_file, 'rb') as f:
-                    vocab_obj = pickle.load(f)
-                    # PalmTree vocab has stoi (string to index) attribute
-                    if hasattr(vocab_obj, 'stoi'):
-                        vocab = vocab_obj.stoi
-                    elif hasattr(vocab_obj, 'itos'):
-                        # Build from itos (index to string)
-                        vocab = {token: idx for idx, token in enumerate(vocab_obj.itos)}
-                    else:
-                        vocab = vocab_obj
-            except:
-                # Fall back to text format
-                with open(vocab_file, 'r') as f:
-                    for idx, line in enumerate(f):
-                        token = line.strip()
+            with open(vocab_file, 'r', encoding='utf-8') as f:
+                for idx, line in enumerate(f):
+                    token = line.strip()
+                    if token:
                         vocab[token] = idx
-            
+            print(f"Loaded vocab from text: {len(vocab)} tokens")
             return vocab
+        except Exception as e:
+            print(f"Failed to load vocab as text: {e}")
+            raise ValueError(f"Could not load vocabulary from {vocab_file}")
     
     def _tokenize(self, tokens: List[str]) -> Tuple[List[int], List[int]]:
         """
