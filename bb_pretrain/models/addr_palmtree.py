@@ -151,8 +151,16 @@ class AddressAwarePalmTree(nn.Module):
                 semantic_embeddings[mask] = addr_token_emb
         
         # Level 2: Address-level embeddings (VALUE only, type is in semantic now!)
-        # Only use address value encodings
+        # PROJECT address value encodings to hidden dimension
         address_level_embeddings = self.addr_value_projection(address_encodings)  # [B, L, H]
+        
+        # SELECTIVE FUSION: Only add strong address values to address tokens!
+        # Create a mask for address tokens (IDs >= palmtree_vocab_size)
+        is_address_token = (input_ids >= self.palmtree_vocab_size).float().unsqueeze(-1)  # [B, L, 1]
+        
+        # For address tokens: use full address value embedding
+        # For regular tokens: use zero (no address influence on opcodes!)
+        masked_address_embeddings = address_level_embeddings * is_address_token  # [B, L, H]
         
         # Level 3: Positional embeddings
         if position_ids is None:
@@ -161,8 +169,10 @@ class AddressAwarePalmTree(nn.Module):
         positional_embeddings = self.position_embedding(position_ids)  # [B, L, H]
         
         # Fuse all three levels with simple addition (like BERT)
-        # semantic + address + position
-        fused_features = semantic_embeddings + address_level_embeddings + positional_embeddings  # [B, L, H]
+        # semantic + MASKED_address + position
+        # Now opcodes get: semantic + position (like vanilla BERT)
+        # Address tokens get: semantic + ADDRESS_VALUE + position (address-aware!)
+        fused_features = semantic_embeddings + masked_address_embeddings + positional_embeddings  # [B, L, H]
         fused_features = self.layer_norm(fused_features)  # Normalize after addition
         
         # Task-specific predictions
@@ -184,7 +194,7 @@ class AddressAwarePalmTree(nn.Module):
             'edge_type_logits': edge_type_logits,
             'hidden_states': fused_features,
             'semantic_embeddings': semantic_embeddings,
-            'address_embeddings': address_level_embeddings,
+            'address_embeddings': masked_address_embeddings,  # Now masked (only for address tokens)
             'positional_embeddings': positional_embeddings,
         }
     
