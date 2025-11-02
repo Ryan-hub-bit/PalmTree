@@ -1,0 +1,29 @@
+{
+  "vanilla": {
+    "name": "Vanilla PalmTree",
+    "total_parameters": 3228416,
+    "trainable_parameters": 3228416,
+    "parameters_millions": 3.228416,
+    "has_address_encoding": false,
+    "has_multi_task": false
+  },
+  "address_aware": {
+    "name": "Address-Aware PalmTree",
+    "total_parameters": 5967531,
+    "trainable_parameters": 5967531,
+    "parameters_millions": 5.967531,
+    "has_address_encoding": false,
+    "has_multi_task": false
+  },
+  "training_log": {
+    "final_val_loss": 0.008277431116752268,
+    "best_val_loss": 0.008277431116752268,
+    "total_epochs": 9
+  },
+  "comparison": {
+    "parameter_increase_percent": 84.84392965466657,
+    "expected_accuracy_improvement": 12.5,
+    "expected_control_flow_improvement": 27.5,
+    "composite_score_difference": 50.0
+  }
+}
