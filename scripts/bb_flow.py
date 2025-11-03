@@ -1,12 +1,27 @@
 import sys
 import binaryninja
+from binaryninja import SymbolType
 import re
 
-def is_immediate_value(addr_str):
+def is_immediate_value(addr_str, bv=None):
     """Check if an address is actually a small immediate value (not a real address)"""
     try:
         value = int(addr_str, 16)
-        # Consider values less than 0x1000 as immediate values, not addresses
+        # If binary view available, filter by binary range
+        if bv is not None:
+            binary_base = bv.start
+            binary_end = bv.end
+            # Anything below binary base is likely immediate
+            if value < binary_base:
+                return True
+            # Common immediate constants that look like addresses
+            # 0xffffffff (-1), 0xfffffffe (-2), etc. (high 32-bit values)
+            if value >= 0xffffffff - 0x1000:  # Last 4KB of 32-bit space
+                return True
+            # Anything above binary end is likely not in the binary
+            if value > binary_end:
+                return True
+        # Fallback: consider values less than 0x1000 as immediate values
         return value < 0x1000
     except:
         return False
@@ -66,7 +81,7 @@ def label_addresses_in_instruction(inst_str, bv=None):
         # Check if token is an address (0x followed by hex digits)
         if re.match(r'^0x[0-9a-fA-F]+$', token):
             # Check if it's an immediate value (small constant)
-            if is_immediate_value(token):
+            if is_immediate_value(token, bv):
                 # Keep immediate values unchanged
                 result_tokens.append(token)
             else:
@@ -188,11 +203,120 @@ def get_basic_block_seq(bb, split_at_call=False, only_call=False, after_call=Fal
     inst_str = '\t'.join(inst_seq)
     return inst_str, start_addr, end_addr
 
-def format_bb_with_addr(inst_str, start_addr, end_addr):
-    """Format BB sequence with start and end addresses"""
+def format_bb_with_addr(inst_str, start_addr, end_addr, binary_base=None, binary_length=None, func_start=None, func_length=None, bv=None):
+    """
+    Format BB sequence with start and end addresses plus normalized versions
+    
+    Args:
+        inst_str: instruction string
+        start_addr: actual start address
+        end_addr: actual end address (fall-through address)
+        binary_base: base address of the binary
+        binary_length: total length of the binary
+        func_start: function start address
+        func_length: total length of the function
+        bv: BinaryView object (needed to find which function an addr_code belongs to)
+    
+    Returns:
+        Formatted string with: <addr_start:abs:bin_norm:func_norm> instructions <addr_end:abs:bin_norm:func_norm>
+        
+        Rules for func_norm:
+        - addr_start/addr_end: Always [0.0, 1.0] (position in current function)
+        - addr_code: [0.0, 1.0] if in current function, else relative offset
+        - addr_data: Relative offset from current function start
+        - addr_unknown: -2.0 (special marker)
+    """
     if not inst_str or start_addr is None or end_addr is None:
         return inst_str
-    return f"<{hex(start_addr)}> {inst_str} <{hex(end_addr)}>"
+    
+    # Calculate normalized addresses in [0, 1] range
+    # Binary-level normalization: position within binary
+    if binary_base is not None and binary_length is not None and binary_length > 0:
+        start_bin_norm = (start_addr - binary_base) / binary_length
+        end_bin_norm = (end_addr - binary_base) / binary_length
+    else:
+        start_bin_norm = -5.0  # Binary-level unknown
+        end_bin_norm = -5.0
+    
+    # Function-level normalization: position within function (addr_start and addr_end are always in current function)
+    if func_start is not None and func_length is not None and func_length > 0:
+        start_func_norm = (start_addr - func_start) / func_length
+        end_func_norm = (end_addr - func_start) / func_length
+        # Cap values to [0, 1] to ensure semantic consistency (position within function)
+        start_func_norm = max(0.0, min(1.0, start_func_norm))
+        end_func_norm = max(0.0, min(1.0, end_func_norm))
+    else:
+        start_func_norm = -6.0  # Function-level unknown
+        end_func_norm = -6.0
+    
+    # Process instruction string to normalize addr_code and addr_data references
+    import re
+    
+    def normalize_addr_reference(match):
+        addr_type = match.group(1)  # 'addr_code' or 'addr_data'
+        addr_hex = match.group(2)   # the hex address
+        addr_val = int(addr_hex, 16)
+        
+        # Calculate binary-level normalized value
+        if binary_base is not None and binary_length is not None and binary_length > 0:
+            bin_norm = (addr_val - binary_base) / binary_length
+        else:
+            bin_norm = -5.0  # Binary-level unknown (no binary info available)
+        
+        # Calculate function-level normalized value based on type
+        if addr_type == 'addr_code':
+            # For addr_code: check if it's in current function or external
+            if bv is not None and func_start is not None and func_length is not None and func_length > 0:
+                # Find which function this address belongs to
+                target_funcs = bv.get_functions_containing(addr_val)
+                if target_funcs:
+                    target_func = target_funcs[0]
+                    # Check if target is in current function
+                    if target_func.start == func_start:
+                        # Within current function: use position [0.0, 1.0]
+                        func_norm = (addr_val - func_start) / func_length
+                        # Cap to [0, 1] for semantic consistency
+                        func_norm = max(0.0, min(1.0, func_norm))
+                    else:
+                        # Outside current function: use capped relative distance
+                        if target_func.start < func_start:
+                            # Before current function: range (-1.0, 0)
+                            distance = (func_start - target_func.start) / func_length
+                            func_norm = -min(distance, 1.0)  # Cap at -1.0
+                        else:
+                            # After current function: range (1.0, 2.0]
+                            func_end = func_start + func_length
+                            distance = (target_func.start - func_end) / func_length
+                            func_norm = 1.0 + min(distance, 1.0)  # Cap at 2.0
+                else:
+                    # No function found at target address: addr_unknown
+                    func_norm = -4.0
+            else:
+                # Function info not available
+                func_norm = -6.0  # Function-level unknown (no function info available)
+                    
+        elif addr_type == 'addr_data':
+            # For addr_data: use -3.0 as special marker for "data reference"
+            func_norm = -3.0
+        elif addr_type == 'addr_unknown':
+            # For addr_unknown: use -4.0 as special marker
+            func_norm = -4.0
+        else:
+            # Other types (addr_start, addr_end): use standard normalization
+            if func_start is not None and func_length is not None and func_length > 0:
+                func_norm = (addr_val - func_start) / func_length
+            else:
+                func_norm = -6.0  # Function-level unknown
+        
+        return f"<{addr_type}:{addr_hex}:{bin_norm:.6f}:{func_norm:.6f}>"
+    
+    # Replace addr_code:0xXXXX and addr_data:0xXXXX patterns
+    inst_str = re.sub(r'(addr_code|addr_data):(0x[0-9a-fA-F]+)', normalize_addr_reference, inst_str)
+    
+    # Format: <addr_start:absolute:binary_position:function_position> instructions <addr_end:absolute:binary_position:function_position>
+    return (f"<addr_start:{hex(start_addr)}:{start_bin_norm:.6f}:{start_func_norm:.6f}> "
+            f"{inst_str} "
+            f"<addr_end:{hex(end_addr)}:{end_bin_norm:.6f}:{end_func_norm:.6f}>")
 
 def is_indirect_branch(bb):
     # Check if basic block ends with an indirect call or jump
@@ -398,6 +522,13 @@ def main():
 
         print(f"Extracting basic block pairs from {binary_path}...")
         
+        # Get binary base address and calculate binary length for normalization
+        binary_base = bv.start
+        binary_end = bv.end
+        binary_length = binary_end - binary_base
+        print(f"Binary base address: {hex(binary_base)}")
+        print(f"Binary length: {hex(binary_length)} ({binary_length} bytes)")
+        
         # First pass: collect all call sites and map returns to call sites
         call_return_map = {}  # Maps (func_addr, ret_bb) -> [(inst_str, start_addr, end_addr)]
         
@@ -497,7 +628,29 @@ def main():
         with open(output_file, 'w') as f:
             pair_count = 0
             for func in bv.functions:
+                # Skip PLT and external stub functions
+                if func.symbol and (func.symbol.type == SymbolType.ExternalSymbol or 
+                                   func.symbol.type == SymbolType.ImportedFunctionSymbol or
+                                   '.plt' in func.name or 
+                                   func.name.startswith('sub_') and func.total_bytes < 16):
+                    continue
+                
+                # Calculate function length for normalization
+                func_length = func.total_bytes if func.total_bytes > 0 else 1  # Avoid division by zero
+                
                 for bb in func:
+                    # Find the actual function containing this BB's start address
+                    # (BB might belong to a different function due to shared code, tail calls, etc.)
+                    actual_funcs = bv.get_functions_containing(bb.start)
+                    if actual_funcs:
+                        bb_func = actual_funcs[0]
+                        bb_func_start = bb_func.start
+                        bb_func_length = bb_func.total_bytes if bb_func.total_bytes > 0 else 1
+                    else:
+                        # Fallback to iteration func
+                        bb_func_start = func.start
+                        bb_func_length = func_length
+                    
                     # Check if BB contains calls - if so, split at each call
                     call_indices = get_all_call_indices(bb)
                     
@@ -514,7 +667,7 @@ def main():
                             call_inst, call_start, call_end = get_instruction_range(bb, current_idx, call_idx)
                             
                             if call_inst:
-                                call_seq = format_bb_with_addr(call_inst, call_start, call_end)
+                                call_seq = format_bb_with_addr(call_inst, call_start, call_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
                                 
                                 # Check if this specific call is indirect
                                 tokens = [token.text for token in all_insts[call_idx][0]]
@@ -523,7 +676,7 @@ def main():
                                 is_indirect = not any(token.startswith('0x') for token in call_tokens[1:])
                                 
                                 if is_indirect:
-                                    f.write(f"{call_seq} -> <addr_start> unknown <addr_end>\n")
+                                    f.write(f"{call_seq} <addr_unknown:unknown:-5.000000:-4.000000>\n")
                                     pair_count += 1
                                 else:
                                     # Direct call - add edge to function entry
@@ -551,8 +704,8 @@ def main():
                                                         succ_inst, succ_start, succ_end = get_basic_block_seq(target_bb)
                                                     
                                                     if succ_inst:
-                                                        succ_seq = format_bb_with_addr(succ_inst, succ_start, succ_end)
-                                                        f.write(f"{call_seq} -> {succ_seq}\n")
+                                                        succ_seq = format_bb_with_addr(succ_inst, succ_start, succ_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
+                                                        f.write(f"{call_seq} {succ_seq}\n")
                                                         pair_count += 1
                                                 
                                                 # Check if this is a PLT stub (no returns) - if so, create direct edge to continuation
@@ -560,8 +713,8 @@ def main():
                                                     # This is a PLT function, create edge to after-call continuation
                                                     for return_inst, return_start, return_end in call_return_map[target_func.start][None]:
                                                         if return_inst:
-                                                            return_seq = format_bb_with_addr(return_inst, return_start, return_end)
-                                                            f.write(f"{call_seq} -> {return_seq}\n")
+                                                            return_seq = format_bb_with_addr(return_inst, return_start, return_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
+                                                            f.write(f"{call_seq} {return_seq}\n")
                                                             pair_count += 1
                                                 break
                                                 break
@@ -573,7 +726,7 @@ def main():
                         if current_idx < total_insts:
                             after_inst, after_start, after_end = get_instruction_range(bb, current_idx, total_insts - 1)
                             if after_inst:
-                                after_call_seq = format_bb_with_addr(after_inst, after_start, after_end)
+                                after_call_seq = format_bb_with_addr(after_inst, after_start, after_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
                                 # This becomes a new pseudo-BB, handle its outgoing edges
                                 for edge in bb.outgoing_edges:
                                     successor_bb = edge.target
@@ -584,32 +737,32 @@ def main():
                                         succ_inst, succ_start, succ_end = get_basic_block_seq(successor_bb)
                                     
                                     if succ_inst:
-                                        succ_seq = format_bb_with_addr(succ_inst, succ_start, succ_end)
-                                        f.write(f"{after_call_seq} -> {succ_seq}\n")
+                                        succ_seq = format_bb_with_addr(succ_inst, succ_start, succ_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
+                                        f.write(f"{after_call_seq} {succ_seq}\n")
                                         pair_count += 1
                     
                     elif ends_with_ret(bb):
                         # For return instructions: add edges to call sites
                         bb_inst, bb_start, bb_end = get_basic_block_seq(bb)
-                        bb_seq = format_bb_with_addr(bb_inst, bb_start, bb_end)
+                        bb_seq = format_bb_with_addr(bb_inst, bb_start, bb_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
                         if func.start in call_return_map and bb in call_return_map[func.start]:
                             for return_inst, return_start, return_end in call_return_map[func.start][bb]:
                                 if return_inst:
-                                    return_seq = format_bb_with_addr(return_inst, return_start, return_end)
-                                    f.write(f"{bb_seq} -> {return_seq}\n")
+                                    return_seq = format_bb_with_addr(return_inst, return_start, return_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
+                                    f.write(f"{bb_seq} {return_seq}\n")
                                     pair_count += 1
                     
                     elif is_indirect_branch(bb):
                         # Indirect branch
                         bb_inst, bb_start, bb_end = get_basic_block_seq(bb)
-                        bb_seq = format_bb_with_addr(bb_inst, bb_start, bb_end)
-                        f.write(f"{bb_seq} -> <addr_start> unknown <addr_end>\n")
+                        bb_seq = format_bb_with_addr(bb_inst, bb_start, bb_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
+                        f.write(f"{bb_seq} <addr_unknown:unknown:-5.000000:-4.000000>\n")
                         pair_count += 1
                     
                     elif not contains_call(bb):
                         # Regular control flow (no call, no ret, no indirect)
                         bb_inst, bb_start, bb_end = get_basic_block_seq(bb)
-                        bb_seq = format_bb_with_addr(bb_inst, bb_start, bb_end)
+                        bb_seq = format_bb_with_addr(bb_inst, bb_start, bb_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
                         for edge in bb.outgoing_edges:
                             successor_bb = edge.target
                             # Check if successor contains a call - if so, split it
@@ -619,8 +772,8 @@ def main():
                                 succ_inst, succ_start, succ_end = get_basic_block_seq(successor_bb)
                             
                             if succ_inst:
-                                succ_seq = format_bb_with_addr(succ_inst, succ_start, succ_end)
-                                f.write(f"{bb_seq} -> {succ_seq}\n")
+                                succ_seq = format_bb_with_addr(succ_inst, succ_start, succ_end, binary_base, binary_length, bb_func_start, bb_func_length, bv)
+                                f.write(f"{bb_seq} {succ_seq}\n")
                                 pair_count += 1
         
         print(f"✓ Extracted {pair_count} basic block pairs")
