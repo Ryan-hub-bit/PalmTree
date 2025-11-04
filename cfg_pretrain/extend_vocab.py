@@ -33,6 +33,7 @@ def extend_palmtree_vocab(original_vocab_path: str, output_vocab_path: str):
     
     # Address tokens to add
     new_tokens = [
+        '<seq>',        # Instruction separator
         'addr_start',
         'addr_end', 
         'addr_code',
@@ -69,8 +70,8 @@ def verify_extended_vocab(vocab_path: str):
     
     print(f"\nVocabulary size: {len(vocab)}")
     print(f"Type: {type(vocab).__name__}")
-    print("\nAddress tokens:")
-    for token in ['addr_start', 'addr_end', 'addr_code', 'addr_data']:
+    print("\nSpecial and address tokens:")
+    for token in ['<seq>', 'addr_start', 'addr_end', 'addr_code', 'addr_data']:
         if token in vocab.stoi:
             print(f"  {token}: {vocab.stoi[token]}")
         else:

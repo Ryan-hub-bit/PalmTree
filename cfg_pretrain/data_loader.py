@@ -107,17 +107,13 @@ class CFGPretrainDataset(Dataset):
         self.id_to_token = {v: k for k, v in self.vocab.items()}
         
         # Special tokens
-        self.pad_token = '[PAD]'
-        self.mask_token = '[MASK]'
-        self.seq_token = '[SEQ]'  # Separator between instructions
-        self.addr_start_token = '[ADDR_START]'
-        self.addr_end_token = '[ADDR_END]'
+        self.pad_token = '<pad>'
+        self.mask_token = '<mask>'
+        self.seq_token = '<seq>'  # Separator between instructions
         
         self.pad_id = self.vocab.get(self.pad_token, 0)
         self.mask_id = self.vocab.get(self.mask_token, 1)
-        self.seq_id = self.vocab.get(self.seq_token, self.vocab.get('[SEP]', 2))  # Fallback to [SEP]
-        self.addr_start_id = self.vocab.get(self.addr_start_token, self.vocab.get('[CLS]', 3))
-        self.addr_end_id = self.vocab.get(self.addr_end_token, self.vocab.get('[SEP]', 2))
+        self.seq_id = self.vocab.get(self.seq_token, 2)
         
         # Address tokenizer
         self.addr_tokenizer = AddressTokenizer()
@@ -249,17 +245,17 @@ class CFGPretrainDataset(Dataset):
                     parsed = self.addr_tokenizer.parse_address(part)
                     if parsed:
                         # Use the address type as the token (addr_start, addr_end, addr_code, addr_data)
-                        token_ids.append(self.vocab.get(parsed['type'], self.vocab.get('[UNK]', 0)))
+                        token_ids.append(self.vocab.get(parsed['type'], self.vocab.get('<unk>', 0)))
                         position_info.append((parsed['binary_norm'], parsed['function_norm']))
                     else:
-                        # Failed to parse, use [UNK]
-                        token_ids.append(self.vocab.get('[UNK]', 0))
+                        # Failed to parse, use <unk>
+                        token_ids.append(self.vocab.get('<unk>', 0))
                         position_info.append((0.0, 0.0))
                 else:
                     # Regular instruction tokens - no address position
                     tokens = part.split()
                     for token in tokens:
-                        token_id = self.vocab.get(token, self.vocab.get('[UNK]', 0))
+                        token_id = self.vocab.get(token, self.vocab.get('<unk>', 0))
                         token_ids.append(token_id)
                         position_info.append((0.0, 0.0))  # No address position for regular tokens
             
@@ -334,8 +330,22 @@ class CFGPretrainDataset(Dataset):
         - addr_start and addr_end tokens already mark BB boundaries
         - Address tokens (addr_start, addr_end, addr_code, addr_data) get positions
         - Regular tokens get (0.0, 0.0)
+        
+        Negative pair sampling: with probability config.NEGATIVE_PAIR_PROB, replace target BB with a random BB (not the true successor) and set cfg_label=0.
         """
         source_bb, target_bb = self.pairs[idx]
+        
+        # Decide if this sample will be negative
+        if random.random() < getattr(config, 'NEGATIVE_PAIR_PROB', 0.5):
+            # Sample a random target BB (not the true successor)
+            neg_idx = random.randrange(len(self.pairs))
+            while neg_idx == idx:
+                neg_idx = random.randrange(len(self.pairs))
+            _, negative_target_bb = self.pairs[neg_idx]
+            target_bb = negative_target_bb
+            cfg_label = 0
+        else:
+            cfg_label = 1
         
         # Tokenize both BBs with position information
         source_ids, source_addrs, source_positions, source_start_pos, source_end_pos = self._tokenize_bb(source_bb)
@@ -397,7 +407,7 @@ class CFGPretrainDataset(Dataset):
             
             # Task labels
             'mlm_labels': torch.tensor(mlm_labels, dtype=torch.long),
-            'cfg_label': torch.tensor(1, dtype=torch.long),  # 1 = valid CFG edge
+            'cfg_label': torch.tensor(cfg_label, dtype=torch.long),  # 1 = valid CFG edge, 0 = negative pair
             
             # Aggregated address features for auxiliary tasks
             'source_addr_features': torch.tensor(source_addr_features, dtype=torch.float),

@@ -4,7 +4,8 @@ Configuration for CFG-based pretraining
 
 # Data paths
 DATA_DIR = "bb_pairs_output"
-BB_PAIRS_FILE = "all_bb_pairs.txt"  # Main training data file
+#BB_PAIRS_FILE = "all_bb_pairs.txt"  # Main training data file
+BB_PAIRS_FILE = "bb_pairs_output/ircat_bb_pairs.txt"  # Main training data file
 VOCAB_FILE = "vocab_extended"  # Extended vocabulary with address tokens
 
 # Model parameters (aligned with PalmTree)
@@ -18,30 +19,31 @@ HIDDEN_DROPOUT_PROB = 0.1
 ATTENTION_PROBS_DROPOUT_PROB = 0.1
 
 # Training parameters
-BATCH_SIZE = 32
-LEARNING_RATE = 1e-4
+BATCH_SIZE = 4  # Further reduced to 4 to avoid OOM on busy GPU
+LEARNING_RATE = 5e-5  # Reduced from 1e-4 to prevent gradient explosion and NaN
 NUM_EPOCHS = 20
 WARMUP_STEPS = 1000
 WEIGHT_DECAY = 0.01
-MAX_GRAD_NORM = 1.0
+MAX_GRAD_NORM = 0.5  # Reduced from 1.0 for more aggressive gradient clipping
 NUM_WORKERS = 4  # DataLoader workers
 SAVE_EVERY = 2   # Save checkpoint every N epochs
 
 # MLM parameters
 MLM_PROBABILITY = 0.15  # Probability of masking tokens
-
-# Pretraining tasks weights
-TASK_WEIGHTS = {
-    'mlm': 1.0,           # Masked Language Modeling
-    'cfg_prediction': 1.0, # CFG edge prediction (predict successor BB)
-    'addr_prediction': 0.5 # Address value prediction
-}
-
-# MLM parameters
-MLM_PROBABILITY = 0.15
 MLM_MASK_TOKEN_PROB = 0.8
 MLM_RANDOM_TOKEN_PROB = 0.1
 MLM_UNCHANGED_PROB = 0.1
+
+# Negative pair sampling probability
+NEGATIVE_PAIR_PROB = 0.5  # Probability of sampling a negative pair (CFG label = 0)
+
+# Pretraining tasks weights
+TASK_WEIGHTS = {
+    'mlm': 1.0,            # Masked Language Modeling
+    'cfg_prediction': 1.0, # CFG edge prediction (predict successor BB)
+    'addr_prediction': 0.5,# Address value prediction
+    'contrastive': 0.3     # Contrastive loss to keep embeddings close to PalmTree
+}
 
 # Device
 DEVICE = "cuda"  # or "cpu"
@@ -50,3 +52,6 @@ DEVICE = "cuda"  # or "cpu"
 LOG_INTERVAL = 100
 SAVE_INTERVAL = 1000
 CHECKPOINT_DIR = "checkpoints/cfg_pretrain"
+
+
+

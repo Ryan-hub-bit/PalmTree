@@ -63,7 +63,7 @@ train_data_loader = DataLoader(train_dataset, batch_size=32, num_workers=4)
 test_data_loader = None
 
 print("Building BERT model") 
-bert = bert_pytorch.BERT2(len(vocab), hidden=128, n_layers=6, attn_heads=8, dropout=0.1)
+bert = bert_pytorch.BERT(len(vocab), hidden=128, n_layers=6, attn_heads=8, dropout=0.1)
 
 print("Creating BERT Trainer")
 trainer = trainer.BERTTrainer(bert, len(vocab), train_dataloader=train_data_loader, test_dataloader=test_data_loader,
