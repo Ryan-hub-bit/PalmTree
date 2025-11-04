@@ -67,7 +67,7 @@ ENABLE_TASKS = {
 TASK_WEIGHTS = {
     'mlm': 1.0,            # Masked Language Modeling
     'cfg_prediction': 1.0, # CFG edge prediction (predict successor BB)
-    'addr_prediction': 0.5,# Address value prediction
+    'addr_prediction': 1.0,# Address value prediction
     'contrastive': 0.3     # Contrastive loss to keep embeddings close to PalmTree
 }
 
@@ -79,7 +79,8 @@ DEVICE = "cuda"  # or "cpu"
 # ============================================================================
 # Enable multi-GPU training using DataParallel (simple, works on single node)
 # Set to True to use all available GPUs, or specify GPU IDs: [0, 1, 2, 3]
-USE_MULTI_GPU = True  # Set to True to enable multi-GPU
+# NOTE: Set to False if you encounter NCCL errors - use single GPU instead
+USE_MULTI_GPU = True  # Set to True to enable multi-GPU (DISABLED due to NCCL issues)
 GPU_IDS = None  # None = use all available GPUs, or specify list like [0, 1, 2]
 
 # Logging

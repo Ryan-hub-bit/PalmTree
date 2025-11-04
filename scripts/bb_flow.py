@@ -541,7 +541,7 @@ def main():
                     all_insts = list(bb)
                     total_insts = len(all_insts)
                     
-                    for call_idx in call_indices:
+                    for i, call_idx in enumerate(call_indices):
                         # Get the instructions after this specific call
                         after_call_inst = None
                         after_start = None
@@ -549,7 +549,15 @@ def main():
                         
                         if call_idx + 1 < total_insts:
                             # There are instructions after this call in the same BB
-                            after_call_inst, after_start, after_end = get_instruction_range(bb, call_idx + 1, total_insts - 1)
+                            # But only up to the next call (if any)
+                            if i + 1 < len(call_indices):
+                                # There's another call after this one - only get instructions up to (but not including) that call
+                                next_call_idx = call_indices[i + 1]
+                                if call_idx + 1 < next_call_idx:
+                                    after_call_inst, after_start, after_end = get_instruction_range(bb, call_idx + 1, next_call_idx - 1)
+                            else:
+                                # This is the last call - get all remaining instructions
+                                after_call_inst, after_start, after_end = get_instruction_range(bb, call_idx + 1, total_insts - 1)
                         
                         # Get the call target from this specific call instruction
                         tokens = [token.text for token in all_insts[call_idx][0]]
@@ -586,6 +594,8 @@ def main():
                                                 # The return should go to the after-call sequence (instructions after the call)
                                                 if after_call_inst:
                                                     # Return to instructions after call in same BB
+                                                    # NOTE: after_call_inst might contain another call - it will be handled
+                                                    # correctly when this segment is used as a source BB in the second pass
                                                     call_return_map[target_func.start][ret_bb].append(
                                                         (after_call_inst, after_start, after_end))
                                                 else:

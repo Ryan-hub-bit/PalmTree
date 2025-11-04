@@ -343,6 +343,15 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
         mlm_labels = batch['mlm_labels'].to(device)
         cfg_label = batch['cfg_label'].to(device)
         
+        # Check for CUDA errors before forward pass
+        if device.type == 'cuda':
+            try:
+                torch.cuda.synchronize()
+            except RuntimeError as e:
+                print(f"\nCUDA error detected before forward pass: {e}")
+                print("Skipping batch and continuing...")
+                continue
+        
         optimizer.zero_grad()
         
         # Forward pass
@@ -740,19 +749,28 @@ def main():
         palmtree_embeddings=palmtree_embeddings
     ).to(device)
     
-    # Multi-GPU support
+    # Multi-GPU support with error handling
     if USE_MULTI_GPU and torch.cuda.device_count() > 1:
-        if GPU_IDS is not None:
-            # Use specified GPUs
-            model = nn.DataParallel(model, device_ids=GPU_IDS)
+        try:
+            # First, make sure CUDA is working properly
+            torch.cuda.synchronize()
+            
+            if GPU_IDS is not None:
+                # Use specified GPUs
+                model = nn.DataParallel(model, device_ids=GPU_IDS)
+                print(f"\n{'='*80}")
+                print(f"Using DataParallel with GPUs: {GPU_IDS}")
+                print(f"{'='*80}")
+            else:
+                # Use all available GPUs
+                model = nn.DataParallel(model)
+                print(f"\n{'='*80}")
+                print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
+                print(f"{'='*80}")
+        except RuntimeError as e:
             print(f"\n{'='*80}")
-            print(f"Using DataParallel with GPUs: {GPU_IDS}")
-            print(f"{'='*80}")
-        else:
-            # Use all available GPUs
-            model = nn.DataParallel(model)
-            print(f"\n{'='*80}")
-            print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
+            print(f"Warning: Failed to initialize DataParallel: {e}")
+            print(f"Falling back to single GPU training")
             print(f"{'='*80}")
     else:
         if USE_MULTI_GPU:

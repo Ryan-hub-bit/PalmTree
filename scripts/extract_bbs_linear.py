@@ -40,17 +40,43 @@ def process_binary(binpath: str, outpath: str):
 
                 # iterate basic blocks in linear order (by appearance in function)
                 for bb in func:
-                    inst_seq, start_addr, end_addr = get_basic_block_seq(bb)
-                    if not inst_seq:
-                        continue
+                    # Check if this BB contains a call instruction
+                    # If yes, we need to split it into two parts
+                    inst_seq_with_call, start_with_call, end_with_call = get_basic_block_seq(bb, split_at_call=True)
+                    inst_seq_after_call, start_after_call, end_after_call = get_basic_block_seq(bb, after_call=True)
+                    
+                    if inst_seq_with_call and inst_seq_after_call:
+                        # BB contains call with instructions after it - split into 2 BBs
+                        # Part 1: up to and including the call
+                        line = format_bb_with_addr(inst_seq_with_call, start_with_call, end_with_call,
+                                                   binary_base=binary_base,
+                                                   binary_length=binary_length,
+                                                   func_start=func_start,
+                                                   func_length=func_length,
+                                                   bv=bv)
+                        outf.write(line + '\n')
+                        
+                        # Part 2: instructions after the call
+                        line = format_bb_with_addr(inst_seq_after_call, start_after_call, end_after_call,
+                                                   binary_base=binary_base,
+                                                   binary_length=binary_length,
+                                                   func_start=func_start,
+                                                   func_length=func_length,
+                                                   bv=bv)
+                        outf.write(line + '\n')
+                    else:
+                        # No call, or call is at the end - use as-is
+                        inst_seq, start_addr, end_addr = get_basic_block_seq(bb, split_at_call=False)
+                        if not inst_seq:
+                            continue
 
-                    line = format_bb_with_addr(inst_seq, start_addr, end_addr,
-                                               binary_base=binary_base,
-                                               binary_length=binary_length,
-                                               func_start=func_start,
-                                               func_length=func_length,
-                                               bv=bv)
-                    outf.write(line + '\n')
+                        line = format_bb_with_addr(inst_seq, start_addr, end_addr,
+                                                   binary_base=binary_base,
+                                                   binary_length=binary_length,
+                                                   func_start=func_start,
+                                                   func_length=func_length,
+                                                   bv=bv)
+                        outf.write(line + '\n')
 
     print(f"Wrote basic blocks (linear order) to {outpath}")
 
