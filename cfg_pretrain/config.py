@@ -4,8 +4,8 @@ Configuration for CFG-based pretraining
 
 # Data paths
 DATA_DIR = "bb_pairs_output"
-#BB_PAIRS_FILE = "all_bb_pairs.txt"  # Main training data file
-BB_PAIRS_FILE = "bb_pairs_output/ircat_bb_pairs.txt"  # Main training data file
+BB_PAIRS_FILE = "all_bb_pairs.txt"  # Main training data file
+#BB_PAIRS_FILE = "bb_pairs_output/ircat_bb_pairs.txt"  # Main training data file
 VOCAB_FILE = "vocab_extended"  # Extended vocabulary with address tokens
 
 # Model parameters (aligned with PalmTree)
@@ -19,9 +19,9 @@ HIDDEN_DROPOUT_PROB = 0.1
 ATTENTION_PROBS_DROPOUT_PROB = 0.1
 
 # Training parameters
-BATCH_SIZE = 32  # Further reduced to 4 to avoid OOM on busy GPU
+BATCH_SIZE = 512  # Further reduced to 4 to avoid OOM on busy GPU
 LEARNING_RATE = 5e-5  # Reduced from 1e-4 to prevent gradient explosion and NaN
-NUM_EPOCHS = 20
+NUM_EPOCHS = 3 
 WARMUP_STEPS = 1000
 WEIGHT_DECAY = 0.01
 MAX_GRAD_NORM = 0.5  # Reduced from 1.0 for more aggressive gradient clipping
@@ -58,8 +58,8 @@ NEGATIVE_PAIR_PROB = 0.5  # Probability of sampling a negative pair (CFG label =
 #
 ENABLE_TASKS = {
     'mlm': True,            # Masked Language Modeling - predicts masked tokens
-    'cfg_prediction': False, # CFG edge prediction - predicts if BB2 follows BB1
-    'addr_prediction': False,# Address type classification - classifies address tokens
+    'cfg_prediction': True, # CFG edge prediction - predicts if BB2 follows BB1
+    'addr_prediction': True,# Address type classification - classifies address tokens
     'contrastive': False     # Contrastive loss - keeps embeddings close to PalmTree
 }
 
@@ -79,7 +79,7 @@ DEVICE = "cuda"  # or "cpu"
 # ============================================================================
 # Enable multi-GPU training using DataParallel (simple, works on single node)
 # Set to True to use all available GPUs, or specify GPU IDs: [0, 1, 2, 3]
-USE_MULTI_GPU = False  # Set to True to enable multi-GPU
+USE_MULTI_GPU = True  # Set to True to enable multi-GPU
 GPU_IDS = None  # None = use all available GPUs, or specify list like [0, 1, 2]
 
 # Logging

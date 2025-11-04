@@ -162,3 +162,7 @@ bb_pairs_output
 all_bb_pairs.txt
 output
 checkpoints
+hello_palmtree.txt
+hello.txt
+redis-cli_bb_pairs.txt
+redis-cli_palmtree.txt
