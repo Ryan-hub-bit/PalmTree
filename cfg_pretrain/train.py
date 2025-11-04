@@ -354,13 +354,20 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
         addr_logits = addr_logits.view(-1, 4)  # [batch*seq_len, 4]
         addr_labels_flat = addr_labels.view(-1)  # [batch*seq_len]
         
-        # Clamp addr logits to prevent overflow
-        addr_logits = torch.clamp(addr_logits, min=-100, max=100)
-        addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+        # Check if there are any valid address targets
+        num_valid_addr = (addr_labels_flat != -100).sum().item()
         
-        # Check for NaN in address loss
-        if torch.isnan(addr_loss):
-            print(f"\nWARNING: NaN in Address loss, skipping batch")
+        if num_valid_addr > 0:
+            # Clamp addr logits to prevent overflow
+            addr_logits = torch.clamp(addr_logits, min=-100, max=100)
+            addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+            
+            # Check for NaN in address loss (shouldn't happen with valid targets, but keep as safety)
+            if torch.isnan(addr_loss):
+                print(f"\nWARNING: NaN in Address loss despite {num_valid_addr} valid targets, skipping batch")
+                addr_loss = torch.tensor(0.0, device=device)
+        else:
+            # No address tokens were masked in this batch, skip address loss
             addr_loss = torch.tensor(0.0, device=device)
         
         # Task 4: Contrastive Loss (keep NON-ADDRESS embeddings close to PalmTree's semantic space)
@@ -584,7 +591,13 @@ def main():
                 addr_logits = model.predict_addr_type(hidden_states)
                 addr_logits = addr_logits.view(-1, 4)
                 addr_labels_flat = addr_labels.view(-1)
-                addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+                
+                # Check if there are any valid address targets
+                num_valid_addr = (addr_labels_flat != -100).sum().item()
+                if num_valid_addr > 0:
+                    addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+                else:
+                    addr_loss = torch.tensor(0.0, device=device)
                 
                 # Task 4: Contrastive Loss (only for non-address tokens)
                 contrastive_loss = torch.tensor(0.0, device=device)
