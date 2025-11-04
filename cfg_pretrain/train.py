@@ -17,8 +17,34 @@ from config import (
     VOCAB_FILE, BB_PAIRS_FILE, MAX_SEQ_LEN, EMBED_DIM,
     NUM_HEADS, NUM_LAYERS, BATCH_SIZE, LEARNING_RATE,
     WEIGHT_DECAY, NUM_EPOCHS, NUM_WORKERS, SAVE_EVERY,
-    MLM_PROBABILITY, TASK_WEIGHTS
+    MLM_PROBABILITY, TASK_WEIGHTS, ENABLE_TASKS
 )
+
+
+def get_model_name_suffix():
+    """
+    Generate a suffix for model names based on enabled tasks.
+    Examples:
+      - All tasks enabled: "mlm_cfg_addr_contra"
+      - Only MLM: "mlm_only"
+      - MLM + CFG: "mlm_cfg"
+    """
+    enabled = [task for task, is_enabled in ENABLE_TASKS.items() if is_enabled]
+    
+    if len(enabled) == 4:  # All tasks enabled
+        return "mlm_cfg_addr_contra"
+    elif len(enabled) == 1:
+        return f"{enabled[0]}_only"
+    else:
+        # Abbreviate task names
+        abbrev = {
+            'mlm': 'mlm',
+            'cfg_prediction': 'cfg',
+            'addr_prediction': 'addr',
+            'contrastive': 'contra'
+        }
+        return "_".join([abbrev[task] for task in enabled])
+
 
 
 class SinCosPositionEncoding(nn.Module):
@@ -311,69 +337,77 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
         # Forward pass
         hidden_states = model(token_ids, binary_positions, function_positions, sequence_positions, attention_mask)
         
-        # Task 1: MLM Loss (focus on address and control flow tokens)
-        mlm_logits = model.predict_mlm(hidden_states)
-        mlm_logits = mlm_logits.view(-1, model.vocab_size)
-        mlm_labels_flat = mlm_labels.view(-1)
-        
-        # Clamp logits to prevent overflow before softmax
-        mlm_logits = torch.clamp(mlm_logits, min=-100, max=100)
-        mlm_loss = mlm_criterion(mlm_logits, mlm_labels_flat)
-        
-        # Check for NaN in MLM loss
-        if torch.isnan(mlm_loss):
-            print(f"\nWARNING: NaN in MLM loss, skipping batch")
+        # Task 1: MLM Loss (Masked Language Modeling)
+        if ENABLE_TASKS['mlm']:
+            mlm_logits = model.predict_mlm(hidden_states)
+            mlm_logits = mlm_logits.view(-1, model.vocab_size)
+            mlm_labels_flat = mlm_labels.view(-1)
+            
+            # Clamp logits to prevent overflow before softmax
+            mlm_logits = torch.clamp(mlm_logits, min=-100, max=100)
+            mlm_loss = mlm_criterion(mlm_logits, mlm_labels_flat)
+            
+            # Check for NaN in MLM loss
+            if torch.isnan(mlm_loss):
+                print(f"\nWARNING: NaN in MLM loss, skipping batch")
+                mlm_loss = torch.tensor(0.0, device=device)
+        else:
             mlm_loss = torch.tensor(0.0, device=device)
         
         # Task 2: CFG Reachability Loss
-        # Use mean pooling over non-padding tokens for BB representation
-        mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-        sum_embeddings = torch.sum(hidden_states * mask_expanded, dim=1)
-        sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
-        bb_repr = sum_embeddings / sum_mask  # [batch, embed_dim]
-        
-        # Split into source and target (assuming batch is organized this way)
-        batch_size = bb_repr.size(0)
-        if batch_size % 2 == 0:
-            source_repr = bb_repr[:batch_size//2]
-            target_repr = bb_repr[batch_size//2:]
-            cfg_labels = cfg_label[:batch_size//2]
+        if ENABLE_TASKS['cfg_prediction']:
+            # Use mean pooling over non-padding tokens for BB representation
+            mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
+            sum_embeddings = torch.sum(hidden_states * mask_expanded, dim=1)
+            sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
+            bb_repr = sum_embeddings / sum_mask  # [batch, embed_dim]
             
-            cfg_logits = model.predict_cfg(source_repr, target_repr)
-            cfg_loss = cfg_criterion(cfg_logits, cfg_labels.float())
+            # Split into source and target (assuming batch is organized this way)
+            batch_size = bb_repr.size(0)
+            if batch_size % 2 == 0:
+                source_repr = bb_repr[:batch_size//2]
+                target_repr = bb_repr[batch_size//2:]
+                cfg_labels = cfg_label[:batch_size//2]
+                
+                cfg_logits = model.predict_cfg(source_repr, target_repr)
+                cfg_loss = cfg_criterion(cfg_logits, cfg_labels.float())
+            else:
+                cfg_loss = torch.tensor(0.0, device=device)
         else:
             cfg_loss = torch.tensor(0.0, device=device)
         
         # Task 3: Address Type Prediction (4-class classification for masked address tokens)
-        # Create labels: for each masked position, if it's an address token, set the class (0-3), else -100
-        addr_labels = torch.full_like(mlm_labels, -100)  # [batch, seq_len], default ignore
-        for addr_id, class_idx in addr_id_to_class.items():
-            addr_labels[mlm_labels == addr_id] = class_idx  # Set class index for address tokens
-        
-        addr_logits = model.predict_addr_type(hidden_states)  # [batch, seq_len, 4]
-        addr_logits = addr_logits.view(-1, 4)  # [batch*seq_len, 4]
-        addr_labels_flat = addr_labels.view(-1)  # [batch*seq_len]
-        
-        # Check if there are any valid address targets
-        num_valid_addr = (addr_labels_flat != -100).sum().item()
-        
-        if num_valid_addr > 0:
-            # Clamp addr logits to prevent overflow
-            addr_logits = torch.clamp(addr_logits, min=-100, max=100)
-            addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+        if ENABLE_TASKS['addr_prediction']:
+            # Create labels: for each masked position, if it's an address token, set the class (0-3), else -100
+            addr_labels = torch.full_like(mlm_labels, -100)  # [batch, seq_len], default ignore
+            for addr_id, class_idx in addr_id_to_class.items():
+                addr_labels[mlm_labels == addr_id] = class_idx  # Set class index for address tokens
             
-            # Check for NaN in address loss (shouldn't happen with valid targets, but keep as safety)
-            if torch.isnan(addr_loss):
-                print(f"\nWARNING: NaN in Address loss despite {num_valid_addr} valid targets, skipping batch")
+            addr_logits = model.predict_addr_type(hidden_states)  # [batch, seq_len, 4]
+            addr_logits = addr_logits.view(-1, 4)  # [batch*seq_len, 4]
+            addr_labels_flat = addr_labels.view(-1)  # [batch*seq_len]
+            
+            # Check if there are any valid address targets
+            num_valid_addr = (addr_labels_flat != -100).sum().item()
+            
+            if num_valid_addr > 0:
+                # Clamp addr logits to prevent overflow
+                addr_logits = torch.clamp(addr_logits, min=-100, max=100)
+                addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+                
+                # Check for NaN in address loss (shouldn't happen with valid targets, but keep as safety)
+                if torch.isnan(addr_loss):
+                    print(f"\nWARNING: NaN in Address loss despite {num_valid_addr} valid targets, skipping batch")
+                    addr_loss = torch.tensor(0.0, device=device)
+            else:
+                # No address tokens were masked in this batch, skip address loss
                 addr_loss = torch.tensor(0.0, device=device)
         else:
-            # No address tokens were masked in this batch, skip address loss
             addr_loss = torch.tensor(0.0, device=device)
         
         # Task 4: Contrastive Loss (keep NON-ADDRESS embeddings close to PalmTree's semantic space)
         # Address tokens are new and should learn freely; only preserve semantics for existing tokens
-        contrastive_loss = torch.tensor(0.0, device=device)
-        if palmtree_model is not None:
+        if ENABLE_TASKS['contrastive'] and palmtree_model is not None:
             # Clip token IDs to PalmTree's vocab range for embedding lookup
             # Address tokens (6632-6635) will be clipped to 6630 (last valid PalmTree token)
             token_ids_clipped = torch.clamp(token_ids, 0, 6630)
@@ -410,6 +444,10 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
                 palmtree_non_addr = palmtree_flat[non_addr_mask]
                 target = torch.ones(our_non_addr.size(0), device=device)  # All 1s = similar
                 contrastive_loss = contrastive_criterion(our_non_addr, palmtree_non_addr, target)
+            else:
+                contrastive_loss = torch.tensor(0.0, device=device)
+        else:
+            contrastive_loss = torch.tensor(0.0, device=device)
         
         # Combined loss with task weights
         loss = (TASK_WEIGHTS['mlm'] * mlm_loss + 
@@ -533,7 +571,7 @@ def main():
         cfg_loss_sum = 0
         addr_loss_sum = 0
         contrastive_loss_sum = 0
-        addr_loss_sum = 0
+        num_batches = 0  # Track valid batches (excluding NaN)
         
         mlm_criterion = nn.CrossEntropyLoss(ignore_index=-100)
         cfg_criterion = nn.BCEWithLogitsLoss()
@@ -562,46 +600,61 @@ def main():
                 hidden_states = model(token_ids, binary_positions, function_positions, sequence_positions, attention_mask)
                 
                 # Task 1: MLM Loss
-                mlm_logits = model.predict_mlm(hidden_states)
-                mlm_logits = mlm_logits.view(-1, model.vocab_size)
-                mlm_labels_flat = mlm_labels.view(-1)
-                mlm_loss = mlm_criterion(mlm_logits, mlm_labels_flat)
+                if ENABLE_TASKS['mlm']:
+                    mlm_logits = model.predict_mlm(hidden_states)
+                    mlm_logits = mlm_logits.view(-1, model.vocab_size)
+                    mlm_labels_flat = mlm_labels.view(-1)
+                    
+                    # Clamp logits to prevent overflow
+                    mlm_logits = torch.clamp(mlm_logits, min=-100, max=100)
+                    mlm_loss = mlm_criterion(mlm_logits, mlm_labels_flat)
+                    
+                    # Check for NaN in MLM loss
+                    if torch.isnan(mlm_loss):
+                        mlm_loss = torch.tensor(0.0, device=device)
+                else:
+                    mlm_loss = torch.tensor(0.0, device=device)
                 
                 # Task 2: CFG Loss
-                mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
-                sum_embeddings = torch.sum(hidden_states * mask_expanded, dim=1)
-                sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
-                bb_repr = sum_embeddings / sum_mask
-                
-                batch_size = bb_repr.size(0)
-                if batch_size % 2 == 0:
-                    source_repr = bb_repr[:batch_size//2]
-                    target_repr = bb_repr[batch_size//2:]
-                    cfg_labels = cfg_label[:batch_size//2]
-                    cfg_logits = model.predict_cfg(source_repr, target_repr)
-                    cfg_loss = cfg_criterion(cfg_logits, cfg_labels.float())
+                if ENABLE_TASKS['cfg_prediction']:
+                    mask_expanded = attention_mask.unsqueeze(-1).expand(hidden_states.size()).float()
+                    sum_embeddings = torch.sum(hidden_states * mask_expanded, dim=1)
+                    sum_mask = torch.clamp(mask_expanded.sum(dim=1), min=1e-9)
+                    bb_repr = sum_embeddings / sum_mask
+                    
+                    batch_size = bb_repr.size(0)
+                    if batch_size % 2 == 0:
+                        source_repr = bb_repr[:batch_size//2]
+                        target_repr = bb_repr[batch_size//2:]
+                        cfg_labels = cfg_label[:batch_size//2]
+                        cfg_logits = model.predict_cfg(source_repr, target_repr)
+                        cfg_loss = cfg_criterion(cfg_logits, cfg_labels.float())
+                    else:
+                        cfg_loss = torch.tensor(0.0, device=device)
                 else:
                     cfg_loss = torch.tensor(0.0, device=device)
                 
                 # Task 3: Address Type Prediction
-                addr_labels = torch.full_like(mlm_labels, -100)
-                for addr_id, class_idx in addr_id_to_class.items():
-                    addr_labels[mlm_labels == addr_id] = class_idx
-                
-                addr_logits = model.predict_addr_type(hidden_states)
-                addr_logits = addr_logits.view(-1, 4)
-                addr_labels_flat = addr_labels.view(-1)
-                
-                # Check if there are any valid address targets
-                num_valid_addr = (addr_labels_flat != -100).sum().item()
-                if num_valid_addr > 0:
-                    addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+                if ENABLE_TASKS['addr_prediction']:
+                    addr_labels = torch.full_like(mlm_labels, -100)
+                    for addr_id, class_idx in addr_id_to_class.items():
+                        addr_labels[mlm_labels == addr_id] = class_idx
+                    
+                    addr_logits = model.predict_addr_type(hidden_states)
+                    addr_logits = addr_logits.view(-1, 4)
+                    addr_labels_flat = addr_labels.view(-1)
+                    
+                    # Check if there are any valid address targets
+                    num_valid_addr = (addr_labels_flat != -100).sum().item()
+                    if num_valid_addr > 0:
+                        addr_loss = addr_criterion(addr_logits, addr_labels_flat)
+                    else:
+                        addr_loss = torch.tensor(0.0, device=device)
                 else:
                     addr_loss = torch.tensor(0.0, device=device)
                 
                 # Task 4: Contrastive Loss (only for non-address tokens)
-                contrastive_loss = torch.tensor(0.0, device=device)
-                if palmtree_model is not None:
+                if ENABLE_TASKS['contrastive'] and palmtree_model is not None:
                     # Clip token IDs to PalmTree's vocab range
                     token_ids_clipped = torch.clamp(token_ids, 0, 6630)
                     palmtree_embeddings_batch = palmtree_model.embedding.token(token_ids_clipped)
@@ -626,6 +679,10 @@ def main():
                         palmtree_non_addr = palmtree_flat[non_addr_mask]
                         target = torch.ones(our_non_addr.size(0), device=device)
                         contrastive_loss = contrastive_criterion(our_non_addr, palmtree_non_addr, target)
+                    else:
+                        contrastive_loss = torch.tensor(0.0, device=device)
+                else:
+                    contrastive_loss = torch.tensor(0.0, device=device)
                 
                 # Combined loss
                 loss = (TASK_WEIGHTS['mlm'] * mlm_loss + 
@@ -633,6 +690,12 @@ def main():
                         TASK_WEIGHTS['addr_prediction'] * addr_loss +
                         TASK_WEIGHTS['contrastive'] * contrastive_loss)
                 
+                # Skip batch if combined loss is NaN (don't contaminate validation metrics)
+                if torch.isnan(loss):
+                    continue
+                
+                # Only count valid batches
+                num_batches += 1
                 total_loss += loss.item()
                 mlm_loss_sum += mlm_loss.item()
                 if isinstance(cfg_loss, torch.Tensor):
@@ -640,11 +703,15 @@ def main():
                 addr_loss_sum += addr_loss.item()
                 contrastive_loss_sum += contrastive_loss.item()
         
-        avg_loss = total_loss / len(dataloader)
-        avg_mlm = mlm_loss_sum / len(dataloader)
-        avg_cfg = cfg_loss_sum / len(dataloader)
-        avg_addr = addr_loss_sum / len(dataloader)
-        avg_contra = contrastive_loss_sum / len(dataloader)
+        # Average over valid batches only
+        if num_batches == 0:
+            return float('nan'), float('nan'), float('nan'), float('nan'), float('nan')
+        
+        avg_loss = total_loss / num_batches
+        avg_mlm = mlm_loss_sum / num_batches
+        avg_cfg = cfg_loss_sum / num_batches
+        avg_addr = addr_loss_sum / num_batches
+        avg_contra = contrastive_loss_sum / num_batches
         
         return avg_loss, avg_mlm, avg_cfg, avg_addr, avg_contra
     
@@ -676,6 +743,15 @@ def main():
     
     # Training loop
     print(f"\nStarting training for {NUM_EPOCHS} epochs...")
+    print(f"\n{'='*80}")
+    print("Enabled Pretraining Tasks:")
+    print(f"{'='*80}")
+    for task_name, enabled in ENABLE_TASKS.items():
+        status = "✓ ENABLED" if enabled else "✗ DISABLED"
+        weight = f"(weight={TASK_WEIGHTS[task_name]})" if enabled else ""
+        print(f"  {task_name:20s}: {status:12s} {weight}")
+    print(f"{'='*80}")
+    
     best_loss = float('inf')
     
     best_val_loss = float('inf')
@@ -713,14 +789,20 @@ def main():
             'val_loss': val_loss,
             'mlm_loss': avg_mlm,
             'cfg_loss': avg_cfg,
+            'enabled_tasks': ENABLE_TASKS,  # Save task configuration
+            'task_weights': TASK_WEIGHTS,
         }
-        checkpoint_path = os.path.join(os.path.dirname(__file__), "checkpoints", f"cfg_pretrain_epoch_{epoch}.pth")
+        
+        # Generate task-aware checkpoint name
+        task_suffix = get_model_name_suffix()
+        checkpoint_path = os.path.join(os.path.dirname(__file__), "checkpoints", f"cfg_pretrain_{task_suffix}_epoch_{epoch}.pth")
         os.makedirs(os.path.dirname(checkpoint_path), exist_ok=True)
         torch.save(checkpoint, checkpoint_path)
         print(f"  Checkpoint saved: {checkpoint_path}")
+        
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_path = os.path.join(os.path.dirname(__file__), "checkpoints", "cfg_pretrain_best.pth")
+            best_path = os.path.join(os.path.dirname(__file__), "checkpoints", f"cfg_pretrain_{task_suffix}_best.pth")
             torch.save(checkpoint, best_path)
             print(f"  Best model updated: {best_path}")
     print(f"\n{'='*80}")

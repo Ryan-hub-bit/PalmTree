@@ -268,42 +268,20 @@ class CFGPretrainDataset(Dataset):
     
     def _apply_mlm(self, token_ids: List[int]) -> Tuple[List[int], List[int], List[int]]:
         """
-        Apply masked language modeling
+        Apply masked language modeling - masks ALL tokens with equal probability
         Returns: (masked_token_ids, labels, mask_positions)
-        
-        Can focus on address tokens only by checking token names
         """
         masked_ids = token_ids.copy()
         labels = [-100] * len(token_ids)  # -100 is ignored in loss
         mask_positions = []
-        
-        # Get address token IDs
-        addr_token_ids = {
-            self.vocab.get('addr_start', -1),
-            self.vocab.get('addr_end', -1),
-            self.vocab.get('addr_code', -1),
-            self.vocab.get('addr_data', -1),
-        }
-        addr_token_ids.discard(-1)  # Remove if not found in vocab
         
         for i in range(len(token_ids)):
             # Skip padding
             if token_ids[i] == self.pad_id:
                 continue
             
-            # Option 1: Mask ALL tokens (original behavior)
-            # should_mask = True
-            
-            # Option 2: Mask ONLY address tokens (focus on addresses)
-            should_mask = token_ids[i] in addr_token_ids
-            
-            # Option 3: Mask address tokens with HIGHER probability
-            # if token_ids[i] in addr_token_ids:
-            #     should_mask = random.random() < (self.mlm_probability * 2)  # 2x more likely
-            # else:
-            #     should_mask = random.random() < self.mlm_probability
-            
-            if should_mask and random.random() < self.mlm_probability:
+            # Mask ALL tokens with equal probability (no special treatment)
+            if random.random() < self.mlm_probability:
                 labels[i] = token_ids[i]  # Original token as label
                 mask_positions.append(i)
                 

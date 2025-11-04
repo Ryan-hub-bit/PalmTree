@@ -37,7 +37,33 @@ MLM_UNCHANGED_PROB = 0.1
 # Negative pair sampling probability
 NEGATIVE_PAIR_PROB = 0.5  # Probability of sampling a negative pair (CFG label = 0)
 
-# Pretraining tasks weights
+# ============================================================================
+# Task Configuration - Enable/Disable different pretraining objectives
+# ============================================================================
+# You can customize which tasks to train by setting True/False:
+#
+# Example configurations:
+#
+# 1. All tasks (default):
+#    ENABLE_TASKS = {'mlm': True, 'cfg_prediction': True, 'addr_prediction': True, 'contrastive': True}
+#
+# 2. Only MLM (standard BERT-style):
+#    ENABLE_TASKS = {'mlm': True, 'cfg_prediction': False, 'addr_prediction': False, 'contrastive': False}
+#
+# 3. MLM + CFG (focus on control flow):
+#    ENABLE_TASKS = {'mlm': True, 'cfg_prediction': True, 'addr_prediction': False, 'contrastive': False}
+#
+# 4. No contrastive (let embeddings drift from PalmTree):
+#    ENABLE_TASKS = {'mlm': True, 'cfg_prediction': True, 'addr_prediction': True, 'contrastive': False}
+#
+ENABLE_TASKS = {
+    'mlm': True,            # Masked Language Modeling - predicts masked tokens
+    'cfg_prediction': False, # CFG edge prediction - predicts if BB2 follows BB1
+    'addr_prediction': False,# Address type classification - classifies address tokens
+    'contrastive': False     # Contrastive loss - keeps embeddings close to PalmTree
+}
+
+# Task weights (only applied if task is enabled)
 TASK_WEIGHTS = {
     'mlm': 1.0,            # Masked Language Modeling
     'cfg_prediction': 1.0, # CFG edge prediction (predict successor BB)
