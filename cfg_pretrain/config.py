@@ -19,7 +19,7 @@ HIDDEN_DROPOUT_PROB = 0.1
 ATTENTION_PROBS_DROPOUT_PROB = 0.1
 
 # Training parameters
-BATCH_SIZE = 4  # Further reduced to 4 to avoid OOM on busy GPU
+BATCH_SIZE = 32  # Further reduced to 4 to avoid OOM on busy GPU
 LEARNING_RATE = 5e-5  # Reduced from 1e-4 to prevent gradient explosion and NaN
 NUM_EPOCHS = 20
 WARMUP_STEPS = 1000
@@ -73,6 +73,14 @@ TASK_WEIGHTS = {
 
 # Device
 DEVICE = "cuda"  # or "cpu"
+
+# ============================================================================
+# Multi-GPU Configuration
+# ============================================================================
+# Enable multi-GPU training using DataParallel (simple, works on single node)
+# Set to True to use all available GPUs, or specify GPU IDs: [0, 1, 2, 3]
+USE_MULTI_GPU = False  # Set to True to enable multi-GPU
+GPU_IDS = None  # None = use all available GPUs, or specify list like [0, 1, 2]
 
 # Logging
 LOG_INTERVAL = 100

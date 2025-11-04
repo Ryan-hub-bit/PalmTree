@@ -17,7 +17,8 @@ from config import (
     VOCAB_FILE, BB_PAIRS_FILE, MAX_SEQ_LEN, EMBED_DIM,
     NUM_HEADS, NUM_LAYERS, BATCH_SIZE, LEARNING_RATE,
     WEIGHT_DECAY, NUM_EPOCHS, NUM_WORKERS, SAVE_EVERY,
-    MLM_PROBABILITY, TASK_WEIGHTS, ENABLE_TASKS
+    MLM_PROBABILITY, TASK_WEIGHTS, ENABLE_TASKS,
+    USE_MULTI_GPU, GPU_IDS
 )
 
 
@@ -725,6 +726,24 @@ def main():
         palmtree_embeddings=palmtree_embeddings
     ).to(device)
     
+    # Multi-GPU support
+    if USE_MULTI_GPU and torch.cuda.device_count() > 1:
+        if GPU_IDS is not None:
+            # Use specified GPUs
+            model = nn.DataParallel(model, device_ids=GPU_IDS)
+            print(f"\n{'='*80}")
+            print(f"Using DataParallel with GPUs: {GPU_IDS}")
+            print(f"{'='*80}")
+        else:
+            # Use all available GPUs
+            model = nn.DataParallel(model)
+            print(f"\n{'='*80}")
+            print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
+            print(f"{'='*80}")
+    else:
+        if USE_MULTI_GPU:
+            print(f"\nWarning: USE_MULTI_GPU=True but only {torch.cuda.device_count()} GPU(s) available. Using single GPU.")
+    
     print(f"\nModel architecture:")
     print(f"  Embedding dim: {EMBED_DIM}")
     print(f"  Num heads: {NUM_HEADS}")
@@ -780,9 +799,12 @@ def main():
         print(f"  Learning Rate: {current_lr:.6f}")
         
         # Save checkpoint
+        # Handle DataParallel: save the underlying model without 'module.' prefix
+        model_to_save = model.module if isinstance(model, nn.DataParallel) else model
+        
         checkpoint = {
             'epoch': epoch,
-            'model_state_dict': model.state_dict(),
+            'model_state_dict': model_to_save.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'scheduler_state_dict': scheduler.state_dict(),
             'train_loss': avg_loss,
@@ -791,6 +813,7 @@ def main():
             'cfg_loss': avg_cfg,
             'enabled_tasks': ENABLE_TASKS,  # Save task configuration
             'task_weights': TASK_WEIGHTS,
+            'multi_gpu': USE_MULTI_GPU,  # Save multi-GPU info
         }
         
         # Generate task-aware checkpoint name
