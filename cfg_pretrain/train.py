@@ -47,6 +47,16 @@ def get_model_name_suffix():
         return "_".join([abbrev[task] for task in enabled])
 
 
+def get_model_attr(model, attr_name):
+    """
+    Helper function to access model attributes/methods, handling DataParallel wrapper.
+    When using DataParallel, the actual model is wrapped as model.module
+    """
+    if isinstance(model, nn.DataParallel):
+        return getattr(model.module, attr_name)
+    return getattr(model, attr_name)
+
+
 
 class SinCosPositionEncoding(nn.Module):
     """
@@ -340,8 +350,9 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
         
         # Task 1: MLM Loss (Masked Language Modeling)
         if ENABLE_TASKS['mlm']:
-            mlm_logits = model.predict_mlm(hidden_states)
-            mlm_logits = mlm_logits.view(-1, model.vocab_size)
+            mlm_logits = get_model_attr(model, 'predict_mlm')(hidden_states)
+            vocab_size = get_model_attr(model, 'vocab_size')
+            mlm_logits = mlm_logits.view(-1, vocab_size)
             mlm_labels_flat = mlm_labels.view(-1)
             
             # Clamp logits to prevent overflow before softmax
@@ -370,7 +381,7 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
                 target_repr = bb_repr[batch_size//2:]
                 cfg_labels = cfg_label[:batch_size//2]
                 
-                cfg_logits = model.predict_cfg(source_repr, target_repr)
+                cfg_logits = get_model_attr(model, 'predict_cfg')(source_repr, target_repr)
                 cfg_loss = cfg_criterion(cfg_logits, cfg_labels.float())
             else:
                 cfg_loss = torch.tensor(0.0, device=device)
@@ -384,7 +395,7 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
             for addr_id, class_idx in addr_id_to_class.items():
                 addr_labels[mlm_labels == addr_id] = class_idx  # Set class index for address tokens
             
-            addr_logits = model.predict_addr_type(hidden_states)  # [batch, seq_len, 4]
+            addr_logits = get_model_attr(model, 'predict_addr_type')(hidden_states)  # [batch, seq_len, 4]
             addr_logits = addr_logits.view(-1, 4)  # [batch*seq_len, 4]
             addr_labels_flat = addr_labels.view(-1)  # [batch*seq_len]
             
@@ -418,7 +429,8 @@ def train_epoch(model, dataloader, optimizer, device, epoch, vocab, palmtree_mod
                 palmtree_embeddings = palmtree_model.embedding.token(token_ids_clipped)  # [batch, seq_len, embed_dim]
             
             # Get our enhanced embeddings (just the token embedding part, not full hidden states)
-            our_token_embeddings = model.embedding.token_embedding(token_ids)  # [batch, seq_len, embed_dim]
+            model_embedding = get_model_attr(model, 'embedding')
+            our_token_embeddings = model_embedding.token_embedding(token_ids)  # [batch, seq_len, embed_dim]
             
             # Calculate contrastive loss: encourage similarity FOR NON-ADDRESS TOKENS ONLY
             # Reshape for contrastive loss
@@ -602,8 +614,9 @@ def main():
                 
                 # Task 1: MLM Loss
                 if ENABLE_TASKS['mlm']:
-                    mlm_logits = model.predict_mlm(hidden_states)
-                    mlm_logits = mlm_logits.view(-1, model.vocab_size)
+                    mlm_logits = get_model_attr(model, 'predict_mlm')(hidden_states)
+                    vocab_size = get_model_attr(model, 'vocab_size')
+                    mlm_logits = mlm_logits.view(-1, vocab_size)
                     mlm_labels_flat = mlm_labels.view(-1)
                     
                     # Clamp logits to prevent overflow
@@ -628,7 +641,7 @@ def main():
                         source_repr = bb_repr[:batch_size//2]
                         target_repr = bb_repr[batch_size//2:]
                         cfg_labels = cfg_label[:batch_size//2]
-                        cfg_logits = model.predict_cfg(source_repr, target_repr)
+                        cfg_logits = get_model_attr(model, 'predict_cfg')(source_repr, target_repr)
                         cfg_loss = cfg_criterion(cfg_logits, cfg_labels.float())
                     else:
                         cfg_loss = torch.tensor(0.0, device=device)
@@ -641,7 +654,7 @@ def main():
                     for addr_id, class_idx in addr_id_to_class.items():
                         addr_labels[mlm_labels == addr_id] = class_idx
                     
-                    addr_logits = model.predict_addr_type(hidden_states)
+                    addr_logits = get_model_attr(model, 'predict_addr_type')(hidden_states)
                     addr_logits = addr_logits.view(-1, 4)
                     addr_labels_flat = addr_labels.view(-1)
                     
@@ -659,7 +672,8 @@ def main():
                     # Clip token IDs to PalmTree's vocab range
                     token_ids_clipped = torch.clamp(token_ids, 0, 6630)
                     palmtree_embeddings_batch = palmtree_model.embedding.token(token_ids_clipped)
-                    our_token_embeddings = model.embedding.token_embedding(token_ids)
+                    model_embedding = get_model_attr(model, 'embedding')
+                    our_token_embeddings = model_embedding.token_embedding(token_ids)
                     
                     batch_size, seq_len, embed_dim = our_token_embeddings.shape
                     our_flat = our_token_embeddings.view(-1, embed_dim)
