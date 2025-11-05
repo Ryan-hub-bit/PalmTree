@@ -1,0 +1,112 @@
+================================================================================
+QUICK REFERENCE: Input Consistency Between Models
+================================================================================
+
+Question: Do both models receive the same input?
+Answer: YES - Both receive IDENTICAL token sequences!
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      DATA FLOW DIAGRAM                                   │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Inline Format File:
+    mov(0x400000:0.12:0.13:0.14) rax addr_code(0x401000:0.15:0.16:0.17)
+                                  ↓
+              ┌───────────────────────────────────┐
+              │  Paired Dataloader Parsing        │
+              │  (dataloader_paired.py)           │
+              └───────────────────────────────────┘
+                                  ↓
+                    ┌─────────────────────────┐
+                    │ Extracts:               │
+                    │  • Tokens: [mov, rax,   │
+                    │            addr_code]   │
+                    │  • Address pos: [...]   │
+                    │  • Segments: [0,0,1]    │
+                    └─────────────────────────┘
+                                  ↓
+                ┌─────────────────┴─────────────────┐
+                ↓                                   ↓
+    ┏━━━━━━━━━━━━━━━━━━━┓              ┏━━━━━━━━━━━━━━━━━━━┓
+    ┃  PalmTree Model   ┃              ┃ AddressAware Model┃
+    ┣━━━━━━━━━━━━━━━━━━━┫              ┣━━━━━━━━━━━━━━━━━━━┫
+    ┃ Uses:             ┃              ┃ Uses:             ┃
+    ┃  ✓ Tokens         ┃              ┃  ✓ Tokens         ┃
+    ┃  ✓ Segments       ┃              ┃  ✓ Segments       ┃
+    ┃  ✗ Addresses      ┃              ┃  ✓ Addresses      ┃
+    ┗━━━━━━━━━━━━━━━━━━━┛              ┗━━━━━━━━━━━━━━━━━━━┛
+
+================================================================================
+KEY INSIGHT: Same Tokens, Different Embeddings
+================================================================================
+
+PalmTree Embedding:
+    final = token_emb + seq_position_emb + segment_emb
+            ↑           ↑                  ↑
+            128-dim     128-dim            128-dim
+            (frozen)    (frozen)           (frozen)
+
+AddressAware Embedding:
+    final = token_emb + seq_position_emb + segment_emb + address_emb
+            ↑           ↑                  ↑             ↑
+            128-dim     128-dim            128-dim       128-dim
+            (frozen)    (frozen)           (frozen)      (TRAINABLE!)
+
+The ONLY difference: AddressAware adds hierarchical address positional info!
+
+================================================================================
+TOKEN EXAMPLE
+================================================================================
+
+Input: mov(0x400000:0.12:0.13:0.14) rax addr_code(0x401000:0.15:0.16:0.17)
+
+Parsed Tokens (SAME for both models):
+    Position 0: mov        (opcode with address)
+    Position 1: rax        (register, no address)
+    Position 2: addr_code  (address operand)
+
+Address Positions (ONLY used by AddressAware):
+    Position 0: binary=0.12, function=0.13, bb=0.14
+    Position 1: binary=0.0,  function=0.0,  bb=0.0    ← zero for non-address
+    Position 2: binary=0.15, function=0.16, bb=0.17
+
+Token IDs (from PalmTree vocab, SAME for both):
+    Position 0: 1234  (mov in vocab)
+    Position 1: 567   (rax in vocab)
+    Position 2: 890   (addr_code in vocab)
+
+Segments (SAME for both):
+    Position 0: 0  (first sentence)
+    Position 1: 0  (first sentence)
+    Position 2: 1  (second sentence for NSP)
+
+================================================================================
+VERIFICATION
+================================================================================
+
+To verify inputs are identical, run:
+    cd /home/kun/Document/PalmTree/addressaware/test_comparison
+    python verify_inputs.py
+
+This will show you:
+    ✓ Token sequences from the dataloader
+    ✓ All tokens are in PalmTree's vocabulary
+    ✓ Address position distributions
+    ✓ Confirmation both models see identical tokens
+
+================================================================================
+FAIR COMPARISON CHECKLIST
+================================================================================
+
+✓ Same data source (all_cfg_combined.txt, all_dfg_combined.txt)
+✓ Same vocabulary (6,631 tokens from PalmTree)
+✓ Same token sequences (mov, rax, addr_code, etc.)
+✓ Same masking strategy (15% for CFG MLM)
+✓ Same NSP pairing (50% positive, 50% negative)
+✓ Same segment labels
+✓ Same batch size and data percentage
+✓ Only difference: AddressAware gets hierarchical address positions
+
+Result: Fair comparison showing impact of address-aware embeddings!
+
+================================================================================

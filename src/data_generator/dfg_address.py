@@ -4,12 +4,13 @@ import networkx as nx
 import random
 import os
 import re
+import sys
 from pathlib import Path
 
 # ---------------------------
 # Config
 # ---------------------------
-SEG_LEN  = 2   # one output line = 2 instructions
+SEG_LEN  = 2   # Default value, can be overridden by command-line argument
 WALK_LEN = 40  # max steps per random walk
 
 HEX_RE = re.compile(r"0x[0-9a-fA-F]+")
@@ -143,7 +144,7 @@ def build_chunk_inline(seq, start, k, ctx: dict):
         else:
             bbnorm = 0.0
         
-        return f"{bnorm:.3f}:{fnorm:.3f}:{bbnorm:.3f}"
+        return f"{bnorm:.8f}:{fnorm:.6f}:{bbnorm:.4f}"
 
     out_instrs = []
     for addr, norm_line, mask_line in chunk:
@@ -191,7 +192,7 @@ def build_chunk_inline(seq, start, k, ctx: dict):
                         else:
                             bnorm = 0.0
                         sn = section_norm(tgt)
-                        formatted_ops.append(f"addr_data({mk_hex}:{bnorm:.3f}:{sn:.3f}:0)")
+                        formatted_ops.append(f"addr_data({mk_hex}:{bnorm:.8f}:{sn:.6f}:0)")
                 else:
                     formatted_ops.append(mk_hex)
             else:
@@ -235,6 +236,16 @@ def process_file(f):
         symbol_map[sym.address] = sym.full_name
     for string in bv.get_strings():
         string_map[string.start] = string.value
+
+    # Get output directory from global or use default
+    import __main__
+    out_dir_str = getattr(__main__, 'OUTPUT_DIR', '/home/kun/Document/PalmTree/data/dfg')
+    out_dir = Path(out_dir_str)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    binary_name = Path(f).name
+    dfg_inline_path = out_dir / f"{binary_name}_dfg_{SEG_LEN}_inline.txt"
+
+    print(f"[INFO] Writing to: {dfg_inline_path}")
 
     # Build a DFG-like graph from MLIL var defs/uses
     function_graphs = {}
@@ -335,19 +346,34 @@ def process_file(f):
             function_graphs[func.name] = G
 
     total_bin = bin_counter
-    min_addr = min(addr_positions.keys()) if addr_positions else 0
-    max_addr = max(addr_positions.keys()) if addr_positions else min_addr
-
+    
+    # Collect sections first
     sections = []
     try:
-        for sec in bv.get_sections():
-            start = getattr(sec, 'start', None)
-            length = getattr(sec, 'length', None) or getattr(sec, 'size', None) or 0
-            name = getattr(sec, 'name', '')
-            if start is not None:
-                sections.append((start, start + int(length), name))
-    except Exception:
+        for sec in bv.sections.values():
+            start = sec.start
+            end = sec.end
+            name = sec.name
+            sections.append((start, end, name))
+    except Exception as e:
+        print(f"[WARNING] Could not read sections: {e}")
         sections = []
+    
+    # Calculate min/max to cover ALL addresses (code + data sections)
+    all_addrs = list(addr_positions.keys()) if addr_positions else []
+    code_min = min(all_addrs) if all_addrs else 0
+    code_max = max(all_addrs) if all_addrs else 0
+    
+    for sec_start, sec_end, _ in sections:
+        all_addrs.append(sec_start)
+        all_addrs.append(sec_end)
+    
+    if all_addrs:
+        min_addr = min(all_addrs)
+        max_addr = max(all_addrs)
+    else:
+        min_addr = 0
+        max_addr = 0
 
     ctx = {
         'addr_positions': addr_positions,
@@ -357,14 +383,6 @@ def process_file(f):
         'max_addr': max_addr,
         'sections': sections,
     }
-
-    # Output path
-    out_dir = Path("/home/kun/Document/PalmTree/data/dfg")
-    out_dir.mkdir(parents=True, exist_ok=True)
-    binary_name = Path(f).name
-    dfg_inline_path = out_dir / f"{binary_name}_dfg_{SEG_LEN}_inline.txt"
-
-    print(f"[INFO] Writing to: {dfg_inline_path}")
 
     written = 0
     with open(dfg_inline_path, 'w', encoding='utf-8') as w:
@@ -387,7 +405,25 @@ def process_file(f):
 # Main
 # ---------------------------
 def main():
-    bin_folder = '/home/kun/Document/PalmTree/src/data_generator/testbin'
+    global SEG_LEN
+    
+    # Parse command-line arguments
+    bin_folder = '/home/kun/smallbinary'
+    out_dir = '/home/kun/Document/PalmTree/data/dfg'
+    
+    if len(sys.argv) > 1:
+        SEG_LEN = int(sys.argv[1])
+    if len(sys.argv) > 2:
+        bin_folder = sys.argv[2]
+    if len(sys.argv) > 3:
+        out_dir = sys.argv[3]
+    
+    print(f"[CONFIG] SEG_LEN={SEG_LEN}, BIN_FOLDER={bin_folder}, OUTPUT={out_dir}")
+    
+    # Update the output directory globally (will be used in process_file)
+    import __main__
+    __main__.OUTPUT_DIR = out_dir
+    
     file_lst = []
     for parent, _, files in os.walk(bin_folder):
         for f in files:
