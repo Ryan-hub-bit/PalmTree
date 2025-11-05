@@ -10,7 +10,7 @@ from pathlib import Path
 # ---------------------------
 # Config
 # ---------------------------
-SEG_LEN  = 8   # one output line = 8 instructions
+SEG_LEN  = 2   # one output line = 8 instructions
 WALK_LEN = 40  # max steps per random walk
 
 

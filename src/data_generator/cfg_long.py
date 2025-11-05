@@ -8,7 +8,7 @@ from pathlib import Path
 # =========================
 # Config
 # =========================
-SEG_LEN = 8  # each output line = 8 consecutive instructions on a CFG path
+SEG_LEN = 2  # each output line = 8 consecutive instructions on a CFG path
 
 # =========================
 # Address-aware normalization
@@ -133,7 +133,7 @@ def process_file(fpath: str):
         return
 
     # Output files (one line per 8-instruction window)
-    out_dir = Path("/home/louie/PalmTree/datalong/test/cfg")
+    out_dir = Path("/home/louie/PalmTree/data/cfg")
     out_dir.mkdir(parents=True, exist_ok=True)
     binary_name = Path(fpath).name
 
@@ -201,7 +201,7 @@ def is_output_file(fname: str) -> bool:
     )
 
 def main():
-    bin_folder = "/home/louie/testbinary"
+    bin_folder = "/home/kun/Document/PalmTree/src/data_generator/testbin"
     file_lst = []
 
     for parent, _, files in os.walk(bin_folder):
