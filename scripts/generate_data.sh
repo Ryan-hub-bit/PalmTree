@@ -13,11 +13,11 @@
 SEG_LEN=2
 
 # Binary folder containing binaries to process
-BIN_FOLDER="/home/kun/smallbinary"
+BIN_FOLDER="/home/kun/testbinary"
 
 # Output directories
-CFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/cfg"
-DFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/dfg"
+CFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/test/cfg"
+DFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/test/dfg"
 
 # Path to generator scripts
 SCRIPT_DIR="/home/kun/Document/PalmTree/src/data_generator"

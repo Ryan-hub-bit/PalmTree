@@ -27,7 +27,7 @@ MAX_LEN=20
 
 # Training configuration
 EPOCHS=20
-BATCH_SIZE=1024
+BATCH_SIZE=512       # Increased to 512 (GPU 1 has ~24GB free)
 LEARNING_RATE=0.001  # Higher LR since only training new components
 DROPOUT=0.1
 MASK_PROB=0.15
@@ -35,7 +35,7 @@ NSP_PROB=0.5
 
 # Hardware
 USE_CUDA="--cuda"
-USE_MULTI_GPU="--multi_gpu"  # Uncomment for multi-GPU
+USE_MULTI_GPU="--multi_gpu"  # Enabled - GPU 1 has plenty of memory
 
 # Create output directory
 mkdir -p ${OUTPUT_DIR}

@@ -58,12 +58,13 @@ class AddressPositionalEmbedding(nn.Module):
     to d_model via MLP.
     """
     
-    def __init__(self, d_model, max_len=512, intermediate_size=128):
+    def __init__(self, d_model, max_len=512, intermediate_size=128, dropout=0.1):
         """
         Args:
             d_model: Embedding dimension (output size)
             max_len: Maximum sequence length
             intermediate_size: Size of encoding per address level before concatenation
+            dropout: Dropout rate for MLP projection
         """
         super().__init__()
         
@@ -78,7 +79,9 @@ class AddressPositionalEmbedding(nn.Module):
         self.projection = nn.Sequential(
             nn.Linear(concat_size, d_model * 2),
             nn.GELU(),
-            nn.Linear(d_model * 2, d_model)
+            nn.Dropout(dropout),  # Add dropout after activation
+            nn.Linear(d_model * 2, d_model),
+            nn.Dropout(dropout)   # Add dropout at output
         )
         
     def _sinusoidal_encoding(self, positions, d_model):
@@ -200,7 +203,7 @@ class AddressAwareBERTEmbedding(nn.Module):
             self.position_embedding = SequencePositionalEmbedding(embed_size, max_len)
         
         # 3. Address-aware positional embedding - NEW component (TRAINABLE)
-        self.address_position = AddressPositionalEmbedding(embed_size, max_len)
+        self.address_position = AddressPositionalEmbedding(embed_size, max_len, dropout=dropout)
         print(f"[INFO] Address positional embeddings (3-level) - TRAINABLE")
         
         # 4. Segment embedding (for NSP)

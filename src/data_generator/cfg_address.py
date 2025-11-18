@@ -23,7 +23,7 @@ def normalize_and_mask(ins_raw: str, symbol_map: dict, string_map: dict):
     for op in operands:
         pieces = re.split(r"(0x[0-9A-Fa-f]+|[A-Za-z0-9_]+|\[|\]|,|:|\(|\))", op)
         for tok in pieces:
-            if not tok:
+            if not tok or tok.isspace():  # Skip empty and whitespace-only tokens
                 continue
             if tok.startswith("0x") and bool(HEX_RE.fullmatch(tok)):
                 out_tokens.append(tok)
@@ -150,7 +150,7 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                     if tgt in addr_positions:
                         entry = addr_positions[tgt]
                         pos = format_positions(entry)
-                        formatted_ops.append(f"addr_code({mk_hex}:{pos})")
+                        formatted_ops.append(f"address({mk_hex}:{pos})")
                     else:
                         # data addr: binary-normalized + section_norm, last field 0
                         if max_addr > min_addr:
@@ -159,7 +159,7 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                         else:
                             bnorm = 0.0
                         sn = section_norm(tgt)
-                        formatted_ops.append(f"addr_data({mk_hex}:{bnorm:.8f}:{sn:.6f}:0)")
+                        formatted_ops.append(f"address({mk_hex}:{bnorm:.8f}:{sn:.6f}:0)")
                 else:
                     formatted_ops.append(mk_hex)
             else:
@@ -212,7 +212,7 @@ def process_file(fpath: str):
     for func in bv.functions:
         G = nx.DiGraph()
         
-        # Get function address range
+        # Get function /address range
         func_start = func.start
         func_end = func.start + func.total_bytes
         
@@ -304,8 +304,8 @@ def main():
     global SEG_LEN
     
     # Parse command-line arguments
-    bin_folder = "/home/kun/smallbinary"
-    out_dir = "/home/kun/Document/PalmTree/data/cfg"
+    bin_folder = "/home/kun/testbinary"
+    out_dir = "/home/kun/Document/PalmTree/data/test/cfg"
     
     if len(sys.argv) > 1:
         SEG_LEN = int(sys.argv[1])

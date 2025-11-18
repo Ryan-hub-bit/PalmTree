@@ -16,7 +16,7 @@
   "freeze_segment_emb": true,
   "freeze_transformer": true,
   "epochs": 20,
-  "batch_size": 1024,
+  "batch_size": 512,
   "lr": 0.001,
   "dropout": 0.1,
   "warmup_steps": 10000,

@@ -64,7 +64,8 @@ class PairedAddressAwareDataset(Dataset):
         
         # Regex patterns for parsing inline format
         self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
-        self.nested_addr_pattern = re.compile(r'(addr_code|addr_data)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+        # Pattern for address operands (now using 'address' instead of 'addr_code'/'addr_data')
+        self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         
         # Load data
         print(f"Loading CFG corpus from {cfg_corpus_path}")
@@ -130,14 +131,13 @@ class PairedAddressAwareDataset(Dataset):
                 addr_positions.append((bnorm, fnorm, bbnorm))
                 continue
             
-            # Check for nested address: addr_code(...) or addr_data(...)
+            # Check for nested address: address(0xADDR:bnorm:fnorm:bbnorm)
             nested_match = self.nested_addr_pattern.match(part)
             if nested_match:
-                addr_type = nested_match.group(1)
-                bnorm = float(nested_match.group(3))
-                fnorm = float(nested_match.group(4))
-                bbnorm = float(nested_match.group(5))
-                tokens.append(addr_type)
+                bnorm = float(nested_match.group(2))
+                fnorm = float(nested_match.group(3))
+                bbnorm = float(nested_match.group(4))
+                tokens.append('address')  # Use PalmTree's 'address' token
                 addr_positions.append((bnorm, fnorm, bbnorm))
                 continue
             

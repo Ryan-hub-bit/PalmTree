@@ -1,0 +1,15 @@
+{
+  "total_loss": 12.271575434303982,
+  "mlm_loss": 10.022887925088623,
+  "mlm_accuracy": 0.0001107909253368875,
+  "mlm_correct": 100,
+  "mlm_total": 902601,
+  "nsp_cfg_loss": 1.186651030139172,
+  "nsp_cfg_accuracy": 0.5122012326501979,
+  "nsp_cfg_correct": 143108,
+  "nsp_cfg_total": 279398,
+  "nsp_dfg_loss": 1.0620364882461317,
+  "nsp_dfg_accuracy": 0.5119972226000186,
+  "nsp_dfg_correct": 143051,
+  "nsp_dfg_total": 279398
+}

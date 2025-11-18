@@ -426,14 +426,16 @@ def main():
         
         print(f"Train Loss: {train_metrics['total_loss']:.4f} | "
               f"MLM: {train_metrics['mlm_loss']:.4f} | "
-              f"NSP: {train_metrics['nsp_loss']:.4f}")
+              f"NSP_CFG: {train_metrics['nsp_cfg_loss']:.4f} | "
+              f"NSP_DFG: {train_metrics['nsp_dfg_loss']:.4f}")
         
         # Validate
         if val_loader is not None:
             val_metrics = validate(model, val_loader, device)
             print(f"Val Loss: {val_metrics['total_loss']:.4f} | "
                   f"MLM: {val_metrics['mlm_loss']:.4f} ({val_metrics['mlm_acc']:.2%}) | "
-                  f"NSP: {val_metrics['nsp_loss']:.4f} ({val_metrics['nsp_acc']:.2%})")
+                  f"NSP_CFG: {val_metrics['nsp_cfg_loss']:.4f} ({val_metrics['nsp_cfg_acc']:.2%}) | "
+                  f"NSP_DFG: {val_metrics['nsp_dfg_loss']:.4f} ({val_metrics['nsp_dfg_acc']:.2%})")
             
             # Save best model
             if val_metrics['total_loss'] < best_val_loss:
