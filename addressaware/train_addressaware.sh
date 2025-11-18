@@ -35,12 +35,18 @@ NSP_PROB=0.5
 
 # Hardware
 USE_CUDA="--cuda"
-USE_MULTI_GPU="--multi_gpu"  # Enabled - GPU 1 has plenty of memory
+USE_MULTI_GPU="--multi_gpu"
+
+# Set environment variables for NCCL (fix multi-GPU errors)
+# export NCCL_DEBUG=INFO
+# export NCCL_IB_DISABLE=1  # Disable InfiniBand
+# export NCCL_P2P_DISABLE=1  # Disable P2P
+# export CUDA_VISIBLE_DEVICES=0,1  # Use GPU 0 and 1
 
 # Create output directory
 mkdir -p ${OUTPUT_DIR}
 
-# Check if data files exist
+
 if [ ! -f "${CFG_DATA}" ]; then
     echo "Error: CFG data file not found: ${CFG_DATA}"
     exit 1
