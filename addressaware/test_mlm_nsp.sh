@@ -14,13 +14,13 @@
 #########################################################################
 
 # Test data paths
-CFG_TEST="../data/test/all_cfg_combined.txt"
-DFG_TEST="../data/test/all_dfg_combined.txt"
+CFG_TEST="../data/test/cfg/all_cfg_combined.txt"
+DFG_TEST="../data/test/dfg/all_dfg_combined.txt"
 VOCAB="../pre-trained_model/palmtree/vocab"
 
 # Model checkpoints
 # Address-Aware model (adjust epoch as needed)
-ADDRESSAWARE_CHECKPOINT="output_addressaware/transformer.ep19"
+ADDRESSAWARE_CHECKPOINT="output_addressaware/best_model.pt"
 
 # PalmTree baseline (pre-trained)
 PALMTREE_CHECKPOINT="../pre-trained_model/palmtree/transformer.ep19"

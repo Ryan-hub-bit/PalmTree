@@ -278,8 +278,13 @@ def evaluate_palmtree_model(model, dataloader, device, vocab_size):
     ).to(device)
     
     print("[NOTE] PalmTree uses SAME token sequences but NO address information")
-    print("[NOTE] PalmTree MLM/NSP heads are randomly initialized (not trained)")
-    
+    print("[WARNING] PalmTree checkpoint does NOT contain trained MLM/NSP heads!")
+    print("[WARNING] Creating randomly initialized heads - comparison is UNFAIR")
+    print("[WARNING] PalmTree saves only the BERT encoder, not the BERTLM wrapper")
+    print("[INFO] For fair comparison, you should:")
+    print("       1. Train PalmTree baseline with same task heads, OR")
+    print("       2. Compare encoder representations instead of task performance")
+    print()    
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Evaluating PalmTree"):
             # Move batch to device
@@ -325,23 +330,59 @@ def load_addressaware_checkpoint(checkpoint_path, vocab_size, hidden, n_layers, 
     """Load address-aware model from checkpoint."""
     print(f"Loading address-aware model from: {checkpoint_path}")
     
-    # Create model
-    bert = AddressAwareBERT(
-        vocab_size=vocab_size,
-        hidden=hidden,
-        n_layers=n_layers,
-        attn_heads=attn_heads,
-        dropout=dropout,
-        max_len=max_len
-    )
-    model = AddressAwareBERTForPretraining(bert, vocab_size)
-    
-    # Load checkpoint
+    # Load checkpoint first
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=False)
     if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
+        state_dict = checkpoint['model_state_dict']
     else:
-        model.load_state_dict(checkpoint)
+        state_dict = checkpoint
+    
+    # Handle DataParallel wrapper (remove 'module.' prefix if present)
+    new_state_dict = {}
+    for key, value in state_dict.items():
+        if key.startswith('module.'):
+            new_key = key[7:]  # Remove 'module.' prefix
+            new_state_dict[new_key] = value
+        else:
+            new_state_dict[key] = value
+    
+    # Check if position_embedding is learnable (has .weight) or sinusoidal (has .pe)
+    has_learnable_pos = 'bert.embedding.position_embedding.weight' in new_state_dict
+    
+    if has_learnable_pos:
+        # Extract the position embedding from checkpoint and pass it as pretrained
+        print("[INFO] Checkpoint uses learnable position embeddings")
+        pretrained_pos_emb = new_state_dict['bert.embedding.position_embedding.weight']
+        
+        # Use the actual max_len from the checkpoint (not the arg max_len)
+        checkpoint_max_len = pretrained_pos_emb.size(0)
+        print(f"[INFO] Using checkpoint max_len: {checkpoint_max_len}")
+        
+        bert = AddressAwareBERT(
+            vocab_size=vocab_size,
+            hidden=hidden,
+            n_layers=n_layers,
+            attn_heads=attn_heads,
+            dropout=dropout,
+            max_len=checkpoint_max_len,  # Use checkpoint's max_len
+            pretrained_position_emb=pretrained_pos_emb  # This triggers nn.Embedding creation
+        )
+    else:
+        # Model uses sinusoidal position embeddings
+        print("[INFO] Checkpoint uses sinusoidal position embeddings")
+        bert = AddressAwareBERT(
+            vocab_size=vocab_size,
+            hidden=hidden,
+            n_layers=n_layers,
+            attn_heads=attn_heads,
+            dropout=dropout,
+            max_len=max_len
+        )
+    
+    model = AddressAwareBERTForPretraining(bert, vocab_size)
+    
+    # Load the cleaned state dict
+    model.load_state_dict(new_state_dict)
     
     model = model.to(device)
     model.eval()
@@ -552,6 +593,17 @@ def main():
         
         print("="*70)
         print("NOTE: Positive improvement % means Address-Aware performs better")
+        print("="*70)
+        print("\n⚠️  WARNING: This comparison is UNFAIR!")
+        print("   - Address-Aware: Trained encoder + Trained MLM/NSP heads")
+        print("   - PalmTree: Pre-trained encoder + RANDOM MLM/NSP heads")
+        print("   - PalmTree checkpoint does NOT save the trained task heads")
+        print("\n   The huge performance gap is mainly due to random vs trained heads,")
+        print("   NOT due to address-aware embeddings.")
+        print("\n   For fair comparison, you should:")
+        print("   1. Train a baseline model (without address) on same data with same heads")
+        print("   2. Compare encoder representations on downstream tasks")
+        print("   3. Or compare only the encoder embeddings (cosine similarity, clustering)")
         print("="*70)
 
 
