@@ -10,7 +10,7 @@ from pathlib import Path
 # ---------------------------
 # Config
 # ---------------------------
-SEG_LEN  = 2   # Default value, can be overridden by command-line argument
+SEG_LEN  = 8   # Default value, can be overridden by command-line argument
 WALK_LEN = 40  # max steps per random walk
 
 HEX_RE = re.compile(r"0x[0-9a-fA-F]+")
@@ -408,8 +408,8 @@ def main():
     global SEG_LEN
     
     # Parse command-line arguments
-    bin_folder = '/home/kun/testbinary'
-    out_dir = '/home/kun/Document/PalmTree/data/test/dfg'
+    bin_folder = '/home/kun/smallbinary'
+    out_dir = '/home/kun/Document/PalmTree/data/dfg'
     
     if len(sys.argv) > 1:
         SEG_LEN = int(sys.argv[1])

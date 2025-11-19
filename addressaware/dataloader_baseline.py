@@ -148,24 +148,96 @@ class PairedBaselineDataset(Dataset):
         """Get a random line from corpus."""
         return corpus[random.randint(0, len(corpus) - 1)]
     
+    def _split_line_into_instructions(self, tokens):
+        """
+        Split a line into two instruction sequences.
+        
+        For 2-instruction format: each line has 2 instructions
+        For 8-instruction format: each line has 8 instructions
+        
+        Strategy: Split at midpoint to get two equal halves
+        Returns: (inst1_tokens, inst2_tokens)
+        """
+        mid_point = len(tokens) // 2
+        return tokens[:mid_point], tokens[mid_point:]
+    
     def _get_nsp_pair(self, index, corpus):
-        """Get NSP pair from specified corpus."""
-        line1 = corpus[index % len(corpus)]
-        t1_tokens = self._parse_instruction(line1)
+        """
+        Get NSP pair using WITHIN-LINE strategy for CFG.
+        
+        CFG Semantics: Control Flow ORDER CORRECTNESS
+        
+        POSITIVE (is_next=1): 
+          - Sentence A = First half of Line N (C1)
+          - Sentence B = Second half of SAME Line N (C2)
+          - Meaning: "C1 → C2 is the CORRECT execution order"
+          
+        NEGATIVE (is_next=0):
+          - Sentence A = Second half of Line N (C2)
+          - Sentence B = First half of SAME Line N (C1)
+          - Meaning: "C2 → C1 is the WRONG execution order (reversed)"
+          
+        This teaches: "Is this control flow sequence in the correct order?"
+        """
+        line = corpus[index % len(corpus)]
+        all_tokens = self._parse_instruction(line)
+        
+        # Split line into two halves
+        first_half_tokens, second_half_tokens = self._split_line_into_instructions(all_tokens)
         
         if random.random() < self.nsp_prob:
-            # Negative sample: random line
-            line2 = self._get_random_line(corpus)
+            # NEGATIVE: REVERSE the order (C2 → C1 instead of C1 → C2)
+            t1_tokens = second_half_tokens
+            t2_tokens = first_half_tokens
             is_next = 0
         else:
-            # Positive sample: next line
-            if (index + 1) % len(corpus) < len(corpus):
-                line2 = corpus[(index + 1) % len(corpus)]
-            else:
-                line2 = corpus[0]
+            # POSITIVE: Correct forward order (C1 → C2)
+            t1_tokens = first_half_tokens
+            t2_tokens = second_half_tokens
             is_next = 1
         
-        t2_tokens = self._parse_instruction(line2)
+        return t1_tokens, t2_tokens, is_next
+    
+    def _get_nsp_pair_dfg(self, index, corpus):
+        """
+        Get NSP pair for DFG using WITHIN-LINE vs CROSS-LINE strategy.
+        
+        DFG Semantics: Data Dependency CORRECTNESS
+        
+        POSITIVE (is_next=1): 
+          - Sentence A = First half of Line N (D1)
+          - Sentence B = Second half of SAME Line N (D2)
+          - Meaning: "D2 has the CORRECT data dependency on D1"
+          
+        NEGATIVE (is_next=0):
+          - Sentence A = First half of Line N (D1)
+          - Sentence B = First half of RANDOM Line (D_random, NOT D2)
+          - Meaning: "D_random is NOT the correct dependency for D1"
+          
+        This teaches: "Is this the correct data flow dependency?"
+        """
+        line = corpus[index % len(corpus)]
+        all_tokens = self._parse_instruction(line)
+        
+        # Split line into two halves
+        first_half_tokens, second_half_tokens = self._split_line_into_instructions(all_tokens)
+        
+        if random.random() < self.nsp_prob:
+            # NEGATIVE: pair D1 with random instruction (NOT D2)
+            random_line = self._get_random_line(corpus)
+            random_tokens = self._parse_instruction(random_line)
+            # Use first half of random line as the wrong dependency
+            random_first_half, _ = self._split_line_into_instructions(random_tokens)
+            
+            t1_tokens = first_half_tokens
+            t2_tokens = random_first_half
+            is_next = 0
+        else:
+            # POSITIVE: D1 → D2 (correct dependency within same line)
+            t1_tokens = first_half_tokens
+            t2_tokens = second_half_tokens
+            is_next = 1
+        
         return t1_tokens, t2_tokens, is_next
     
     def _mask_tokens(self, tokens):
@@ -213,14 +285,16 @@ class PairedBaselineDataset(Dataset):
         
         Returns both CFG and DFG sequences in one sample.
         Uses sequential positions (0, 1, 2, ...) instead of address positions.
+        CFG: Control flow ordering NSP
+        DFG: Data dependency NSP
         """
-        # Get CFG NSP pair
+        # Get CFG NSP pair (control flow ordering)
         cfg_t1_tokens, cfg_t2_tokens, cfg_is_next = self._get_nsp_pair(index, self.cfg_lines)
         
-        # Get DFG NSP pair (cycle if needed)
+        # Get DFG NSP pair (data dependency) - cycle if needed
         dfg_index = index % self.n_dfg if self.n_dfg > 0 else 0
         if self.n_dfg > 0:
-            dfg_t1_tokens, dfg_t2_tokens, dfg_is_next = self._get_nsp_pair(dfg_index, self.dfg_lines)
+            dfg_t1_tokens, dfg_t2_tokens, dfg_is_next = self._get_nsp_pair_dfg(dfg_index, self.dfg_lines)
         else:
             # No DFG data - use dummy
             dfg_t1_tokens, dfg_t2_tokens = [], []

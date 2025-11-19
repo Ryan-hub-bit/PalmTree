@@ -304,8 +304,9 @@ def main():
     global SEG_LEN
     
     # Parse command-line arguments
-    bin_folder = "/home/kun/testbinary"
-    out_dir = "/home/kun/Document/PalmTree/data/test/cfg"
+    # bin_folder = "/home/kun/smallbinary"
+    bin_folder = "/home/kun/Document/PalmTree/src/data_generator/testbin"
+    out_dir = "/home/kun/Document/PalmTree/src/data_generator/testres"
     
     if len(sys.argv) > 1:
         SEG_LEN = int(sys.argv[1])

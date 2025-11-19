@@ -1,35 +1,37 @@
 #!/bin/bash
 
 #########################################################################
-# Training Baseline BERT (NO address embeddings)
-# - Same data as address-aware model
-# - Same architecture but uses sequential positions
-# - Fair comparison to measure impact of address embeddings
+# Training Address-Aware BERT (8-Instruction Window with 7:1 Split)
+# - Window: 8 instructions per line
+# - CFG Split: 7:1 (C1:C2), Positive=forward, Negative=reversed
+# - DFG Split: 7:1 (D1:D2), Positive=same line, Negative=random
+# - Initializes from pre-trained PalmTree
+# - Trains ALL components (no freezing) for fair comparison
 #########################################################################
 
-# Data paths (SAME as address-aware model)
-CFG_DATA="../data/cfg_2/all_cfg_combined.txt"
-DFG_DATA="../data/dfg_2/all_dfg_combined.txt"
+# Data paths (8-instruction format)
+CFG_DATA="../data/cfg/all_cfg_combined.txt"
+DFG_DATA="../data/dfg/all_dfg_combined.txt"
 VOCAB_FILE="../pre-trained_model/palmtree/vocab"
-DATA_PERCENTAGE=1.0  # Use same percentage as address-aware (0.0-1.0)
-TRAIN_SPLIT=0.9      # 90% train, 10% validation (0.0-1.0)
+DATA_PERCENTAGE=1.0  # Use 100% of dataset (0.0-1.0)
+TRAIN_SPLIT=0.9      # 90% train, 10% validation
 
 # Pre-trained PalmTree model (for initialization)
 PALMTREE_CHECKPOINT="../pre-trained_model/palmtree/transformer.ep19"
 
 # Output
-OUTPUT_DIR="output_baseline_new"
+OUTPUT_DIR="output_addressaware_8inst"
 
-# Model configuration (SAME as address-aware model)
-HIDDEN=128           # Must match address-aware model
-N_LAYERS=12          # Must match address-aware model
-ATTN_HEADS=8         # Must match address-aware model
-MAX_LEN=20           # 8 instructions * ~10 tokens/instruction (must match address-aware)
+# Model configuration (must match PalmTree checkpoint)
+HIDDEN=128          # PalmTree's hidden size
+N_LAYERS=12         # PalmTree's number of layers
+ATTN_HEADS=8        # PalmTree's attention heads
+MAX_LEN=80          # ~8 instructions * 10 tokens/instruction
 
-# Training configuration (SAME as address-aware model)
+# Training configuration
 EPOCHS=20
-BATCH_SIZE=1024       # Reduced from 512 due to longer sequences (must match address-aware)
-LEARNING_RATE=0.001  # Same learning rate
+BATCH_SIZE=128      # Reduced due to longer sequences
+LEARNING_RATE=0.001
 DROPOUT=0.1
 MASK_PROB=0.15
 NSP_PROB=0.5
@@ -44,11 +46,15 @@ mkdir -p ${OUTPUT_DIR}
 # Validate inputs
 if [ ! -f "${CFG_DATA}" ]; then
     echo "Error: CFG data file not found: ${CFG_DATA}"
+    echo "Please create combined file first:"
+    echo "  cd ../data/cfg && cat *_cfg_8_inline.txt > all_cfg_8inst_combined.txt"
     exit 1
 fi
 
 if [ ! -f "${DFG_DATA}" ]; then
     echo "Error: DFG data file not found: ${DFG_DATA}"
+    echo "Please create combined file first:"
+    echo "  cd ../data/dfg && cat *_dfg_8_inline.txt > all_dfg_8inst_combined.txt"
     exit 1
 fi
 
@@ -63,27 +69,29 @@ if [ ! -f "${VOCAB_FILE}" ]; then
 fi
 
 echo "========================================================================"
-echo "Training Baseline BERT (NO address embeddings)"
+echo "Training Address-Aware BERT (8-Instruction Window, 7:1 Split)"
 echo "========================================================================"
-echo "Purpose: Fair comparison with address-aware model"
+echo ""
+echo "NSP Strategy:"
+echo "  CFG: 7:1 split, POSITIVE=C1→C2, NEGATIVE=C2→C1 (reversed)"
+echo "  DFG: 7:1 split, POSITIVE=D1→D2, NEGATIVE=D1→D_random"
 echo ""
 echo "Data:"
 echo "  CFG: ${CFG_DATA}"
 echo "  DFG: ${DFG_DATA}"
 echo "  Vocabulary: ${VOCAB_FILE}"
-echo "  Data Percentage: ${DATA_PERCENTAGE} ($(echo "$DATA_PERCENTAGE * 100" | bc)%)"
-echo "  Train/Val Split: ${TRAIN_SPLIT} ($(echo "$TRAIN_SPLIT * 100" | bc)% train)"
+echo "  Data Percentage: ${DATA_PERCENTAGE} (100%)"
+echo "  Train/Val Split: ${TRAIN_SPLIT} (90% train, 10% val)"
 echo ""
 echo "Pre-trained Model:"
 echo "  PalmTree Checkpoint: ${PALMTREE_CHECKPOINT}"
-echo "  >>> Used for INITIALIZATION (same as address-aware) <<<"
 echo ""
-echo "Model Architecture (SAME as address-aware):"
+echo "Model Architecture:"
 echo "  Hidden: ${HIDDEN}, Layers: ${N_LAYERS}, Heads: ${ATTN_HEADS}"
 echo "  Max Length: ${MAX_LEN}"
-echo "  Position Embeddings: SEQUENTIAL sinusoidal (no address info)"
+echo "  Position Embeddings: ADDRESS-AWARE (3-level: binary, function, bb)"
 echo ""
-echo "Training (SAME as address-aware):"
+echo "Training:"
 echo "  Epochs: ${EPOCHS}, Batch Size: ${BATCH_SIZE}"
 echo "  Learning Rate: ${LEARNING_RATE}"
 echo "  Mask Prob: ${MASK_PROB}, NSP Prob: ${NSP_PROB}"
@@ -93,7 +101,7 @@ echo "========================================================================"
 echo ""
 
 # Train
-python3 train_baseline.py \
+python3 train_8inst.py \
     --cfg_train "${CFG_DATA}" \
     --dfg_train "${DFG_DATA}" \
     --vocab "${VOCAB_FILE}" \
@@ -119,9 +127,4 @@ python3 train_baseline.py \
 echo ""
 echo "========================================================================"
 echo "Training complete! Checkpoints saved to: ${OUTPUT_DIR}"
-echo "========================================================================"
-echo ""
-echo "Next steps:"
-echo "  1. Compare with address-aware model using test_mlm_nsp.py"
-echo "  2. Check if address embeddings improve MLM/NSP performance"
 echo "========================================================================"

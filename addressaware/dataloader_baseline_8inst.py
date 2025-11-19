@@ -1,10 +1,16 @@
 """
-Paired CFG+DFG DataLoader for Address-Aware PalmTree
+Paired CFG+DFG Baseline DataLoader (8-Instruction Window, NO Address Info)
 
-Matches PalmTree's approach:
-- Each sample contains BOTH CFG and DFG sequences
-- Three tasks per sample: MLM(CFG) + NSP(CFG) + NSP(DFG)
-- Fallback to CFG-only when DFG runs out
+Strategy:
+- Window size: 8 instructions per line
+- CFG Split: 7:1 (first 7 insts : last 1 inst)
+  - POSITIVE: C1(7 insts) → C2(1 inst) - correct order
+  - NEGATIVE: C2(1 inst) → C1(7 insts) - reversed order
+- DFG Split: 7:1 (first 7 insts : last 1 inst)
+  - POSITIVE: D1(7 insts) → D2(1 inst) - correct dependency
+  - NEGATIVE: D1(7 insts) → D_random(1 inst) - wrong dependency
+  
+IMPORTANT: Strips address information from tokens while keeping same token sequence
 """
 
 import torch
@@ -13,15 +19,13 @@ import re
 import random
 
 
-class PairedAddressAwareDataset(Dataset):
+class PairedBaselineDataset8Inst(Dataset):
     """
-    Paired CFG+DFG dataset for address-aware pretraining.
+    Paired CFG+DFG baseline dataset (NO address embeddings, uses sequential positions).
     
-    Following PalmTree's approach:
-    - Returns both CFG and DFG in each sample
-    - CFG: MLM (15% masking) + NSP (order checking)
-    - DFG: NO MLM + NSP only (trace membership)
-    - Fallback to CFG-only if DFG exhausted
+    Uses 7:1 split strategy (same as address-aware):
+    - CFG: Tests execution order (reversed negative)
+    - DFG: Tests data dependency (random negative)
     """
     
     def __init__(
@@ -29,7 +33,7 @@ class PairedAddressAwareDataset(Dataset):
         cfg_corpus_path,
         dfg_corpus_path,
         vocab,
-        seq_len=512,
+        seq_len=80,
         encoding="utf-8",
         on_memory=True,
         nsp_prob=0.5,
@@ -40,10 +44,10 @@ class PairedAddressAwareDataset(Dataset):
     ):
         """
         Args:
-            cfg_corpus_path: Path to CFG inline format file
-            dfg_corpus_path: Path to DFG inline format file
+            cfg_corpus_path: Path to CFG inline format file (8 instructions per line)
+            dfg_corpus_path: Path to DFG inline format file (8 instructions per line)
             vocab: Vocabulary object
-            seq_len: Maximum sequence length
+            seq_len: Maximum sequence length (default 80 for ~8 instructions)
             encoding: File encoding
             on_memory: Load all data into memory
             nsp_prob: Probability of negative NSP pair
@@ -62,10 +66,9 @@ class PairedAddressAwareDataset(Dataset):
         self.train_split = max(0.0, min(1.0, train_split))
         self.is_train = is_train
         
-        # Regex patterns for parsing inline format
-        self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
-        # Pattern for address operands (now using 'address' instead of 'addr_code'/'addr_data')
-        self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+        # Regex patterns for stripping address information
+        self.addr_pattern = re.compile(r'(\w+)\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)')
+        self.nested_addr_pattern = re.compile(r'(address)\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)')
         
         # Load data
         print(f"Loading CFG corpus from {cfg_corpus_path}")
@@ -114,154 +117,124 @@ class PairedAddressAwareDataset(Dataset):
         return lines
     
     def _parse_instruction(self, instruction_str):
-        """Parse instruction and extract tokens with address positions."""
+        """
+        Parse instruction and extract tokens WITHOUT address information.
+        
+        Strips address values but keeps token sequence identical to address-aware model.
+        Example: "mov(0x401000:0.1:0.2:0.3)" → "mov"
+        """
         tokens = []
-        addr_positions = []
         
         parts = instruction_str.split()
         for part in parts:
-            # Check for opcode with inline address: opcode(0xADDR:bnorm:fnorm:bbnorm)
+            # Check for opcode with address: opcode(0xADDR:b:f:bb) → opcode
             addr_match = self.addr_pattern.match(part)
             if addr_match:
-                opcode = addr_match.group(1)
-                bnorm = float(addr_match.group(3))
-                fnorm = float(addr_match.group(4))
-                bbnorm = float(addr_match.group(5))
-                tokens.append(opcode)
-                addr_positions.append((bnorm, fnorm, bbnorm))
+                tokens.append(addr_match.group(1))
                 continue
             
-            # Check for nested address: address(0xADDR:bnorm:fnorm:bbnorm)
+            # Check for nested address: address(0xADDR:b:f:bb) → address
             nested_match = self.nested_addr_pattern.match(part)
             if nested_match:
-                bnorm = float(nested_match.group(2))
-                fnorm = float(nested_match.group(3))
-                bbnorm = float(nested_match.group(4))
-                tokens.append('address')  # Use PalmTree's 'address' token
-                addr_positions.append((bnorm, fnorm, bbnorm))
+                tokens.append(nested_match.group(1))
                 continue
             
             # Regular token (no address)
             tokens.append(part)
-            addr_positions.append((0.0, 0.0, 0.0))
         
-        return tokens, addr_positions
+        return tokens
     
     def _get_random_line(self, corpus):
         """Get a random line from corpus."""
         return corpus[random.randint(0, len(corpus) - 1)]
     
-    def _split_line_into_instructions(self, tokens, positions):
+    def _split_7_1(self, tokens):
         """
-        Split a line into two instruction sequences.
+        Split 8-instruction sequence into 7:1 ratio.
         
-        For 2-instruction format: each line has 2 instructions
-        For 8-instruction format: each line has 8 instructions
-        
-        Strategy: Split at midpoint to get two equal halves
-        Returns: (inst1_tokens, inst1_pos, inst2_tokens, inst2_pos)
+        Returns: (first_7_tokens, last_1_tokens)
         """
-        mid_point = len(tokens) // 2
-        return tokens[:mid_point], positions[:mid_point], tokens[mid_point:], positions[mid_point:]
+        # Calculate split point (7/8 of total tokens)
+        split_point = len(tokens) * 7 // 8
+        return tokens[:split_point], tokens[split_point:]
     
-    def _get_nsp_pair(self, index, corpus):
+    def _get_nsp_pair_cfg(self, index, corpus):
         """
-        Get NSP pair using WITHIN-LINE strategy for CFG.
+        Get CFG NSP pair using 7:1 split with ORDER verification.
         
         CFG Semantics: Control Flow ORDER CORRECTNESS
         
         POSITIVE (is_next=1): 
-          - Sentence A = First half of Line N (C1)
-          - Sentence B = Second half of SAME Line N (C2)
+          - Sentence A = First 7/8 of Line N (C1)
+          - Sentence B = Last 1/8 of SAME Line N (C2)
           - Meaning: "C1 → C2 is the CORRECT execution order"
           
         NEGATIVE (is_next=0):
-          - Sentence A = Second half of Line N (C2)
-          - Sentence B = First half of SAME Line N (C1)
+          - Sentence A = Last 1/8 of Line N (C2)
+          - Sentence B = First 7/8 of SAME Line N (C1)
           - Meaning: "C2 → C1 is the WRONG execution order (reversed)"
-          
-        This teaches: "Is this control flow sequence in the correct order?"
         """
         line = corpus[index % len(corpus)]
-        all_tokens, all_positions = self._parse_instruction(line)
+        all_tokens = self._parse_instruction(line)
         
-        # Split line into two halves
-        first_half_tokens, first_half_pos, second_half_tokens, second_half_pos = \
-            self._split_line_into_instructions(all_tokens, all_positions)
+        # Split into 7:1 ratio
+        first_7_tokens, last_1_tokens = self._split_7_1(all_tokens)
         
         if random.random() < self.nsp_prob:
-            # NEGATIVE: REVERSE the order (C2 → C1 instead of C1 → C2)
-            t1_tokens = second_half_tokens
-            t1_positions = second_half_pos
-            t2_tokens = first_half_tokens
-            t2_positions = first_half_pos
+            # NEGATIVE: REVERSE the order (C2 → C1)
+            t1_tokens = last_1_tokens
+            t2_tokens = first_7_tokens
             is_next = 0
         else:
-            # POSITIVE: Correct forward order (C1 → C2)
-            t1_tokens = first_half_tokens
-            t1_positions = first_half_pos
-            t2_tokens = second_half_tokens
-            t2_positions = second_half_pos
+            # POSITIVE: Correct order (C1 → C2)
+            t1_tokens = first_7_tokens
+            t2_tokens = last_1_tokens
             is_next = 1
         
-        return t1_tokens, t1_positions, t2_tokens, t2_positions, is_next
+        return t1_tokens, t2_tokens, is_next
     
     def _get_nsp_pair_dfg(self, index, corpus):
         """
-        Get NSP pair for DFG using WITHIN-LINE vs CROSS-LINE strategy.
+        Get DFG NSP pair using 7:1 split with DEPENDENCY verification.
         
         DFG Semantics: Data Dependency CORRECTNESS
         
         POSITIVE (is_next=1): 
-          - Sentence A = First half of Line N (D1)
-          - Sentence B = Second half of SAME Line N (D2)
+          - Sentence A = First 7/8 of Line N (D1)
+          - Sentence B = Last 1/8 of SAME Line N (D2)
           - Meaning: "D2 has the CORRECT data dependency on D1"
           
         NEGATIVE (is_next=0):
-          - Sentence A = First half of Line N (D1)
-          - Sentence B = First half of RANDOM Line (D_random, NOT D2)
+          - Sentence A = First 7/8 of Line N (D1)
+          - Sentence B = Last 1/8 of RANDOM Line (D_random, NOT D2)
           - Meaning: "D_random is NOT the correct dependency for D1"
-          
-        This teaches: "Is this the correct data flow dependency?"
         """
         line = corpus[index % len(corpus)]
-        all_tokens, all_positions = self._parse_instruction(line)
+        all_tokens = self._parse_instruction(line)
         
-        # Split line into two halves
-        first_half_tokens, first_half_pos, second_half_tokens, second_half_pos = \
-            self._split_line_into_instructions(all_tokens, all_positions)
+        # Split into 7:1 ratio
+        first_7_tokens, last_1_tokens = self._split_7_1(all_tokens)
         
         if random.random() < self.nsp_prob:
             # NEGATIVE: pair D1 with random instruction (NOT D2)
             random_line = self._get_random_line(corpus)
-            random_tokens, random_positions = self._parse_instruction(random_line)
-            # Use first half of random line as the wrong dependency
-            random_first_half, random_first_pos, _, _ = \
-                self._split_line_into_instructions(random_tokens, random_positions)
+            random_tokens = self._parse_instruction(random_line)
+            # Use last 1/8 of random line as the wrong dependency
+            _, random_last_1 = self._split_7_1(random_tokens)
             
-            t1_tokens = first_half_tokens
-            t1_positions = first_half_pos
-            t2_tokens = random_first_half
-            t2_positions = random_first_pos
+            t1_tokens = first_7_tokens
+            t2_tokens = random_last_1
             is_next = 0
         else:
-            # POSITIVE: D1 → D2 (correct dependency within same line)
-            t1_tokens = first_half_tokens
-            t1_positions = first_half_pos
-            t2_tokens = second_half_tokens
-            t2_positions = second_half_pos
+            # POSITIVE: D1 → D2 (correct dependency)
+            t1_tokens = first_7_tokens
+            t2_tokens = last_1_tokens
             is_next = 1
         
-        return t1_tokens, t1_positions, t2_tokens, t2_positions, is_next
+        return t1_tokens, t2_tokens, is_next
     
     def _mask_tokens(self, tokens):
-        """Apply MLM masking (for CFG only).
-        
-        NOTE: Address positions are KEPT even when tokens are masked.
-        Rationale: In binary analysis, address context is always available and provides
-        crucial location-dependent information (function boundaries, prologue/epilogue
-        patterns, etc.). The model learns: "given this address context, what instruction?"
-        """
+        """Apply MLM masking (for CFG only)."""
         output_tokens = []
         output_labels = []
         
@@ -301,100 +274,72 @@ class PairedAddressAwareDataset(Dataset):
     
     def __getitem__(self, index):
         """
-        Get paired CFG+DFG sample.
+        Get paired CFG+DFG sample WITHOUT address information.
         
-        Returns both CFG and DFG sequences in one sample.
-        CFG: Control flow ordering NSP
-        DFG: Data dependency NSP
+        Uses sequential positions (0, 1, 2, ...) instead of address positions.
+        CFG: Control flow order verification (7:1 split, reversed negative)
+        DFG: Data dependency verification (7:1 split, random negative)
         """
-        # Get CFG NSP pair (control flow ordering)
-        cfg_t1_tokens, cfg_t1_pos, cfg_t2_tokens, cfg_t2_pos, cfg_is_next = self._get_nsp_pair(index, self.cfg_lines)
+        # Get CFG NSP pair (control flow order)
+        cfg_t1_tokens, cfg_t2_tokens, cfg_is_next = \
+            self._get_nsp_pair_cfg(index, self.cfg_lines)
         
         # Get DFG NSP pair (data dependency) - cycle if needed
         dfg_index = index % self.n_dfg if self.n_dfg > 0 else 0
         if self.n_dfg > 0:
-            dfg_t1_tokens, dfg_t1_pos, dfg_t2_tokens, dfg_t2_pos, dfg_is_next = self._get_nsp_pair_dfg(dfg_index, self.dfg_lines)
+            dfg_t1_tokens, dfg_t2_tokens, dfg_is_next = \
+                self._get_nsp_pair_dfg(dfg_index, self.dfg_lines)
         else:
             # No DFG data - use dummy
-            dfg_t1_tokens, dfg_t1_pos = [], []
-            dfg_t2_tokens, dfg_t2_pos = [], []
+            dfg_t1_tokens, dfg_t2_tokens = [], []
             dfg_is_next = 0
         
         # === Process CFG (with MLM) ===
         cfg_combined_tokens = ['<sos>'] + cfg_t1_tokens + ['<eos>'] + cfg_t2_tokens + ['<eos>']
-        cfg_combined_pos = [(0.0, 0.0, 0.0)] + cfg_t1_pos + [(0.0, 0.0, 0.0)] + cfg_t2_pos + [(0.0, 0.0, 0.0)]
         cfg_segment_labels = [0] * (len(cfg_t1_tokens) + 2) + [1] * (len(cfg_t2_tokens) + 1)
         
         # Truncate if needed
         if len(cfg_combined_tokens) > self.seq_len:
             cfg_combined_tokens = cfg_combined_tokens[:self.seq_len]
-            cfg_combined_pos = cfg_combined_pos[:self.seq_len]
             cfg_segment_labels = cfg_segment_labels[:self.seq_len]
         
         # Apply MLM masking for CFG
         cfg_bert_input, cfg_bert_label = self._mask_tokens(cfg_combined_tokens)
         
         # Pad CFG sequences
-        padding_len = self.seq_len - len(cfg_bert_input)
         cfg_bert_input = self._pad_sequence(cfg_bert_input, self.seq_len, self.vocab.pad_index)
         cfg_bert_label = self._pad_sequence(cfg_bert_label, self.seq_len, -1)
         cfg_segment_labels = self._pad_sequence(cfg_segment_labels, self.seq_len, 0)
-        cfg_combined_pos = cfg_combined_pos + [(0.0, 0.0, 0.0)] * padding_len
-        
-        # Extract CFG position components
-        cfg_binary_pos = [pos[0] for pos in cfg_combined_pos]
-        cfg_function_pos = [pos[1] for pos in cfg_combined_pos]
-        cfg_bb_pos = [pos[2] for pos in cfg_combined_pos]
         
         # === Process DFG (NO MLM) ===
         if self.n_dfg > 0:
             dfg_combined_tokens = ['<sos>'] + dfg_t1_tokens + ['<eos>'] + dfg_t2_tokens + ['<eos>']
-            dfg_combined_pos = [(0.0, 0.0, 0.0)] + dfg_t1_pos + [(0.0, 0.0, 0.0)] + dfg_t2_pos + [(0.0, 0.0, 0.0)]
             dfg_segment_labels = [0] * (len(dfg_t1_tokens) + 2) + [1] * (len(dfg_t2_tokens) + 1)
             
             # Truncate if needed
             if len(dfg_combined_tokens) > self.seq_len:
                 dfg_combined_tokens = dfg_combined_tokens[:self.seq_len]
-                dfg_combined_pos = dfg_combined_pos[:self.seq_len]
                 dfg_segment_labels = dfg_segment_labels[:self.seq_len]
             
-            # NO masking for DFG
+            # Convert to indices (NO masking for DFG)
             dfg_bert_input = [self.vocab.stoi.get(token, self.vocab.unk_index) for token in dfg_combined_tokens]
             
             # Pad DFG sequences
-            padding_len = self.seq_len - len(dfg_bert_input)
             dfg_bert_input = self._pad_sequence(dfg_bert_input, self.seq_len, self.vocab.pad_index)
             dfg_segment_labels = self._pad_sequence(dfg_segment_labels, self.seq_len, 0)
-            dfg_combined_pos = dfg_combined_pos + [(0.0, 0.0, 0.0)] * padding_len
-            
-            # Extract DFG position components
-            dfg_binary_pos = [pos[0] for pos in dfg_combined_pos]
-            dfg_function_pos = [pos[1] for pos in dfg_combined_pos]
-            dfg_bb_pos = [pos[2] for pos in dfg_combined_pos]
         else:
-            # No DFG - use dummy padded sequences
+            # No DFG - use padding
             dfg_bert_input = [self.vocab.pad_index] * self.seq_len
             dfg_segment_labels = [0] * self.seq_len
-            dfg_binary_pos = [0.0] * self.seq_len
-            dfg_function_pos = [0.0] * self.seq_len
-            dfg_bb_pos = [0.0] * self.seq_len
+            dfg_is_next = 0
         
-        # Return paired CFG+DFG sample
+        # Return all data
         return {
-            # CFG data (with MLM)
-            'cfg_bert_input': torch.tensor(cfg_bert_input, dtype=torch.long),
-            'cfg_bert_label': torch.tensor(cfg_bert_label, dtype=torch.long),
-            'cfg_segment_label': torch.tensor(cfg_segment_labels, dtype=torch.long),
+            'cfg_input': torch.tensor(cfg_bert_input, dtype=torch.long),
+            'cfg_label': torch.tensor(cfg_bert_label, dtype=torch.long),
+            'cfg_segment': torch.tensor(cfg_segment_labels, dtype=torch.long),
             'cfg_is_next': torch.tensor(cfg_is_next, dtype=torch.long),
-            'cfg_binary_pos': torch.tensor(cfg_binary_pos, dtype=torch.float),
-            'cfg_function_pos': torch.tensor(cfg_function_pos, dtype=torch.float),
-            'cfg_bb_pos': torch.tensor(cfg_bb_pos, dtype=torch.float),
-            
-            # DFG data (NO MLM, only NSP)
-            'dfg_bert_input': torch.tensor(dfg_bert_input, dtype=torch.long),
-            'dfg_segment_label': torch.tensor(dfg_segment_labels, dtype=torch.long),
+            'dfg_input': torch.tensor(dfg_bert_input, dtype=torch.long),
+            'dfg_segment': torch.tensor(dfg_segment_labels, dtype=torch.long),
             'dfg_is_next': torch.tensor(dfg_is_next, dtype=torch.long),
-            'dfg_binary_pos': torch.tensor(dfg_binary_pos, dtype=torch.float),
-            'dfg_function_pos': torch.tensor(dfg_function_pos, dtype=torch.float),
-            'dfg_bb_pos': torch.tensor(dfg_bb_pos, dtype=torch.float),
         }

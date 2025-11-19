@@ -15,7 +15,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from palmtree.model.transformer import TransformerBlock
 from palmtree.model.utils.layer_norm import LayerNorm
-from address_embedding import AddressAwareBERTEmbedding
+
+# Use relative import for address_embedding (works when running from addressaware dir)
+try:
+    from addressaware.address_embedding import AddressAwareBERTEmbedding
+except ModuleNotFoundError:
+    from address_embedding import AddressAwareBERTEmbedding
 
 
 class AddressAwareBERT(nn.Module):
@@ -73,9 +78,9 @@ class AddressAwareBERT(nn.Module):
             print(f"[INFO] Loading pre-trained transformer blocks")
             self.transformer_blocks.load_state_dict(pretrained_transformer, strict=False)
             # FREEZE all transformer parameters
-            for param in self.transformer_blocks.parameters():
+            """ for param in self.transformer_blocks.parameters():
                 param.requires_grad = False
-            print(f"[INFO] Transformer blocks FROZEN")
+            print(f"[INFO] Transformer blocks FROZEN") """
     
     def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos):
         """
@@ -147,8 +152,27 @@ class AddressAwareBERTForPretraining(nn.Module):
             nn.Tanh(),
             nn.Linear(self.hidden, 2)
         )
+        
+        # Address Distance Prediction head (learns address relationships)
+        # Predicts relative distance category between two instruction segments
+        self.adp_head = nn.Sequential(
+            nn.Linear(self.hidden, self.hidden),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(self.hidden, 128),
+            nn.ReLU(),
+            nn.Linear(128, 5)  # 5 categories: very_close, close, medium, far, very_far
+        )
+        
+        # Address Order Prediction head (predicts if instruction A comes before B)
+        self.aop_head = nn.Sequential(
+            nn.Linear(self.hidden, self.hidden),
+            nn.Tanh(),
+            nn.Linear(self.hidden, 2)  # binary: before (1) or after (0)
+        )
     
-    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg'):
+    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg', 
+                return_address_tasks=False):
         """
         Forward pass for pretraining.
         
@@ -159,10 +183,13 @@ class AddressAwareBERTForPretraining(nn.Module):
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
             corpus_type: 'cfg' or 'dfg' - determines which NSP head to use
+            return_address_tasks: if True, also return address distance and order predictions
             
         Returns:
             mlm_output: [batch_size, seq_len, vocab_size] - predictions for each token (CFG only)
             nsp_output: [batch_size, 2] - binary classification for NSP
+            adp_output: [batch_size, 5] - address distance prediction (if return_address_tasks=True)
+            aop_output: [batch_size, 2] - address order prediction (if return_address_tasks=True)
         """
         # Get BERT output
         sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
@@ -178,5 +205,14 @@ class AddressAwareBERTForPretraining(nn.Module):
             nsp_output = self.nsp_cfg_head(cls_output)
         else:  # dfg
             nsp_output = self.nsp_dfg_head(cls_output)
+        
+        if return_address_tasks:
+            # Address Distance Prediction using [CLS] token
+            adp_output = self.adp_head(cls_output)
+            
+            # Address Order Prediction using [CLS] token
+            aop_output = self.aop_head(cls_output)
+            
+            return mlm_output, nsp_output, adp_output, aop_output
         
         return mlm_output, nsp_output

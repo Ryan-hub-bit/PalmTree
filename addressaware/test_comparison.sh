@@ -16,8 +16,8 @@ DFG_TEST="../data/test/dfg/all_dfg_combined.txt"
 VOCAB_FILE="../pre-trained_model/palmtree/vocab"
 
 # Model checkpoints
-ADDRESSAWARE_CHECKPOINT="output_addressaware/best_model.pt"
-BASELINE_CHECKPOINT="output_baseline/best_model.pt"
+ADDRESSAWARE_CHECKPOINT="output_addressaware_new/best_model.pt"
+BASELINE_CHECKPOINT="output_baseline_new/best_model.pt"
 
 # Model configuration (MUST match training config)
 HIDDEN=128
@@ -29,6 +29,7 @@ DROPOUT=0.1
 # Evaluation configuration
 BATCH_SIZE=512
 OUTPUT_FILE="fair_comparison_results.json"
+RANDOM_SEED=42  # Fixed seed for reproducible masking
 
 # Hardware
 USE_CUDA="--cuda"
@@ -60,6 +61,7 @@ echo ""
 echo "Configuration:"
 echo "  Hidden: ${HIDDEN}, Layers: ${N_LAYERS}, Heads: ${ATTN_HEADS}"
 echo "  Seq Length: ${SEQ_LEN}, Batch Size: ${BATCH_SIZE}"
+echo "  Random Seed: ${RANDOM_SEED} (for reproducible masking)"
 echo ""
 echo "Output: ${OUTPUT_FILE}"
 echo "========================================================================"
@@ -85,6 +87,7 @@ CMD="python3 test_comparison.py \
     --seq_len ${SEQ_LEN} \
     --dropout ${DROPOUT} \
     --batch_size ${BATCH_SIZE} \
+    --seed ${RANDOM_SEED} \
     --output_file \"${OUTPUT_FILE}\" \
     ${USE_CUDA}"
 

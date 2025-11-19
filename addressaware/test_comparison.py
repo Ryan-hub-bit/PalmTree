@@ -22,6 +22,7 @@ import os
 import sys
 import json
 import numpy as np
+import random
 from tqdm import tqdm
 
 # Add parent directory to path
@@ -372,6 +373,7 @@ def main():
     # Evaluation config
     parser.add_argument('--batch_size', type=int, default=512, help='Batch size')
     parser.add_argument('--output_file', default='comparison_results.json', help='Output JSON file')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducible masking')
     parser.add_argument('--cuda', action='store_true', help='Use CUDA')
     
     args = parser.parse_args()
@@ -379,6 +381,16 @@ def main():
     # Setup device
     device = torch.device('cuda' if args.cuda and torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}\n")
+    
+    # Set random seeds for reproducible masking
+    print(f"Setting random seed: {args.seed}")
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(args.seed)
+        torch.cuda.manual_seed_all(args.seed)
+    print("✓ Random seeds set for reproducible masking\n")
     
     # Load vocabulary
     print(f"Loading vocabulary from: {args.vocab}")
@@ -393,6 +405,11 @@ def main():
         print("="*80)
         print("EVALUATING ADDRESS-AWARE MODEL")
         print("="*80)
+        
+        # Reset random seed for reproducible masking
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
         
         # Create test dataset with address info
         print("Creating test dataset (with address positions)...")
@@ -458,6 +475,11 @@ def main():
         print("EVALUATING BASELINE MODEL")
         print("="*80)
         
+        # Reset random seed for reproducible masking (SAME SEED as address-aware!)
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        
         # Create test dataset WITHOUT address info
         print("Creating test dataset (sequential positions only)...")
         baseline_dataset = PairedBaselineDataset(
@@ -521,6 +543,9 @@ def main():
         print("="*80)
         print("COMPARISON SUMMARY")
         print("="*80)
+        print(f"Note: Both models evaluated with SAME random seed ({args.seed})")
+        print("      → Same tokens masked at same positions (fair comparison)")
+        print("")
         
         aa = results['address_aware']
         bl = results['baseline']

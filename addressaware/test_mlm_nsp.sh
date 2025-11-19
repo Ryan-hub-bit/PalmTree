@@ -30,7 +30,7 @@ HIDDEN=128
 N_LAYERS=12
 ATTN_HEADS=8
 DROPOUT=0.1
-SEQ_LEN=20  # Match training seq_len
+SEQ_LEN=80  # Match training: 8 instructions * ~10 tokens/instruction
 
 # Evaluation config
 BATCH_SIZE=512

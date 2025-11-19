@@ -2,33 +2,34 @@
 
 #########################################################################
 # Training Address-Aware BERT
-# - Loads pre-trained PalmTree (FROZEN)
-# - Only trains NEW address-aware positional embeddings
+# - Initializes from pre-trained PalmTree (SAME as baseline)
+# - Trains ALL components (no freezing) for fair comparison
+# - Address embeddings provide additional positional information
 #########################################################################
 
 # Data paths
-CFG_DATA="../data/cfg/all_cfg_combined.txt"
-DFG_DATA="../data/dfg/all_dfg_combined.txt"
+CFG_DATA="../data/cfg_2/all_cfg_combined.txt"
+DFG_DATA="../data/dfg_2/all_dfg_combined.txt"
 VOCAB_FILE="../pre-trained_model/palmtree/vocab"
-DATA_PERCENTAGE=0.5  # Use 10% of dataset (0.0-1.0), set 1.0 for full dataset
-TRAIN_SPLIT=0.9      # 90% train, 10% validation (0.0-1.0), set 1.0 for no validation
+DATA_PERCENTAGE=1.0  # Use 100% of dataset (0.0-1.0)
+TRAIN_SPLIT=0.9      # 90% train, 10% validation
 
-# Pre-trained PalmTree model (will be FROZEN)
+# Pre-trained PalmTree model (for initialization)
 PALMTREE_CHECKPOINT="../pre-trained_model/palmtree/transformer.ep19"
 
 # Output
-OUTPUT_DIR="output_addressaware"
+OUTPUT_DIR="output_addressaware_new"
 
 # Model configuration (must match PalmTree checkpoint)
 HIDDEN=128          # PalmTree's hidden size (must match checkpoint!)
 N_LAYERS=12          # PalmTree's number of layers
 ATTN_HEADS=8        # PalmTree's attention heads
-MAX_LEN=20
+MAX_LEN=20          # 8 instructions * ~10 tokens/instruction
 
 # Training configuration
 EPOCHS=20
-BATCH_SIZE=512       # Increased to 512 (GPU 1 has ~24GB free)
-LEARNING_RATE=0.001  # Higher LR since only training new components
+BATCH_SIZE=1024      # Reduced from 512 due to longer sequences (4x length → 4x memory)
+LEARNING_RATE=0.001
 DROPOUT=0.1
 MASK_PROB=0.15
 NSP_PROB=0.5
@@ -45,7 +46,6 @@ USE_MULTI_GPU="--multi_gpu"
 
 # Create output directory
 mkdir -p ${OUTPUT_DIR}
-
 
 if [ ! -f "${CFG_DATA}" ]; then
     echo "Error: CFG data file not found: ${CFG_DATA}"
@@ -70,6 +70,8 @@ fi
 echo "========================================================================"
 echo "Training Address-Aware BERT"
 echo "========================================================================"
+echo "Purpose: Fair comparison with baseline (both use same PalmTree init)"
+echo ""
 echo "Data:"
 echo "  CFG: ${CFG_DATA}"
 echo "  DFG: ${DFG_DATA}"
@@ -79,11 +81,12 @@ echo "  Train/Val Split: ${TRAIN_SPLIT} ($(echo "$TRAIN_SPLIT * 100" | bc)% trai
 echo ""
 echo "Pre-trained Model:"
 echo "  PalmTree Checkpoint: ${PALMTREE_CHECKPOINT}"
-echo "  >>> ALL PalmTree components will be FROZEN <<<"
+echo "  >>> Used for INITIALIZATION (same as baseline) <<<"
 echo ""
 echo "Model Architecture:"
 echo "  Hidden: ${HIDDEN}, Layers: ${N_LAYERS}, Heads: ${ATTN_HEADS}"
 echo "  Max Length: ${MAX_LEN}"
+echo "  Position Embeddings: ADDRESS-AWARE (3-level: binary, function, bb)"
 echo ""
 echo "Training:"
 echo "  Epochs: ${EPOCHS}, Batch Size: ${BATCH_SIZE}"
@@ -102,10 +105,6 @@ python3 train.py \
     --data_percentage ${DATA_PERCENTAGE} \
     --train_split ${TRAIN_SPLIT} \
     --palmtree_checkpoint "${PALMTREE_CHECKPOINT}" \
-    --freeze_token_emb \
-    --freeze_position_emb \
-    --freeze_segment_emb \
-    --freeze_transformer \
     --hidden ${HIDDEN} \
     --layers ${N_LAYERS} \
     --attn_heads ${ATTN_HEADS} \

@@ -1,13 +1,17 @@
 """
-Training script for Baseline BERT (NO address-aware embeddings)
+Training script for Baseline BERT (8-Instruction Window, NO address-aware embeddings)
 
 This is for FAIR COMPARISON with Address-Aware BERT:
-- Same data
+- Same data (8-instruction windows with 7:1 split)
 - Same MLM/NSP tasks
 - Same hyperparameters
 - Same model architecture (EXCEPT no address embeddings)
 
 The ONLY difference: Uses sequential positional embeddings instead of address-aware embeddings
+
+NSP Strategy (SAME as address-aware):
+- CFG: POSITIVE=C1→C2, NEGATIVE=C2→C1 (reversed)
+- DFG: POSITIVE=D1→D2, NEGATIVE=D1→D_random
 """
 
 import torch
@@ -24,7 +28,7 @@ import json
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from palmtree.dataset.vocab import WordVocab
-from dataloader_baseline import PairedBaselineDataset
+from dataloader_baseline_8inst import PairedBaselineDataset8Inst
 from model_baseline import create_baseline_model
 
 
@@ -209,7 +213,7 @@ def main():
     
     # Create datasets
     print("\nCreating training dataset...")
-    train_dataset = PairedBaselineDataset(
+    train_dataset = PairedBaselineDataset8Inst(
         cfg_corpus_path=args.cfg_train,
         dfg_corpus_path=args.dfg_train,
         vocab=vocab,
@@ -223,7 +227,7 @@ def main():
     )
     
     print("Creating validation dataset...")
-    val_dataset = PairedBaselineDataset(
+    val_dataset = PairedBaselineDataset8Inst(
         cfg_corpus_path=args.cfg_train,
         dfg_corpus_path=args.dfg_train,
         vocab=vocab,

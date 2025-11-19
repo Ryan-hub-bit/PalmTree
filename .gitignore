@@ -160,3 +160,7 @@ evaluation_result
 data2
 output_addressaware
 output_baseline
+output_addressaware_new
+output_baseline_new
+log
+test_data

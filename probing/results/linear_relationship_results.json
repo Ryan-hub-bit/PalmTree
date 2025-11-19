@@ -1,0 +1,78 @@
+{
+  "addressaware": {
+    "binary": {
+      "train_mae": 0.10646258294582367,
+      "test_mae": 0.10976304858922958,
+      "train_r2": -0.09932136535644531,
+      "test_r2": -0.11279261112213135,
+      "pearson_r": 0.045552823692560196,
+      "pearson_p": 0.003956484111059842,
+      "spearman_rho": 0.04758370648290359,
+      "spearman_p": 0.0026105649978099034
+    },
+    "function": {
+      "train_mae": 0.25565508008003235,
+      "test_mae": 0.2510601282119751,
+      "train_r2": -0.0002897977828979492,
+      "test_r2": -0.004942059516906738,
+      "pearson_r": 0.054096728563308716,
+      "pearson_p": 0.03459633382571031,
+      "spearman_rho": 0.09722771020771229,
+      "spearman_p": 0.00014237171207425833
+    },
+    "bb": {
+      "train_mae": 0.2506856620311737,
+      "test_mae": 0.2616139054298401,
+      "train_r2": 0.002648591995239258,
+      "test_r2": -0.024971604347229004,
+      "pearson_r": -0.01799676939845085,
+      "pearson_p": 0.8479398152300954,
+      "spearman_rho": -0.03340637373620882,
+      "spearman_p": 0.7218401432951649
+    }
+  },
+  "baseline": {
+    "binary": {
+      "train_mae": 0.13032592833042145,
+      "test_mae": 0.12877267599105835,
+      "train_r2": -0.8266656398773193,
+      "test_r2": -0.7797374725341797,
+      "pearson_r": 0.0591956302523613,
+      "pearson_p": 0.00017969395150061975,
+      "spearman_rho": 0.0619764188900606,
+      "spearman_p": 8.771549889308722e-05
+    },
+    "function": {
+      "train_mae": 0.2522938847541809,
+      "test_mae": 0.2506594657897949,
+      "train_r2": -0.016191840171813965,
+      "test_r2": 0.003571450710296631,
+      "pearson_r": 0.19677861034870148,
+      "pearson_p": 8.721580049360276e-15,
+      "spearman_rho": 0.16017275176578244,
+      "spearman_p": 3.1231922970548125e-10
+    },
+    "bb": {
+      "train_mae": 0.2545517086982727,
+      "test_mae": 0.25611650943756104,
+      "train_r2": -0.060159921646118164,
+      "test_r2": -0.13431859016418457,
+      "pearson_r": -0.02761995419859886,
+      "pearson_p": 0.7685205424070534,
+      "spearman_rho": 0.011401223705295024,
+      "spearman_p": 0.9033195289404886
+    }
+  },
+  "config": {
+    "addressaware_model": "../addressaware/output_addressaware_new/best_model.pt",
+    "baseline_model": "../addressaware/output_baseline_new/best_model.pt",
+    "binary_test": "./test_data/binary_level_test.txt",
+    "function_test": "./test_data/function_level_test.txt",
+    "bb_test": "./test_data/bb_level_test.txt",
+    "vocab": "../pre-trained_model/palmtree/vocab",
+    "output_dir": "./results",
+    "hidden_size": 128,
+    "max_samples": 20000,
+    "seed": 42
+  }
+}
