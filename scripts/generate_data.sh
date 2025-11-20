@@ -21,7 +21,7 @@ DFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/dfg"
 
 # Path to generator scripts
 SCRIPT_DIR="/home/kun/Document/PalmTree/src/data_generator"
-CFG_SCRIPT="${SCRIPT_DIR}/cfg_address.py"
+CFG_SCRIPT="${SCRIPT_DIR}/cfg_address_icfg.py"
 DFG_SCRIPT="${SCRIPT_DIR}/dfg_address.py"
 
 # Combined output files (optional - set to "" to disable)

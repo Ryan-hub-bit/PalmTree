@@ -12,9 +12,9 @@ echo ""
 # Configuration
 ADDRESSAWARE_MODEL="../addressaware/output_addressaware_new/best_model.pt"
 BASELINE_MODEL="../addressaware/output_baseline_new/best_model.pt"
-BINARY_TEST="./test_data/binary_level_test.txt"
-FUNCTION_TEST="./test_data/function_level_test.txt"
-BB_TEST="./test_data/bb_level_test.txt"
+BINARY_TEST="./test_data/6tunnel__6tunnel_binary_level.txt"
+FUNCTION_TEST="./test_data/6tunnel__6tunnel_function_level.txt"
+BB_TEST="./test_data/6tunnel__6tunnel_bb_level.txt"
 VOCAB="../pre-trained_model/palmtree/vocab"
 OUTPUT_DIR="./results"
 
@@ -53,7 +53,7 @@ python probe_linear_relationship.py \
   --vocab "${VOCAB}" \
   --output_dir "${OUTPUT_DIR}" \
   --hidden_size 128 \
-  --max_samples 5000 \
+  --max_samples 500 \
   --seed 42
 
 echo ""

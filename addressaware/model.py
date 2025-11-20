@@ -155,21 +155,21 @@ class AddressAwareBERTForPretraining(nn.Module):
         
         # Address Distance Prediction head (learns address relationships)
         # Predicts relative distance category between two instruction segments
-        self.adp_head = nn.Sequential(
-            nn.Linear(self.hidden, self.hidden),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(self.hidden, 128),
-            nn.ReLU(),
-            nn.Linear(128, 5)  # 5 categories: very_close, close, medium, far, very_far
-        )
+        # self.adp_head = nn.Sequential(
+        #     nn.Linear(self.hidden, self.hidden),
+        #     nn.ReLU(),
+        #     nn.Dropout(0.1),
+        #     nn.Linear(self.hidden, 128),
+        #     nn.ReLU(),
+        #     nn.Linear(128, 5)  # 5 categories: very_close, close, medium, far, very_far
+        # )
         
-        # Address Order Prediction head (predicts if instruction A comes before B)
-        self.aop_head = nn.Sequential(
-            nn.Linear(self.hidden, self.hidden),
-            nn.Tanh(),
-            nn.Linear(self.hidden, 2)  # binary: before (1) or after (0)
-        )
+        # # Address Order Prediction head (predicts if instruction A comes before B)
+        # self.aop_head = nn.Sequential(
+        #     nn.Linear(self.hidden, self.hidden),
+        #     nn.Tanh(),
+        #     nn.Linear(self.hidden, 2)  # binary: before (1) or after (0)
+        # )
     
     def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg', 
                 return_address_tasks=False):
