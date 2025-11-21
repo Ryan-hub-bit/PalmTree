@@ -11,7 +11,7 @@
 CFG_DATA="../data/cfg_2/all_cfg_combined.txt"
 DFG_DATA="../data/dfg_2/all_dfg_combined.txt"
 VOCAB_FILE="../pre-trained_model/palmtree/vocab"
-DATA_PERCENTAGE=1.0  # Use same percentage as address-aware (0.0-1.0)
+DATA_PERCENTAGE=0.2  # Use same percentage as address-aware (0.0-1.0)
 TRAIN_SPLIT=0.9      # 90% train, 10% validation (0.0-1.0)
 
 # Pre-trained PalmTree model (for initialization)

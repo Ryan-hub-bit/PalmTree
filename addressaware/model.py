@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from palmtree.model.transformer import TransformerBlock
 from palmtree.model.utils.layer_norm import LayerNorm
+from palmtree.model.language_model import MaskedLanguageModel, NextSentencePrediction
 
 # Use relative import for address_embedding (works when running from addressaware dir)
 try:
@@ -131,48 +132,16 @@ class AddressAwareBERTForPretraining(nn.Module):
         self.vocab_size = vocab_size
         self.hidden = bert_model.hidden
         
-        # Masked Language Model head (for CFG only)
-        self.mlm_head = nn.Sequential(
-            nn.Linear(self.hidden, self.hidden),
-            nn.GELU(),
-            nn.LayerNorm(self.hidden),
-            nn.Linear(self.hidden, vocab_size)
-        )
+        # Masked Language Model head (for CFG only) - same as baseline
+        self.MLM = MaskedLanguageModel(self.hidden, vocab_size)
         
-        # CFG Next Sentence Prediction head (order coherence)
-        self.nsp_cfg_head = nn.Sequential(
-            nn.Linear(self.hidden, self.hidden),
-            nn.Tanh(),
-            nn.Linear(self.hidden, 2)
-        )
+        # CFG Next Sentence Prediction head (order coherence) - same as baseline
+        self.CWP = NextSentencePrediction(self.hidden)
         
-        # DFG Next Sentence Prediction head (trace coherence)
-        self.nsp_dfg_head = nn.Sequential(
-            nn.Linear(self.hidden, self.hidden),
-            nn.Tanh(),
-            nn.Linear(self.hidden, 2)
-        )
-        
-        # Address Distance Prediction head (learns address relationships)
-        # Predicts relative distance category between two instruction segments
-        # self.adp_head = nn.Sequential(
-        #     nn.Linear(self.hidden, self.hidden),
-        #     nn.ReLU(),
-        #     nn.Dropout(0.1),
-        #     nn.Linear(self.hidden, 128),
-        #     nn.ReLU(),
-        #     nn.Linear(128, 5)  # 5 categories: very_close, close, medium, far, very_far
-        # )
-        
-        # # Address Order Prediction head (predicts if instruction A comes before B)
-        # self.aop_head = nn.Sequential(
-        #     nn.Linear(self.hidden, self.hidden),
-        #     nn.Tanh(),
-        #     nn.Linear(self.hidden, 2)  # binary: before (1) or after (0)
-        # )
+        # DFG Next Sentence Prediction head (trace coherence) - same as baseline
+        self.DUP = NextSentencePrediction(self.hidden)
     
-    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg', 
-                return_address_tasks=False):
+    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg'):
         """
         Forward pass for pretraining.
         
@@ -183,36 +152,21 @@ class AddressAwareBERTForPretraining(nn.Module):
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
             corpus_type: 'cfg' or 'dfg' - determines which NSP head to use
-            return_address_tasks: if True, also return address distance and order predictions
             
         Returns:
             mlm_output: [batch_size, seq_len, vocab_size] - predictions for each token (CFG only)
             nsp_output: [batch_size, 2] - binary classification for NSP
-            adp_output: [batch_size, 5] - address distance prediction (if return_address_tasks=True)
-            aop_output: [batch_size, 2] - address order prediction (if return_address_tasks=True)
         """
         # Get BERT output
         sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
         
         # MLM prediction for all tokens (only meaningful for CFG)
-        mlm_output = self.mlm_head(sequence_output)
-        
-        # NSP prediction using [CLS] token (first token)
-        cls_output = sequence_output[:, 0, :]
+        mlm_output = self.MLM(sequence_output)
         
         # Use appropriate NSP head based on corpus type
         if corpus_type == 'cfg':
-            nsp_output = self.nsp_cfg_head(cls_output)
+            nsp_output = self.CWP(sequence_output)  # CWP uses [CLS] token internally
         else:  # dfg
-            nsp_output = self.nsp_dfg_head(cls_output)
-        
-        if return_address_tasks:
-            # Address Distance Prediction using [CLS] token
-            adp_output = self.adp_head(cls_output)
-            
-            # Address Order Prediction using [CLS] token
-            aop_output = self.aop_head(cls_output)
-            
-            return mlm_output, nsp_output, adp_output, aop_output
+            nsp_output = self.DUP(sequence_output)  # DUP uses [CLS] token internally
         
         return mlm_output, nsp_output

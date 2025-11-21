@@ -166,21 +166,21 @@ class PairedAddressAwareDataset(Dataset):
     
     def _get_nsp_pair(self, index, corpus):
         """
-        Get NSP pair using WITHIN-LINE strategy for CFG.
+        Get NSP pair using WITHIN-LINE vs CROSS-LINE strategy for CFG.
         
-        CFG Semantics: Control Flow ORDER CORRECTNESS
+        CFG Semantics: Control Flow CONTINUITY
         
         POSITIVE (is_next=1): 
           - Sentence A = First half of Line N (C1)
           - Sentence B = Second half of SAME Line N (C2)
-          - Meaning: "C1 → C2 is the CORRECT execution order"
+          - Meaning: "C2 continues the control flow from C1" (same CFG path)
           
         NEGATIVE (is_next=0):
-          - Sentence A = Second half of Line N (C2)
-          - Sentence B = First half of SAME Line N (C1)
-          - Meaning: "C2 → C1 is the WRONG execution order (reversed)"
+          - Sentence A = First half of Line N (C1)
+          - Sentence B = First half of RANDOM Line (C_random)
+          - Meaning: "C_random does NOT continue from C1" (different CFG path)
           
-        This teaches: "Is this control flow sequence in the correct order?"
+        This teaches: "Does sentence B continue the control flow from sentence A?"
         """
         line = corpus[index % len(corpus)]
         all_tokens, all_positions = self._parse_instruction(line)
@@ -190,14 +190,20 @@ class PairedAddressAwareDataset(Dataset):
             self._split_line_into_instructions(all_tokens, all_positions)
         
         if random.random() < self.nsp_prob:
-            # NEGATIVE: REVERSE the order (C2 → C1 instead of C1 → C2)
-            t1_tokens = second_half_tokens
-            t1_positions = second_half_pos
-            t2_tokens = first_half_tokens
-            t2_positions = first_half_pos
+            # NEGATIVE: pair C1 with random instruction (broken control flow)
+            random_line = self._get_random_line(corpus)
+            random_tokens, random_positions = self._parse_instruction(random_line)
+            # Use first half of random line as the disconnected instruction
+            random_first_half, random_first_pos, _, _ = \
+                self._split_line_into_instructions(random_tokens, random_positions)
+            
+            t1_tokens = first_half_tokens
+            t1_positions = first_half_pos
+            t2_tokens = random_first_half
+            t2_positions = random_first_pos
             is_next = 0
         else:
-            # POSITIVE: Correct forward order (C1 → C2)
+            # POSITIVE: C1 → C2 (correct control flow continuity within same line)
             t1_tokens = first_half_tokens
             t1_positions = first_half_pos
             t2_tokens = second_half_tokens

@@ -374,6 +374,8 @@ def main():
         # Save best model
         if val_metrics['total_loss'] < best_val_loss:
             best_val_loss = val_metrics['total_loss']
+            
+            # Save full model state
             best_model_path = os.path.join(args.output_dir, 'best_model.pt')
             torch.save({
                 'epoch': epoch,
@@ -381,7 +383,13 @@ def main():
                 'optimizer_state_dict': optimizer.state_dict(),
                 'val_loss': val_metrics['total_loss']
             }, best_model_path)
+            
+            # Save BERT encoder separately (for embedding extraction like original PalmTree)
+            best_bert_path = os.path.join(args.output_dir, 'best_bert.pt')
+            torch.save(model_to_save.bert, best_bert_path)
+            
             print(f"  ✓ New best model saved: {best_model_path}")
+            print(f"  ✓ BERT encoder saved: {best_bert_path}")
     
     # Save training history
     history_path = os.path.join(args.output_dir, 'training_history.json')

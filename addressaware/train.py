@@ -18,6 +18,8 @@ import os
 import sys
 from tqdm import tqdm
 import json
+import logging
+from datetime import datetime
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -27,7 +29,7 @@ from dataloader_paired import PairedAddressAwareDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
 
-def train_epoch(model, data_loader, optimizer, device, log_freq=100):
+def train_epoch(model, data_loader, optimizer, device, log_freq=100, logger=None):
     """Train for one epoch with paired CFG+DFG samples."""
     model.train()
     
@@ -39,7 +41,7 @@ def train_epoch(model, data_loader, optimizer, device, log_freq=100):
     mlm_criterion = nn.CrossEntropyLoss(ignore_index=-1)
     nsp_criterion = nn.CrossEntropyLoss()
     
-    progress = tqdm(data_loader, desc="Training")
+    progress = tqdm(data_loader, desc="Training", file=sys.stdout)
     
     for i, batch in enumerate(progress):
         # === Process CFG (MLM + NSP) ===
@@ -101,22 +103,29 @@ def train_epoch(model, data_loader, optimizer, device, log_freq=100):
             avg_mlm = mlm_loss_total / (i + 1)
             avg_nsp_cfg = nsp_cfg_loss_total / (i + 1)
             avg_nsp_dfg = nsp_dfg_loss_total / (i + 1)
+            
             progress.set_postfix({
                 'loss': f'{avg_loss:.4f}',
                 'mlm': f'{avg_mlm:.4f}',
                 'nsp_cfg': f'{avg_nsp_cfg:.4f}',
                 'nsp_dfg': f'{avg_nsp_dfg:.4f}'
             })
+            
+            # Log to file
+            if logger:
+                logger.info(f"Batch {i}/{len(data_loader)} - "
+                          f"Loss: {avg_loss:.4f} | MLM: {avg_mlm:.4f} | "
+                          f"NSP_CFG: {avg_nsp_cfg:.4f} | NSP_DFG: {avg_nsp_dfg:.4f}")
     
     return {
         'total_loss': total_loss / len(data_loader),
         'mlm_loss': mlm_loss_total / len(data_loader),
         'nsp_cfg_loss': nsp_cfg_loss_total / len(data_loader),
-        'nsp_dfg_loss': nsp_dfg_loss_total / len(data_loader),
+        'nsp_dfg_loss': nsp_dfg_loss_total / len(data_loader)
     }
 
 
-def validate(model, data_loader, device):
+def validate(model, data_loader, device, logger=None):
     """Validate the model on validation set with paired CFG+DFG samples."""
     model.eval()
     
@@ -136,7 +145,7 @@ def validate(model, data_loader, device):
     nsp_criterion = nn.CrossEntropyLoss()
     
     with torch.no_grad():
-        for batch in tqdm(data_loader, desc="Validation"):
+        for batch in tqdm(data_loader, desc="Validation", file=sys.stdout):
             # === Process CFG (MLM + NSP) ===
             cfg_token_ids = batch['cfg_bert_input'].to(device)
             cfg_segment_labels = batch['cfg_segment_label'].to(device)
@@ -157,7 +166,7 @@ def validate(model, data_loader, device):
             mlm_loss = mlm_criterion(cfg_mlm_output.transpose(1, 2), cfg_mlm_labels)
             nsp_cfg_loss = nsp_criterion(cfg_nsp_output, cfg_nsp_labels)
             
-            # CFG accuracy
+            # CFG accuracy (MLM, NSP)
             mask = cfg_mlm_labels != -1
             if mask.any():
                 mlm_pred = torch.argmax(cfg_mlm_output[mask], dim=-1)
@@ -176,7 +185,7 @@ def validate(model, data_loader, device):
             dfg_bb_pos = batch['dfg_bb_pos'].to(device)
             dfg_nsp_labels = batch['dfg_is_next'].to(device)
             
-            # DFG forward pass
+            # DFG forward pass (NO MLM)
             _, dfg_nsp_output = model(
                 dfg_token_ids, dfg_segment_labels,
                 dfg_binary_pos, dfg_function_pos, dfg_bb_pos,
@@ -212,7 +221,7 @@ def validate(model, data_loader, device):
         'nsp_dfg_loss': nsp_dfg_loss_total / len(data_loader),
         'mlm_acc': mlm_acc,
         'nsp_cfg_acc': nsp_cfg_acc,
-        'nsp_dfg_acc': nsp_dfg_acc,
+        'nsp_dfg_acc': nsp_dfg_acc
     }
 
 
@@ -255,6 +264,7 @@ def main():
     
     # Output args
     parser.add_argument("--output_dir", type=str, default="./output", help="Output directory")
+    parser.add_argument("--log_dir", type=str, default="./log", help="Log directory")
     parser.add_argument("--save_freq", type=int, default=1, help="Save checkpoint every N epochs")
     parser.add_argument("--log_freq", type=int, default=100, help="Log every N batches")
     
@@ -268,20 +278,41 @@ def main():
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # Create output directory
+    # Create output and log directories
     os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.log_dir, exist_ok=True)
+    
+    # Setup logging
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_file = os.path.join(args.log_dir, f"train_{timestamp}.log")
+    
+    # Configure logger
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Logging to: {log_file}")
+    logger.info(f"Using device: {device}")
     
     # Save args
-    with open(os.path.join(args.output_dir, "args.json"), "w") as f:
+    args_file = os.path.join(args.output_dir, "args.json")
+    with open(args_file, "w") as f:
         json.dump(vars(args), f, indent=2)
+    logger.info(f"Arguments saved to: {args_file}")
     
     # Load vocabulary
-    print(f"Loading vocabulary from {args.vocab}")
+    logger.info(f"Loading vocabulary from {args.vocab}")
     vocab = WordVocab.load_vocab(args.vocab)
-    print(f"Vocabulary size: {len(vocab)}")
+    logger.info(f"Vocabulary size: {len(vocab)}")
     
     # Create datasets
-    print("Creating training dataset...")
+    logger.info("Creating training dataset...")
     train_dataset = PairedAddressAwareDataset(
         cfg_corpus_path=args.cfg_train,
         dfg_corpus_path=args.dfg_train,
@@ -305,7 +336,7 @@ def main():
     val_loader = None
     if args.cfg_val and args.dfg_val:
         # Use separate validation files if provided
-        print("Creating validation dataset from separate files...")
+        logger.info("Creating validation dataset from separate files...")
         val_dataset = PairedAddressAwareDataset(
             cfg_corpus_path=args.cfg_val,
             dfg_corpus_path=args.dfg_val,
@@ -327,7 +358,7 @@ def main():
         )
     elif args.train_split < 1.0:
         # Automatically create validation set from training data
-        print("Creating validation dataset (automatic split)...")
+        logger.info("Creating validation dataset (automatic split)...")
         val_dataset = PairedAddressAwareDataset(
             cfg_corpus_path=args.cfg_train,
             dfg_corpus_path=args.dfg_train,
@@ -349,7 +380,7 @@ def main():
         )
     
     # Create model
-    print("Creating model...")
+    logger.info("Creating model...")
     
     # Load pre-trained PalmTree weights if provided
     pretrained_token_emb = None
@@ -358,7 +389,7 @@ def main():
     pretrained_transformer = None
     
     if args.palmtree_checkpoint:
-        print(f"Loading pre-trained PalmTree from: {args.palmtree_checkpoint}")
+        logger.info(f"Loading pre-trained PalmTree from: {args.palmtree_checkpoint}")
         from load_pretrained import load_palmtree_weights
         
         weights = load_palmtree_weights(args.palmtree_checkpoint, len(vocab), device)
@@ -382,19 +413,19 @@ def main():
     
     # Freeze components based on flags
     if args.freeze_token_emb and pretrained_token_emb is not None:
-        print("[INFO] Freezing token embeddings")
+        logger.info("Freezing token embeddings")
         bert.embedding.token_embedding.weight.requires_grad = False
     
     if args.freeze_position_emb and pretrained_position_emb is not None:
-        print("[INFO] Freezing position embeddings")
+        logger.info("Freezing position embeddings")
         bert.embedding.position_embedding.weight.requires_grad = False
     
     if args.freeze_segment_emb and pretrained_segment_emb is not None:
-        print("[INFO] Freezing segment embeddings")
+        logger.info("Freezing segment embeddings")
         bert.embedding.segment_embedding.weight.requires_grad = False
     
     if args.freeze_transformer and pretrained_transformer is not None:
-        print("[INFO] Freezing transformer blocks")
+        logger.info("Freezing transformer blocks")
         for param in bert.transformer_blocks.parameters():
             param.requires_grad = False
     
@@ -402,62 +433,84 @@ def main():
     model = model.to(device)
     
     if args.multi_gpu and torch.cuda.device_count() > 1:
-        print(f"Using {torch.cuda.device_count()} GPUs")
+        logger.info(f"Using {torch.cuda.device_count()} GPUs")
         model = nn.DataParallel(model)
     
     # Print model info
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"Total parameters: {total_params:,}")
+    logger.info(f"Total parameters: {total_params:,}")
     
     # Create optimizer and scheduler
     optimizer = Adam(model.parameters(), lr=args.lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs * len(train_loader))
     
     # Training loop
-    print("Starting training...")
+    logger.info("Starting training...")
+    logger.info("="*80)
     best_val_loss = float('inf')
     
     for epoch in range(args.epochs):
-        print(f"\nEpoch {epoch + 1}/{args.epochs}")
+        logger.info(f"\nEpoch {epoch + 1}/{args.epochs}")
+        logger.info("-"*80)
         
         # Train
-        train_metrics = train_epoch(model, train_loader, optimizer, device, args.log_freq)
+        train_metrics = train_epoch(model, train_loader, optimizer, device, args.log_freq, logger)
         scheduler.step()
         
-        print(f"Train Loss: {train_metrics['total_loss']:.4f} | "
-              f"MLM: {train_metrics['mlm_loss']:.4f} | "
-              f"NSP_CFG: {train_metrics['nsp_cfg_loss']:.4f} | "
-              f"NSP_DFG: {train_metrics['nsp_dfg_loss']:.4f}")
+        train_log = (f"Train Loss: {train_metrics['total_loss']:.4f} | "
+                    f"MLM: {train_metrics['mlm_loss']:.4f} | "
+                    f"NSP_CFG: {train_metrics['nsp_cfg_loss']:.4f} | "
+                    f"NSP_DFG: {train_metrics['nsp_dfg_loss']:.4f}")
+        logger.info(train_log)
         
         # Validate
         if val_loader is not None:
-            val_metrics = validate(model, val_loader, device)
-            print(f"Val Loss: {val_metrics['total_loss']:.4f} | "
-                  f"MLM: {val_metrics['mlm_loss']:.4f} ({val_metrics['mlm_acc']:.2%}) | "
-                  f"NSP_CFG: {val_metrics['nsp_cfg_loss']:.4f} ({val_metrics['nsp_cfg_acc']:.2%}) | "
-                  f"NSP_DFG: {val_metrics['nsp_dfg_loss']:.4f} ({val_metrics['nsp_dfg_acc']:.2%})")
+            val_metrics = validate(model, val_loader, device, logger)
+            val_log = (f"Val Loss: {val_metrics['total_loss']:.4f} | "
+                      f"MLM: {val_metrics['mlm_loss']:.4f} ({val_metrics['mlm_acc']:.2%}) | "
+                      f"NSP_CFG: {val_metrics['nsp_cfg_loss']:.4f} ({val_metrics['nsp_cfg_acc']:.2%}) | "
+                      f"NSP_DFG: {val_metrics['nsp_dfg_loss']:.4f} ({val_metrics['nsp_dfg_acc']:.2%})")
+            logger.info(val_log)
             
             # Save best model
             if val_metrics['total_loss'] < best_val_loss:
                 best_val_loss = val_metrics['total_loss']
+                
+                # Save full model state
+                best_model_path = os.path.join(args.output_dir, "best_model.pt")
                 torch.save({
                     'epoch': epoch,
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': optimizer.state_dict(),
                     'val_loss': best_val_loss,
-                }, os.path.join(args.output_dir, "best_model.pt"))
-                print("Saved best model")
+                }, best_model_path)
+                
+                # Save BERT encoder separately (for embedding extraction like original PalmTree)
+                if hasattr(model, 'module'):
+                    # DataParallel case
+                    bert_to_save = model.module.bert
+                else:
+                    bert_to_save = model.bert
+                best_bert_path = os.path.join(args.output_dir, "best_bert.pt")
+                torch.save(bert_to_save, best_bert_path)
+                
+                logger.info(f"Saved best model (val_loss: {best_val_loss:.4f})")
+                logger.info(f"  - Full model: {best_model_path}")
+                logger.info(f"  - BERT encoder: {best_bert_path}")
         
         # Save checkpoint
         if (epoch + 1) % args.save_freq == 0:
+            checkpoint_path = os.path.join(args.output_dir, f"checkpoint_epoch_{epoch + 1}.pt")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-            }, os.path.join(args.output_dir, f"checkpoint_epoch_{epoch + 1}.pt"))
-            print(f"Saved checkpoint for epoch {epoch + 1}")
+            }, checkpoint_path)
+            logger.info(f"Saved checkpoint: {checkpoint_path}")
     
-    print("\nTraining completed!")
+    logger.info("\n" + "="*80)
+    logger.info("Training completed!")
+    logger.info(f"Logs saved to: {log_file}")
 
 
 if __name__ == "__main__":

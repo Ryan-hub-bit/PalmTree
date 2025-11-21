@@ -202,16 +202,33 @@ class BERTTrainer:
         print(f"Metrics saved to {output_file}")
 
 
-    def save(self, epoch, file_path="output/bert_trained.model"):
+    def save(self, epoch, file_path="output/bert_trained.model", save_best_only=False, is_best=False, best_dir="output_addressaware_new"):
         """
         Saving the current BERT model on file_path
 
         :param epoch: current epoch number
-        :param file_path: model output path which gonna be file_path+"ep%d" % epoch
+        :param file_path: model output path which gonna be file_path+".ep%d" % epoch
+        :param save_best_only: If True, only save when is_best is True
+        :param is_best: If True, this is the best model so far
+        :param best_dir: Directory to save best model and best BERT
         :return: final_output_path
         """
         output_path = file_path + ".ep%d" % epoch
         torch.save(self.bert.cpu(), output_path)
         self.bert.to(self.device)
         print("EP:%d Model Saved on:" % epoch, output_path)
+
+        # If this is the best model, save both best_model.pt and best_bert.pt
+        if is_best:
+            os.makedirs(best_dir, exist_ok=True)
+            best_model_path = os.path.join(best_dir, "best_model.pt")
+            best_bert_path = os.path.join(best_dir, "best_bert.pt")
+            # Save the full model (for resuming training)
+            torch.save(self.model.state_dict(), best_model_path)
+            # Save only the BERT encoder (for embedding extraction)
+            torch.save(self.bert.cpu(), best_bert_path)
+            self.bert.to(self.device)
+            print(f"Best model saved: {best_model_path}")
+            print(f"Best BERT encoder saved: {best_bert_path}")
+
         return output_path

@@ -18,7 +18,8 @@ TRAIN_SPLIT=0.9      # 90% train, 10% validation
 PALMTREE_CHECKPOINT="../pre-trained_model/palmtree/transformer.ep19"
 
 # Output
-OUTPUT_DIR="output_addressaware_new"
+OUTPUT_DIR="output_addressaware_all"
+LOG_DIR="log"
 
 # Model configuration (must match PalmTree checkpoint)
 HIDDEN=128          # PalmTree's hidden size (must match checkpoint!)
@@ -46,6 +47,7 @@ USE_MULTI_GPU="--multi_gpu"
 
 # Create output directory
 mkdir -p ${OUTPUT_DIR}
+mkdir -p ${LOG_DIR}
 
 if [ ! -f "${CFG_DATA}" ]; then
     echo "Error: CFG data file not found: ${CFG_DATA}"
@@ -94,6 +96,7 @@ echo "  Learning Rate: ${LEARNING_RATE}"
 echo "  Mask Prob: ${MASK_PROB}, NSP Prob: ${NSP_PROB}"
 echo ""
 echo "Output: ${OUTPUT_DIR}"
+echo "Logs: ${LOG_DIR}"
 echo "========================================================================"
 echo ""
 
@@ -116,6 +119,7 @@ python3 train.py \
     --mask_prob ${MASK_PROB} \
     --nsp_prob ${NSP_PROB} \
     --output_dir "${OUTPUT_DIR}" \
+    --log_dir "${LOG_DIR}" \
     --num_workers 4 \
     --log_freq 50 \
     ${USE_CUDA} \

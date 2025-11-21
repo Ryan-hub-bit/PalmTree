@@ -10,19 +10,19 @@
 # =============================================================================
 
 # Segment length (number of instructions per line)
-SEG_LEN=8
+SEG_LEN=2
 
 # Binary folder containing binaries to process
 BIN_FOLDER="/home/kun/smallbinary"
 
 # Output directories
-CFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/cfg"
-DFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/dfg"
+CFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/ncfg"
+DFG_OUTPUT_DIR="/home/kun/Document/PalmTree/data/ndfg"
 
 # Path to generator scripts
 SCRIPT_DIR="/home/kun/Document/PalmTree/src/data_generator"
-CFG_SCRIPT="${SCRIPT_DIR}/cfg_address_icfg.py"
-DFG_SCRIPT="${SCRIPT_DIR}/dfg_address.py"
+CFG_SCRIPT="${SCRIPT_DIR}/cfg_hierarchical_icfg.py"
+DFG_SCRIPT="${SCRIPT_DIR}/dfg_hierarchical_idfg.py"
 
 # Combined output files (optional - set to "" to disable)
 COMBINED_CFG="${CFG_OUTPUT_DIR}/all_cfg_combined.txt"
