@@ -26,22 +26,28 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from palmtree.dataset.vocab import WordVocab
 from dataloader_paired import PairedAddressAwareDataset
+from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
 
-def train_epoch(model, data_loader, optimizer, device, log_freq=100, logger=None):
-    """Train for one epoch with paired CFG+DFG samples."""
+def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=100, logger=None):
+    """Train for one epoch with paired CFG+DFG samples and scope prediction."""
     model.train()
     
     total_loss = 0
     mlm_loss_total = 0
     nsp_cfg_loss_total = 0
     nsp_dfg_loss_total = 0
+    scope_loss_total = 0
     
     mlm_criterion = nn.CrossEntropyLoss(ignore_index=-1)
     nsp_criterion = nn.CrossEntropyLoss()
+    scope_criterion = nn.CrossEntropyLoss()
     
     progress = tqdm(data_loader, desc="Training", file=sys.stdout)
+    
+    # Create scope iterator
+    scope_iter = iter(scope_loader) if scope_loader is not None else None
     
     for i, batch in enumerate(progress):
         # === Process CFG (MLM + NSP) ===
@@ -82,8 +88,34 @@ def train_epoch(model, data_loader, optimizer, device, log_freq=100, logger=None
         # DFG loss (NSP only)
         nsp_dfg_loss = nsp_criterion(dfg_nsp_output, dfg_nsp_labels)
         
-        # Combined loss: MLM(CFG) + NSP(CFG) + NSP(DFG)
-        loss = mlm_loss + nsp_cfg_loss + nsp_dfg_loss
+        # === Process Scope (if available) ===
+        scope_loss = torch.tensor(0.0, device=device)
+        if scope_iter is not None:
+            try:
+                scope_batch = next(scope_iter)
+            except StopIteration:
+                # Restart scope iterator if exhausted
+                scope_iter = iter(scope_loader)
+                scope_batch = next(scope_iter)
+            
+            scope_token_ids = scope_batch['bert_input'].to(device)
+            scope_segment_labels = scope_batch['segment_label'].to(device)
+            scope_binary_pos = scope_batch['binary_pos'].to(device)
+            scope_function_pos = scope_batch['function_pos'].to(device)
+            scope_bb_pos = scope_batch['bb_pos'].to(device)
+            scope_labels = scope_batch['scope_label'].to(device)
+            
+            # Scope forward pass
+            scope_output = model.forward_scope(
+                scope_token_ids, scope_segment_labels,
+                scope_binary_pos, scope_function_pos, scope_bb_pos
+            )
+            
+            # Scope loss
+            scope_loss = scope_criterion(scope_output, scope_labels)
+        
+        # Combined loss: MLM(CFG) + NSP(CFG) + NSP(DFG) + SCOPE
+        loss = mlm_loss + nsp_cfg_loss + nsp_dfg_loss + scope_loss
         
         # Backward pass
         optimizer.zero_grad()
@@ -96,6 +128,7 @@ def train_epoch(model, data_loader, optimizer, device, log_freq=100, logger=None
         mlm_loss_total += mlm_loss.item()
         nsp_cfg_loss_total += nsp_cfg_loss.item()
         nsp_dfg_loss_total += nsp_dfg_loss.item()
+        scope_loss_total += scope_loss.item()
         
         # Update progress bar
         if i % log_freq == 0:
@@ -103,36 +136,41 @@ def train_epoch(model, data_loader, optimizer, device, log_freq=100, logger=None
             avg_mlm = mlm_loss_total / (i + 1)
             avg_nsp_cfg = nsp_cfg_loss_total / (i + 1)
             avg_nsp_dfg = nsp_dfg_loss_total / (i + 1)
+            avg_scope = scope_loss_total / (i + 1)
             
             progress.set_postfix({
                 'loss': f'{avg_loss:.4f}',
                 'mlm': f'{avg_mlm:.4f}',
                 'nsp_cfg': f'{avg_nsp_cfg:.4f}',
-                'nsp_dfg': f'{avg_nsp_dfg:.4f}'
+                'nsp_dfg': f'{avg_nsp_dfg:.4f}',
+                'scope': f'{avg_scope:.4f}'
             })
             
             # Log to file
             if logger:
                 logger.info(f"Batch {i}/{len(data_loader)} - "
                           f"Loss: {avg_loss:.4f} | MLM: {avg_mlm:.4f} | "
-                          f"NSP_CFG: {avg_nsp_cfg:.4f} | NSP_DFG: {avg_nsp_dfg:.4f}")
+                          f"NSP_CFG: {avg_nsp_cfg:.4f} | NSP_DFG: {avg_nsp_dfg:.4f} | "
+                          f"SCOPE: {avg_scope:.4f}")
     
     return {
         'total_loss': total_loss / len(data_loader),
         'mlm_loss': mlm_loss_total / len(data_loader),
         'nsp_cfg_loss': nsp_cfg_loss_total / len(data_loader),
-        'nsp_dfg_loss': nsp_dfg_loss_total / len(data_loader)
+        'nsp_dfg_loss': nsp_dfg_loss_total / len(data_loader),
+        'scope_loss': scope_loss_total / len(data_loader)
     }
 
 
-def validate(model, data_loader, device, logger=None):
-    """Validate the model on validation set with paired CFG+DFG samples."""
+def validate(model, data_loader, scope_loader, device, logger=None):
+    """Validate the model on validation set with paired CFG+DFG samples and scope."""
     model.eval()
     
     total_loss = 0
     mlm_loss_total = 0
     nsp_cfg_loss_total = 0
     nsp_dfg_loss_total = 0
+    scope_loss_total = 0
     
     mlm_correct = 0
     mlm_total = 0
@@ -140,9 +178,15 @@ def validate(model, data_loader, device, logger=None):
     nsp_cfg_total = 0
     nsp_dfg_correct = 0
     nsp_dfg_total = 0
+    scope_correct = 0
+    scope_total = 0
     
     mlm_criterion = nn.CrossEntropyLoss(ignore_index=-1)
     nsp_criterion = nn.CrossEntropyLoss()
+    scope_criterion = nn.CrossEntropyLoss()
+    
+    # Create scope iterator
+    scope_iter = iter(scope_loader) if scope_loader is not None else None
     
     with torch.no_grad():
         for batch in tqdm(data_loader, desc="Validation", file=sys.stdout):
@@ -200,28 +244,63 @@ def validate(model, data_loader, device, logger=None):
             nsp_dfg_correct += (nsp_dfg_pred == dfg_nsp_labels).sum().item()
             nsp_dfg_total += len(dfg_nsp_labels)
             
+            # === Process Scope (if available) ===
+            scope_loss = torch.tensor(0.0, device=device)
+            if scope_iter is not None:
+                try:
+                    scope_batch = next(scope_iter)
+                except StopIteration:
+                    # Restart scope iterator if exhausted
+                    scope_iter = iter(scope_loader)
+                    scope_batch = next(scope_iter)
+                
+                scope_token_ids = scope_batch['bert_input'].to(device)
+                scope_segment_labels = scope_batch['segment_label'].to(device)
+                scope_binary_pos = scope_batch['binary_pos'].to(device)
+                scope_function_pos = scope_batch['function_pos'].to(device)
+                scope_bb_pos = scope_batch['bb_pos'].to(device)
+                scope_labels = scope_batch['scope_label'].to(device)
+                
+                # Scope forward pass
+                scope_output = model.forward_scope(
+                    scope_token_ids, scope_segment_labels,
+                    scope_binary_pos, scope_function_pos, scope_bb_pos
+                )
+                
+                # Scope loss
+                scope_loss = scope_criterion(scope_output, scope_labels)
+                
+                # Scope accuracy
+                scope_pred = torch.argmax(scope_output, dim=-1)
+                scope_correct += (scope_pred == scope_labels).sum().item()
+                scope_total += len(scope_labels)
+            
             # Combined loss
-            loss = mlm_loss + nsp_cfg_loss + nsp_dfg_loss
+            loss = mlm_loss + nsp_cfg_loss + nsp_dfg_loss + scope_loss
             
             # Accumulate losses
             total_loss += loss.item()
             mlm_loss_total += mlm_loss.item()
             nsp_cfg_loss_total += nsp_cfg_loss.item()
             nsp_dfg_loss_total += nsp_dfg_loss.item()
+            scope_loss_total += scope_loss.item()
     
     # Calculate accuracies
     mlm_acc = mlm_correct / mlm_total if mlm_total > 0 else 0
     nsp_cfg_acc = nsp_cfg_correct / nsp_cfg_total if nsp_cfg_total > 0 else 0
     nsp_dfg_acc = nsp_dfg_correct / nsp_dfg_total if nsp_dfg_total > 0 else 0
+    scope_acc = scope_correct / scope_total if scope_total > 0 else 0
     
     return {
         'total_loss': total_loss / len(data_loader),
         'mlm_loss': mlm_loss_total / len(data_loader),
         'nsp_cfg_loss': nsp_cfg_loss_total / len(data_loader),
         'nsp_dfg_loss': nsp_dfg_loss_total / len(data_loader),
+        'scope_loss': scope_loss_total / len(data_loader),
         'mlm_acc': mlm_acc,
         'nsp_cfg_acc': nsp_cfg_acc,
-        'nsp_dfg_acc': nsp_dfg_acc
+        'nsp_dfg_acc': nsp_dfg_acc,
+        'scope_acc': scope_acc
     }
 
 
@@ -231,6 +310,7 @@ def main():
     # Data args
     parser.add_argument("--cfg_train", type=str, required=True, help="Path to CFG training data")
     parser.add_argument("--dfg_train", type=str, required=True, help="Path to DFG training data")
+    parser.add_argument("--scope_train", type=str, help="Path to scope training data (optional)")
     parser.add_argument("--cfg_val", type=str, help="Path to CFG validation data (optional)")
     parser.add_argument("--dfg_val", type=str, help="Path to DFG validation data (optional)")
     parser.add_argument("--vocab", type=str, required=True, help="Path to vocabulary file")
@@ -379,6 +459,47 @@ def main():
             num_workers=args.num_workers
         )
     
+    # Create scope datasets if provided
+    scope_train_loader = None
+    scope_val_loader = None
+    if args.scope_train:
+        logger.info(f"Creating scope training dataset from {args.scope_train}...")
+        scope_train_dataset = ScopeDataset(
+            scope_corpus_path=args.scope_train,
+            vocab=vocab,
+            seq_len=args.seq_len,
+            on_memory=True,
+            data_percentage=args.data_percentage,
+            train_split=args.train_split,
+            is_train=True
+        )
+        
+        scope_train_loader = DataLoader(
+            scope_train_dataset,
+            batch_size=args.batch_size,
+            shuffle=True,
+            num_workers=args.num_workers
+        )
+        
+        if args.train_split < 1.0:
+            logger.info("Creating scope validation dataset (automatic split)...")
+            scope_val_dataset = ScopeDataset(
+                scope_corpus_path=args.scope_train,
+                vocab=vocab,
+                seq_len=args.seq_len,
+                on_memory=True,
+                data_percentage=args.data_percentage,
+                train_split=args.train_split,
+                is_train=False
+            )
+            
+            scope_val_loader = DataLoader(
+                scope_val_dataset,
+                batch_size=args.batch_size,
+                shuffle=False,
+                num_workers=args.num_workers
+            )
+    
     # Create model
     logger.info("Creating model...")
     
@@ -454,22 +575,24 @@ def main():
         logger.info("-"*80)
         
         # Train
-        train_metrics = train_epoch(model, train_loader, optimizer, device, args.log_freq, logger)
+        train_metrics = train_epoch(model, train_loader, scope_train_loader, optimizer, device, args.log_freq, logger)
         scheduler.step()
         
         train_log = (f"Train Loss: {train_metrics['total_loss']:.4f} | "
                     f"MLM: {train_metrics['mlm_loss']:.4f} | "
                     f"NSP_CFG: {train_metrics['nsp_cfg_loss']:.4f} | "
-                    f"NSP_DFG: {train_metrics['nsp_dfg_loss']:.4f}")
+                    f"NSP_DFG: {train_metrics['nsp_dfg_loss']:.4f} | "
+                    f"SCOPE: {train_metrics['scope_loss']:.4f}")
         logger.info(train_log)
         
         # Validate
         if val_loader is not None:
-            val_metrics = validate(model, val_loader, device, logger)
+            val_metrics = validate(model, val_loader, scope_val_loader, device, logger)
             val_log = (f"Val Loss: {val_metrics['total_loss']:.4f} | "
                       f"MLM: {val_metrics['mlm_loss']:.4f} ({val_metrics['mlm_acc']:.2%}) | "
                       f"NSP_CFG: {val_metrics['nsp_cfg_loss']:.4f} ({val_metrics['nsp_cfg_acc']:.2%}) | "
-                      f"NSP_DFG: {val_metrics['nsp_dfg_loss']:.4f} ({val_metrics['nsp_dfg_acc']:.2%})")
+                      f"NSP_DFG: {val_metrics['nsp_dfg_loss']:.4f} ({val_metrics['nsp_dfg_acc']:.2%}) | "
+                      f"SCOPE: {val_metrics['scope_loss']:.4f} ({val_metrics['scope_acc']:.2%})")
             logger.info(val_log)
             
             # Save best model

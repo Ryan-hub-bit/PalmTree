@@ -112,12 +112,13 @@ class AddressAwareBERT(nn.Module):
 
 class AddressAwareBERTForPretraining(nn.Module):
     """
-    Address-aware BERT with MLM and dual NSP heads for pretraining.
+    Address-aware BERT with MLM, dual NSP, and scope prediction heads for pretraining.
     
     Following PalmTree's approach:
     - MLM head (for CFG only)
     - NSP_CFG head (for CFG order coherence)
     - NSP_DFG head (for DFG trace coherence)
+    - SCOPE head (for scope prediction - 3-class classification)
     """
     
     def __init__(self, bert_model, vocab_size):
@@ -140,6 +141,14 @@ class AddressAwareBERTForPretraining(nn.Module):
         
         # DFG Next Sentence Prediction head (trace coherence) - same as baseline
         self.DUP = NextSentencePrediction(self.hidden)
+        
+        # Scope prediction head (3-class classification)
+        self.SCOPE = nn.Sequential(
+            nn.Linear(self.hidden, self.hidden),
+            nn.GELU(),
+            nn.Linear(self.hidden, 3),
+            nn.LogSoftmax(dim=-1)
+        )
     
     def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg'):
         """
@@ -170,3 +179,26 @@ class AddressAwareBERTForPretraining(nn.Module):
             nsp_output = self.DUP(sequence_output)  # DUP uses [CLS] token internally
         
         return mlm_output, nsp_output
+    
+    def forward_scope(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos):
+        """
+        Forward pass for scope prediction.
+        
+        Args:
+            token_ids: [batch_size, seq_len]
+            segment_labels: [batch_size, seq_len]
+            binary_pos: [batch_size, seq_len]
+            function_pos: [batch_size, seq_len]
+            bb_pos: [batch_size, seq_len]
+            
+        Returns:
+            scope_output: [batch_size, 3] - 3-class classification for scope
+        """
+        # Get BERT output
+        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
+        
+        # Scope prediction using [CLS] token
+        cls_output = sequence_output[:, 0, :]
+        scope_output = self.SCOPE(cls_output)
+        
+        return scope_output
