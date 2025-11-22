@@ -16,6 +16,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from palmtree.model.bert import BERT
+import bert_pytorch
 from palmtree.model.language_model import NextSentencePrediction, MaskedLanguageModel
 
 
@@ -90,7 +91,7 @@ def create_baseline_model(vocab_size, hidden=128, n_layers=12, attn_heads=8, dro
         BaselineBERTForPretraining model
     """
     # Create standard PalmTree BERT
-    bert = BERT(
+    bert = bert_pytorch.BERT(
         vocab_size=vocab_size,
         hidden=hidden,
         n_layers=n_layers,

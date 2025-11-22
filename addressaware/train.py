@@ -499,14 +499,14 @@ def main():
                 logger.info(f"  - BERT encoder: {best_bert_path}")
         
         # Save checkpoint
-        if (epoch + 1) % args.save_freq == 0:
-            checkpoint_path = os.path.join(args.output_dir, f"checkpoint_epoch_{epoch + 1}.pt")
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-            }, checkpoint_path)
-            logger.info(f"Saved checkpoint: {checkpoint_path}")
+        # if (epoch + 1) % args.save_freq == 0:
+        #     checkpoint_path = os.path.join(args.output_dir, f"checkpoint_epoch_{epoch + 1}.pt")
+        #     torch.save({
+        #         'epoch': epoch,
+        #         'model_state_dict': model.state_dict(),
+        #         'optimizer_state_dict': optimizer.state_dict(),
+        #     }, checkpoint_path)
+        #     logger.info(f"Saved checkpoint: {checkpoint_path}")
     
     logger.info("\n" + "="*80)
     logger.info("Training completed!")

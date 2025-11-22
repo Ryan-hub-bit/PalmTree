@@ -1,0 +1,111 @@
+{
+  "summary": {
+    "bb_bucket": {
+      "baseline_avg": 0.3846,
+      "addressaware_avg": 0.77245,
+      "improvement_pct": 100.84503380135206
+    },
+    "func_bucket": {
+      "baseline_avg": 0.3221,
+      "addressaware_avg": 0.66875,
+      "improvement_pct": 107.62185656628375
+    },
+    "binary_bucket": {
+      "baseline_avg": 0.4385625,
+      "addressaware_avg": 0.9498125,
+      "improvement_pct": 116.57403448767279
+    }
+  },
+  "all_results": [
+    {
+      "model_type": "baseline",
+      "bucket_key": "bb_bucket",
+      "accuracy": 0.3846,
+      "n_train": 80000,
+      "n_test": 20000,
+      "binary": "combined_5_binaries",
+      "binary_list": [
+        "_ecodes.cpython-313-x86_64-linux-gnu.so",
+        "_input.cpython-313-x86_64-linux-gnu.so",
+        "_uinput.cpython-313-x86_64-linux-gnu.so",
+        "atilibusb.so",
+        "ghex"
+      ]
+    },
+    {
+      "model_type": "addressaware",
+      "bucket_key": "bb_bucket",
+      "accuracy": 0.77245,
+      "n_train": 80000,
+      "n_test": 20000,
+      "binary": "combined_5_binaries",
+      "binary_list": [
+        "_ecodes.cpython-313-x86_64-linux-gnu.so",
+        "_input.cpython-313-x86_64-linux-gnu.so",
+        "_uinput.cpython-313-x86_64-linux-gnu.so",
+        "atilibusb.so",
+        "ghex"
+      ]
+    },
+    {
+      "model_type": "baseline",
+      "bucket_key": "func_bucket",
+      "accuracy": 0.3221,
+      "n_train": 80000,
+      "n_test": 20000,
+      "binary": "combined_5_binaries",
+      "binary_list": [
+        "_ecodes.cpython-313-x86_64-linux-gnu.so",
+        "_input.cpython-313-x86_64-linux-gnu.so",
+        "_uinput.cpython-313-x86_64-linux-gnu.so",
+        "atilibusb.so",
+        "ghex"
+      ]
+    },
+    {
+      "model_type": "addressaware",
+      "bucket_key": "func_bucket",
+      "accuracy": 0.66875,
+      "n_train": 80000,
+      "n_test": 20000,
+      "binary": "combined_5_binaries",
+      "binary_list": [
+        "_ecodes.cpython-313-x86_64-linux-gnu.so",
+        "_input.cpython-313-x86_64-linux-gnu.so",
+        "_uinput.cpython-313-x86_64-linux-gnu.so",
+        "atilibusb.so",
+        "ghex"
+      ]
+    },
+    {
+      "model_type": "baseline",
+      "bucket_key": "binary_bucket",
+      "accuracy": 0.4385625,
+      "n_train": 64000,
+      "n_test": 16000,
+      "binary": "combined_5_binaries",
+      "binary_list": [
+        "_ecodes.cpython-313-x86_64-linux-gnu.so",
+        "_input.cpython-313-x86_64-linux-gnu.so",
+        "_uinput.cpython-313-x86_64-linux-gnu.so",
+        "atilibusb.so",
+        "ghex"
+      ]
+    },
+    {
+      "model_type": "addressaware",
+      "bucket_key": "binary_bucket",
+      "accuracy": 0.9498125,
+      "n_train": 64000,
+      "n_test": 16000,
+      "binary": "combined_5_binaries",
+      "binary_list": [
+        "_ecodes.cpython-313-x86_64-linux-gnu.so",
+        "_input.cpython-313-x86_64-linux-gnu.so",
+        "_uinput.cpython-313-x86_64-linux-gnu.so",
+        "atilibusb.so",
+        "ghex"
+      ]
+    }
+  ]
+}

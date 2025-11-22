@@ -8,8 +8,8 @@
 #########################################################################
 
 # Data paths
-CFG_DATA="../data/cfg_2/all_cfg_combined.txt"
-DFG_DATA="../data/dfg_2/all_dfg_combined.txt"
+CFG_DATA="../data/ncfg/all_cfg_combined.txt"
+DFG_DATA="../data/ndfg/all_dfg_combined.txt"
 VOCAB_FILE="../pre-trained_model/palmtree/vocab"
 DATA_PERCENTAGE=1.0  # Use 100% of dataset (0.0-1.0)
 TRAIN_SPLIT=0.9      # 90% train, 10% validation
@@ -18,7 +18,7 @@ TRAIN_SPLIT=0.9      # 90% train, 10% validation
 PALMTREE_CHECKPOINT="../pre-trained_model/palmtree/transformer.ep19"
 
 # Output
-OUTPUT_DIR="output_addressaware_all"
+OUTPUT_DIR="output_address_new"
 LOG_DIR="log"
 
 # Model configuration (must match PalmTree checkpoint)
@@ -37,7 +37,7 @@ NSP_PROB=0.5
 
 # Hardware
 USE_CUDA="--cuda"
-USE_MULTI_GPU="--multi_gpu"
+# USE_MULTI_GPU="--multi_gpu"
 
 # Set environment variables for NCCL (fix multi-GPU errors)
 # export NCCL_DEBUG=INFO

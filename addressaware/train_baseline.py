@@ -360,16 +360,16 @@ def main():
         })
         
         # Save checkpoint
-        checkpoint_path = os.path.join(args.output_dir, f'baseline_bert.ep{epoch}')
+        # checkpoint_path = os.path.join(args.output_dir, f'baseline_bert.ep{epoch}')
         model_to_save = model.module if hasattr(model, 'module') else model
-        torch.save({
-            'epoch': epoch,
-            'model_state_dict': model_to_save.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'train_loss': train_metrics['total_loss'],
-            'val_loss': val_metrics['total_loss']
-        }, checkpoint_path)
-        print(f"  Checkpoint saved: {checkpoint_path}")
+        # torch.save({
+        #     'epoch': epoch,
+        #     'model_state_dict': model_to_save.state_dict(),
+        #     'optimizer_state_dict': optimizer.state_dict(),
+        #     'train_loss': train_metrics['total_loss'],
+        #     'val_loss': val_metrics['total_loss']
+        # }, checkpoint_path)
+        # print(f"  Checkpoint saved: {checkpoint_path}")
         
         # Save best model
         if val_metrics['total_loss'] < best_val_loss:
