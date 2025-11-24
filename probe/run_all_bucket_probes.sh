@@ -5,12 +5,12 @@
 # Tests all three hierarchical levels: Binary, Function, and BB
 # ==============================================================================
 
-set -e  # Exit on error
+set -e # Exit on error
 
 # Configuration
 DATA_DIR="data_5bucket"
 VOCAB="../pre-trained_model/palmtree/vocab"
-ADDRESSAWARE_MODEL="../addressaware/output_addressaware_new/best_bert.pt"
+ADDRESSAWARE_MODEL="../addressaware/output_addressaware_scope/best_bert.pt"
 BASELINE_MODEL="../pre-trained_model/palmtree/transformer.ep19"
 NUM_BUCKETS=5
 
@@ -40,11 +40,11 @@ echo "Output directory: $OUTPUT_DIR"
 echo ""
 
 python bb_bucket_probe.py \
-    --data_dir "$DATA_DIR" \
-    --vocab "$VOCAB" \
-    --addressaware_model "$ADDRESSAWARE_MODEL" \
-    --baseline_model "$BASELINE_MODEL" \
-    --output "$OUTPUT_DIR"
+  --data_dir "$DATA_DIR" \
+  --vocab "$VOCAB" \
+  --addressaware_model "$ADDRESSAWARE_MODEL" \
+  --baseline_model "$BASELINE_MODEL" \
+  --output "$OUTPUT_DIR"
 
 echo ""
 echo "BB-Level Results:"
@@ -67,11 +67,11 @@ echo "Output directory: $OUTPUT_DIR"
 echo ""
 
 python function_bucket_probe.py \
-    --data_dir "$DATA_DIR" \
-    --vocab "$VOCAB" \
-    --addressaware_model "$ADDRESSAWARE_MODEL" \
-    --baseline_model "$BASELINE_MODEL" \
-    --output "$OUTPUT_DIR"
+  --data_dir "$DATA_DIR" \
+  --vocab "$VOCAB" \
+  --addressaware_model "$ADDRESSAWARE_MODEL" \
+  --baseline_model "$BASELINE_MODEL" \
+  --output "$OUTPUT_DIR"
 
 echo ""
 echo "Function-Level Results:"
@@ -94,11 +94,11 @@ echo "Output directory: $OUTPUT_DIR"
 echo ""
 
 python binary_bucket_probe.py \
-    --data_dir "$DATA_DIR" \
-    --vocab "$VOCAB" \
-    --addressaware_model "$ADDRESSAWARE_MODEL" \
-    --baseline_model "$BASELINE_MODEL" \
-    --output "$OUTPUT_DIR"
+  --data_dir "$DATA_DIR" \
+  --vocab "$VOCAB" \
+  --addressaware_model "$ADDRESSAWARE_MODEL" \
+  --baseline_model "$BASELINE_MODEL" \
+  --output "$OUTPUT_DIR"
 
 echo ""
 echo "Binary-Level Results:"
@@ -120,15 +120,15 @@ echo ""
 
 # Function to extract test accuracy
 extract_accuracy() {
-    local file=$1
-    local model=$2
-    python -c "import json; data=json.load(open('$file')); print(f\"{data['$model']['test_accuracy']:.4f}\")"
+  local file=$1
+  local model=$2
+  python -c "import json; data=json.load(open('$file')); print(f\"{data['$model']['test_accuracy']:.4f}\")"
 }
 
 # Function to extract improvement
 extract_improvement() {
-    local file=$1
-    python -c "import json; data=json.load(open('$file')); print(f\"{data['improvement']['test_accuracy']:.4f}\")"
+  local file=$1
+  python -c "import json; data=json.load(open('$file')); print(f\"{data['improvement']['test_accuracy']:.4f}\")"
 }
 
 # Extract all results

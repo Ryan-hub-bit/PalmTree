@@ -1,0 +1,1392 @@
+========================================================================
+Comprehensive Bucket Prediction Evaluation
+========================================================================
+Baseline Model:       ../addressaware/output_baseline_new/best_bert.pt
+Address-Aware Model:  ../addressaware/output_addressaware_scope_0.1_0.0005/best_bert.pt
+JSON Labels:          data/json_labels
+Samples per bucket:   20000
+Binaries to test:     5
+Device:               cuda
+========================================================================
+
+================================================================================
+COMPREHENSIVE BUCKET PREDICTION EVALUATION
+================================================================================
+Device: cuda
+Samples per bucket: 20000
+Binary limit: 5
+================================================================================
+[INFO] Loading vocabulary from ../pre-trained_model/palmtree/vocab
+[INFO] Vocabulary size: 6631
+[INFO] Loading baseline model from ../addressaware/output_baseline_new/best_bert.pt
+[INFO] Baseline model loaded successfully
+[INFO] Loading address-aware model from ../addressaware/output_addressaware_scope_0.1_0.0005/best_bert.pt
+[INFO] Address positional embeddings (3-level) - TRAINABLE
+[INFO] Address-aware model loaded successfully
+
+[INFO] Found 5 JSON files
+[INFO] Loading 5 binaries
+
+================================================================================
+Combining instructions from all binaries
+================================================================================
+[INFO] Loading labels from data/json_labels/_ecodes.cpython-313-x86_64-linux-gnu.so_instructions_labels.json
+[INFO] Loaded 268182 instructions from _ecodes.cpython-313-x86_64-linux-gnu.so
+[INFO] Added 268182 instructions from _ecodes.cpython-313-x86_64-linux-gnu.so
+[INFO] Loading labels from data/json_labels/_input.cpython-313-x86_64-linux-gnu.so_instructions_labels.json
+[INFO] Loaded 55466 instructions from _input.cpython-313-x86_64-linux-gnu.so
+[INFO] Added 55466 instructions from _input.cpython-313-x86_64-linux-gnu.so
+[INFO] Loading labels from data/json_labels/_uinput.cpython-313-x86_64-linux-gnu.so_instructions_labels.json
+[INFO] Loaded 18886 instructions from _uinput.cpython-313-x86_64-linux-gnu.so
+[INFO] Added 18886 instructions from _uinput.cpython-313-x86_64-linux-gnu.so
+[INFO] Loading labels from data/json_labels/atilibusb.so_instructions_labels.json
+[INFO] Loaded 25220 instructions from atilibusb.so
+[INFO] Added 25220 instructions from atilibusb.so
+[INFO] Loading labels from data/json_labels/ghex_instructions_labels.json
+[INFO] Loaded 1100620 instructions from ghex
+[INFO] Added 1100620 instructions from ghex
+
+[INFO] Total instructions across all binaries: 1468374
+
+================================================================================
+Task: BB_BUCKET (Combined dataset from 5 binaries)
+================================================================================
+
+[INFO] Original distribution for bb_bucket:
+  Bucket 0: 299863 samples
+  Bucket 1: 238954 samples
+  Bucket 2: 264213 samples
+  Bucket 3: 273468 samples
+  Bucket 4: 391876 samples
+[INFO] Balanced: 100000 samples
+
+================================================================================
+Evaluating BASELINE on BB_BUCKET
+================================================================================
+[INFO] Extracting embeddings for 100000 instructions...
+  Progress: 0/100000
+  Progress: 500/100000
+  Progress: 1000/100000
+  Progress: 1500/100000
+  Progress: 2000/100000
+  Progress: 2500/100000
+  Progress: 3000/100000
+  Progress: 3500/100000
+  Progress: 4000/100000
+  Progress: 4500/100000
+  Progress: 5000/100000
+  Progress: 5500/100000
+  Progress: 6000/100000
+  Progress: 6500/100000
+  Progress: 7000/100000
+  Progress: 7500/100000
+  Progress: 8000/100000
+  Progress: 8500/100000
+  Progress: 9000/100000
+  Progress: 9500/100000
+  Progress: 10000/100000
+  Progress: 10500/100000
+  Progress: 11000/100000
+  Progress: 11500/100000
+  Progress: 12000/100000
+  Progress: 12500/100000
+  Progress: 13000/100000
+  Progress: 13500/100000
+  Progress: 14000/100000
+  Progress: 14500/100000
+  Progress: 15000/100000
+  Progress: 15500/100000
+  Progress: 16000/100000
+  Progress: 16500/100000
+  Progress: 17000/100000
+  Progress: 17500/100000
+  Progress: 18000/100000
+  Progress: 18500/100000
+  Progress: 19000/100000
+  Progress: 19500/100000
+  Progress: 20000/100000
+  Progress: 20500/100000
+  Progress: 21000/100000
+  Progress: 21500/100000
+  Progress: 22000/100000
+  Progress: 22500/100000
+  Progress: 23000/100000
+  Progress: 23500/100000
+  Progress: 24000/100000
+  Progress: 24500/100000
+  Progress: 25000/100000
+  Progress: 25500/100000
+  Progress: 26000/100000
+  Progress: 26500/100000
+  Progress: 27000/100000
+  Progress: 27500/100000
+  Progress: 28000/100000
+  Progress: 28500/100000
+  Progress: 29000/100000
+  Progress: 29500/100000
+  Progress: 30000/100000
+  Progress: 30500/100000
+  Progress: 31000/100000
+  Progress: 31500/100000
+  Progress: 32000/100000
+  Progress: 32500/100000
+  Progress: 33000/100000
+  Progress: 33500/100000
+  Progress: 34000/100000
+  Progress: 34500/100000
+  Progress: 35000/100000
+  Progress: 35500/100000
+  Progress: 36000/100000
+  Progress: 36500/100000
+  Progress: 37000/100000
+  Progress: 37500/100000
+  Progress: 38000/100000
+  Progress: 38500/100000
+  Progress: 39000/100000
+  Progress: 39500/100000
+  Progress: 40000/100000
+  Progress: 40500/100000
+  Progress: 41000/100000
+  Progress: 41500/100000
+  Progress: 42000/100000
+  Progress: 42500/100000
+  Progress: 43000/100000
+  Progress: 43500/100000
+  Progress: 44000/100000
+  Progress: 44500/100000
+  Progress: 45000/100000
+  Progress: 45500/100000
+  Progress: 46000/100000
+  Progress: 46500/100000
+  Progress: 47000/100000
+  Progress: 47500/100000
+  Progress: 48000/100000
+  Progress: 48500/100000
+  Progress: 49000/100000
+  Progress: 49500/100000
+  Progress: 50000/100000
+  Progress: 50500/100000
+  Progress: 51000/100000
+  Progress: 51500/100000
+  Progress: 52000/100000
+  Progress: 52500/100000
+  Progress: 53000/100000
+  Progress: 53500/100000
+  Progress: 54000/100000
+  Progress: 54500/100000
+  Progress: 55000/100000
+  Progress: 55500/100000
+  Progress: 56000/100000
+  Progress: 56500/100000
+  Progress: 57000/100000
+  Progress: 57500/100000
+  Progress: 58000/100000
+  Progress: 58500/100000
+  Progress: 59000/100000
+  Progress: 59500/100000
+  Progress: 60000/100000
+  Progress: 60500/100000
+  Progress: 61000/100000
+  Progress: 61500/100000
+  Progress: 62000/100000
+  Progress: 62500/100000
+  Progress: 63000/100000
+  Progress: 63500/100000
+  Progress: 64000/100000
+  Progress: 64500/100000
+  Progress: 65000/100000
+  Progress: 65500/100000
+  Progress: 66000/100000
+  Progress: 66500/100000
+  Progress: 67000/100000
+  Progress: 67500/100000
+  Progress: 68000/100000
+  Progress: 68500/100000
+  Progress: 69000/100000
+  Progress: 69500/100000
+  Progress: 70000/100000
+  Progress: 70500/100000
+  Progress: 71000/100000
+  Progress: 71500/100000
+  Progress: 72000/100000
+  Progress: 72500/100000
+  Progress: 73000/100000
+  Progress: 73500/100000
+  Progress: 74000/100000
+  Progress: 74500/100000
+  Progress: 75000/100000
+  Progress: 75500/100000
+  Progress: 76000/100000
+  Progress: 76500/100000
+  Progress: 77000/100000
+  Progress: 77500/100000
+  Progress: 78000/100000
+  Progress: 78500/100000
+  Progress: 79000/100000
+  Progress: 79500/100000
+  Progress: 80000/100000
+  Progress: 80500/100000
+  Progress: 81000/100000
+  Progress: 81500/100000
+  Progress: 82000/100000
+  Progress: 82500/100000
+  Progress: 83000/100000
+  Progress: 83500/100000
+  Progress: 84000/100000
+  Progress: 84500/100000
+  Progress: 85000/100000
+  Progress: 85500/100000
+  Progress: 86000/100000
+  Progress: 86500/100000
+  Progress: 87000/100000
+  Progress: 87500/100000
+  Progress: 88000/100000
+  Progress: 88500/100000
+  Progress: 89000/100000
+  Progress: 89500/100000
+  Progress: 90000/100000
+  Progress: 90500/100000
+  Progress: 91000/100000
+  Progress: 91500/100000
+  Progress: 92000/100000
+  Progress: 92500/100000
+  Progress: 93000/100000
+  Progress: 93500/100000
+  Progress: 94000/100000
+  Progress: 94500/100000
+  Progress: 95000/100000
+  Progress: 95500/100000
+  Progress: 96000/100000
+  Progress: 96500/100000
+  Progress: 97000/100000
+  Progress: 97500/100000
+  Progress: 98000/100000
+  Progress: 98500/100000
+  Progress: 99000/100000
+  Progress: 99500/100000
+[INFO] Embeddings shape: (100000, 128)
+[INFO] Labels shape: (100000,)
+[INFO] Train: 80000, Test: 20000
+[INFO] Training logistic regression probe...
+
+[RESULT] BASELINE - BB_BUCKET
+  Accuracy: 0.3868 (38.68%)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.40      0.49      0.44      4000
+           1       0.35      0.36      0.36      4000
+           2       0.39      0.29      0.33      4000
+           3       0.39      0.23      0.29      4000
+           4       0.40      0.56      0.47      4000
+
+    accuracy                           0.39     20000
+   macro avg       0.39      0.39      0.38     20000
+weighted avg       0.39      0.39      0.38     20000
+
+
+================================================================================
+Evaluating ADDRESSAWARE on BB_BUCKET
+================================================================================
+[INFO] Extracting embeddings for 100000 instructions...
+  Progress: 0/100000
+  Progress: 500/100000
+  Progress: 1000/100000
+  Progress: 1500/100000
+  Progress: 2000/100000
+  Progress: 2500/100000
+  Progress: 3000/100000
+  Progress: 3500/100000
+  Progress: 4000/100000
+  Progress: 4500/100000
+  Progress: 5000/100000
+  Progress: 5500/100000
+  Progress: 6000/100000
+  Progress: 6500/100000
+  Progress: 7000/100000
+  Progress: 7500/100000
+  Progress: 8000/100000
+  Progress: 8500/100000
+  Progress: 9000/100000
+  Progress: 9500/100000
+  Progress: 10000/100000
+  Progress: 10500/100000
+  Progress: 11000/100000
+  Progress: 11500/100000
+  Progress: 12000/100000
+  Progress: 12500/100000
+  Progress: 13000/100000
+  Progress: 13500/100000
+  Progress: 14000/100000
+  Progress: 14500/100000
+  Progress: 15000/100000
+  Progress: 15500/100000
+  Progress: 16000/100000
+  Progress: 16500/100000
+  Progress: 17000/100000
+  Progress: 17500/100000
+  Progress: 18000/100000
+  Progress: 18500/100000
+  Progress: 19000/100000
+  Progress: 19500/100000
+  Progress: 20000/100000
+  Progress: 20500/100000
+  Progress: 21000/100000
+  Progress: 21500/100000
+  Progress: 22000/100000
+  Progress: 22500/100000
+  Progress: 23000/100000
+  Progress: 23500/100000
+  Progress: 24000/100000
+  Progress: 24500/100000
+  Progress: 25000/100000
+  Progress: 25500/100000
+  Progress: 26000/100000
+  Progress: 26500/100000
+  Progress: 27000/100000
+  Progress: 27500/100000
+  Progress: 28000/100000
+  Progress: 28500/100000
+  Progress: 29000/100000
+  Progress: 29500/100000
+  Progress: 30000/100000
+  Progress: 30500/100000
+  Progress: 31000/100000
+  Progress: 31500/100000
+  Progress: 32000/100000
+  Progress: 32500/100000
+  Progress: 33000/100000
+  Progress: 33500/100000
+  Progress: 34000/100000
+  Progress: 34500/100000
+  Progress: 35000/100000
+  Progress: 35500/100000
+  Progress: 36000/100000
+  Progress: 36500/100000
+  Progress: 37000/100000
+  Progress: 37500/100000
+  Progress: 38000/100000
+  Progress: 38500/100000
+  Progress: 39000/100000
+  Progress: 39500/100000
+  Progress: 40000/100000
+  Progress: 40500/100000
+  Progress: 41000/100000
+  Progress: 41500/100000
+  Progress: 42000/100000
+  Progress: 42500/100000
+  Progress: 43000/100000
+  Progress: 43500/100000
+  Progress: 44000/100000
+  Progress: 44500/100000
+  Progress: 45000/100000
+  Progress: 45500/100000
+  Progress: 46000/100000
+  Progress: 46500/100000
+  Progress: 47000/100000
+  Progress: 47500/100000
+  Progress: 48000/100000
+  Progress: 48500/100000
+  Progress: 49000/100000
+  Progress: 49500/100000
+  Progress: 50000/100000
+  Progress: 50500/100000
+  Progress: 51000/100000
+  Progress: 51500/100000
+  Progress: 52000/100000
+  Progress: 52500/100000
+  Progress: 53000/100000
+  Progress: 53500/100000
+  Progress: 54000/100000
+  Progress: 54500/100000
+  Progress: 55000/100000
+  Progress: 55500/100000
+  Progress: 56000/100000
+  Progress: 56500/100000
+  Progress: 57000/100000
+  Progress: 57500/100000
+  Progress: 58000/100000
+  Progress: 58500/100000
+  Progress: 59000/100000
+  Progress: 59500/100000
+  Progress: 60000/100000
+  Progress: 60500/100000
+  Progress: 61000/100000
+  Progress: 61500/100000
+  Progress: 62000/100000
+  Progress: 62500/100000
+  Progress: 63000/100000
+  Progress: 63500/100000
+  Progress: 64000/100000
+  Progress: 64500/100000
+  Progress: 65000/100000
+  Progress: 65500/100000
+  Progress: 66000/100000
+  Progress: 66500/100000
+  Progress: 67000/100000
+  Progress: 67500/100000
+  Progress: 68000/100000
+  Progress: 68500/100000
+  Progress: 69000/100000
+  Progress: 69500/100000
+  Progress: 70000/100000
+  Progress: 70500/100000
+  Progress: 71000/100000
+  Progress: 71500/100000
+  Progress: 72000/100000
+  Progress: 72500/100000
+  Progress: 73000/100000
+  Progress: 73500/100000
+  Progress: 74000/100000
+  Progress: 74500/100000
+  Progress: 75000/100000
+  Progress: 75500/100000
+  Progress: 76000/100000
+  Progress: 76500/100000
+  Progress: 77000/100000
+  Progress: 77500/100000
+  Progress: 78000/100000
+  Progress: 78500/100000
+  Progress: 79000/100000
+  Progress: 79500/100000
+  Progress: 80000/100000
+  Progress: 80500/100000
+  Progress: 81000/100000
+  Progress: 81500/100000
+  Progress: 82000/100000
+  Progress: 82500/100000
+  Progress: 83000/100000
+  Progress: 83500/100000
+  Progress: 84000/100000
+  Progress: 84500/100000
+  Progress: 85000/100000
+  Progress: 85500/100000
+  Progress: 86000/100000
+  Progress: 86500/100000
+  Progress: 87000/100000
+  Progress: 87500/100000
+  Progress: 88000/100000
+  Progress: 88500/100000
+  Progress: 89000/100000
+  Progress: 89500/100000
+  Progress: 90000/100000
+  Progress: 90500/100000
+  Progress: 91000/100000
+  Progress: 91500/100000
+  Progress: 92000/100000
+  Progress: 92500/100000
+  Progress: 93000/100000
+  Progress: 93500/100000
+  Progress: 94000/100000
+  Progress: 94500/100000
+  Progress: 95000/100000
+  Progress: 95500/100000
+  Progress: 96000/100000
+  Progress: 96500/100000
+  Progress: 97000/100000
+  Progress: 97500/100000
+  Progress: 98000/100000
+  Progress: 98500/100000
+  Progress: 99000/100000
+  Progress: 99500/100000
+[INFO] Embeddings shape: (100000, 128)
+[INFO] Labels shape: (100000,)
+[INFO] Train: 80000, Test: 20000
+[INFO] Training logistic regression probe...
+
+[RESULT] ADDRESSAWARE - BB_BUCKET
+  Accuracy: 0.7714 (77.14%)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.90      0.84      0.87      4000
+           1       0.68      0.75      0.72      4000
+           2       0.66      0.62      0.64      4000
+           3       0.73      0.75      0.74      4000
+           4       0.91      0.89      0.90      4000
+
+    accuracy                           0.77     20000
+   macro avg       0.77      0.77      0.77     20000
+weighted avg       0.77      0.77      0.77     20000
+
+
+================================================================================
+Task: FUNC_BUCKET (Combined dataset from 5 binaries)
+================================================================================
+
+[INFO] Original distribution for func_bucket:
+  Bucket 0: 175948 samples
+  Bucket 1: 271132 samples
+  Bucket 2: 276744 samples
+  Bucket 3: 314598 samples
+  Bucket 4: 429952 samples
+[INFO] Balanced: 100000 samples
+
+================================================================================
+Evaluating BASELINE on FUNC_BUCKET
+================================================================================
+[INFO] Extracting embeddings for 100000 instructions...
+  Progress: 0/100000
+  Progress: 500/100000
+  Progress: 1000/100000
+  Progress: 1500/100000
+  Progress: 2000/100000
+  Progress: 2500/100000
+  Progress: 3000/100000
+  Progress: 3500/100000
+  Progress: 4000/100000
+  Progress: 4500/100000
+  Progress: 5000/100000
+  Progress: 5500/100000
+  Progress: 6000/100000
+  Progress: 6500/100000
+  Progress: 7000/100000
+  Progress: 7500/100000
+  Progress: 8000/100000
+  Progress: 8500/100000
+  Progress: 9000/100000
+  Progress: 9500/100000
+  Progress: 10000/100000
+  Progress: 10500/100000
+  Progress: 11000/100000
+  Progress: 11500/100000
+  Progress: 12000/100000
+  Progress: 12500/100000
+  Progress: 13000/100000
+  Progress: 13500/100000
+  Progress: 14000/100000
+  Progress: 14500/100000
+  Progress: 15000/100000
+  Progress: 15500/100000
+  Progress: 16000/100000
+  Progress: 16500/100000
+  Progress: 17000/100000
+  Progress: 17500/100000
+  Progress: 18000/100000
+  Progress: 18500/100000
+  Progress: 19000/100000
+  Progress: 19500/100000
+  Progress: 20000/100000
+  Progress: 20500/100000
+  Progress: 21000/100000
+  Progress: 21500/100000
+  Progress: 22000/100000
+  Progress: 22500/100000
+  Progress: 23000/100000
+  Progress: 23500/100000
+  Progress: 24000/100000
+  Progress: 24500/100000
+  Progress: 25000/100000
+  Progress: 25500/100000
+  Progress: 26000/100000
+  Progress: 26500/100000
+  Progress: 27000/100000
+  Progress: 27500/100000
+  Progress: 28000/100000
+  Progress: 28500/100000
+  Progress: 29000/100000
+  Progress: 29500/100000
+  Progress: 30000/100000
+  Progress: 30500/100000
+  Progress: 31000/100000
+  Progress: 31500/100000
+  Progress: 32000/100000
+  Progress: 32500/100000
+  Progress: 33000/100000
+  Progress: 33500/100000
+  Progress: 34000/100000
+  Progress: 34500/100000
+  Progress: 35000/100000
+  Progress: 35500/100000
+  Progress: 36000/100000
+  Progress: 36500/100000
+  Progress: 37000/100000
+  Progress: 37500/100000
+  Progress: 38000/100000
+  Progress: 38500/100000
+  Progress: 39000/100000
+  Progress: 39500/100000
+  Progress: 40000/100000
+  Progress: 40500/100000
+  Progress: 41000/100000
+  Progress: 41500/100000
+  Progress: 42000/100000
+  Progress: 42500/100000
+  Progress: 43000/100000
+  Progress: 43500/100000
+  Progress: 44000/100000
+  Progress: 44500/100000
+  Progress: 45000/100000
+  Progress: 45500/100000
+  Progress: 46000/100000
+  Progress: 46500/100000
+  Progress: 47000/100000
+  Progress: 47500/100000
+  Progress: 48000/100000
+  Progress: 48500/100000
+  Progress: 49000/100000
+  Progress: 49500/100000
+  Progress: 50000/100000
+  Progress: 50500/100000
+  Progress: 51000/100000
+  Progress: 51500/100000
+  Progress: 52000/100000
+  Progress: 52500/100000
+  Progress: 53000/100000
+  Progress: 53500/100000
+  Progress: 54000/100000
+  Progress: 54500/100000
+  Progress: 55000/100000
+  Progress: 55500/100000
+  Progress: 56000/100000
+  Progress: 56500/100000
+  Progress: 57000/100000
+  Progress: 57500/100000
+  Progress: 58000/100000
+  Progress: 58500/100000
+  Progress: 59000/100000
+  Progress: 59500/100000
+  Progress: 60000/100000
+  Progress: 60500/100000
+  Progress: 61000/100000
+  Progress: 61500/100000
+  Progress: 62000/100000
+  Progress: 62500/100000
+  Progress: 63000/100000
+  Progress: 63500/100000
+  Progress: 64000/100000
+  Progress: 64500/100000
+  Progress: 65000/100000
+  Progress: 65500/100000
+  Progress: 66000/100000
+  Progress: 66500/100000
+  Progress: 67000/100000
+  Progress: 67500/100000
+  Progress: 68000/100000
+  Progress: 68500/100000
+  Progress: 69000/100000
+  Progress: 69500/100000
+  Progress: 70000/100000
+  Progress: 70500/100000
+  Progress: 71000/100000
+  Progress: 71500/100000
+  Progress: 72000/100000
+  Progress: 72500/100000
+  Progress: 73000/100000
+  Progress: 73500/100000
+  Progress: 74000/100000
+  Progress: 74500/100000
+  Progress: 75000/100000
+  Progress: 75500/100000
+  Progress: 76000/100000
+  Progress: 76500/100000
+  Progress: 77000/100000
+  Progress: 77500/100000
+  Progress: 78000/100000
+  Progress: 78500/100000
+  Progress: 79000/100000
+  Progress: 79500/100000
+  Progress: 80000/100000
+  Progress: 80500/100000
+  Progress: 81000/100000
+  Progress: 81500/100000
+  Progress: 82000/100000
+  Progress: 82500/100000
+  Progress: 83000/100000
+  Progress: 83500/100000
+  Progress: 84000/100000
+  Progress: 84500/100000
+  Progress: 85000/100000
+  Progress: 85500/100000
+  Progress: 86000/100000
+  Progress: 86500/100000
+  Progress: 87000/100000
+  Progress: 87500/100000
+  Progress: 88000/100000
+  Progress: 88500/100000
+  Progress: 89000/100000
+  Progress: 89500/100000
+  Progress: 90000/100000
+  Progress: 90500/100000
+  Progress: 91000/100000
+  Progress: 91500/100000
+  Progress: 92000/100000
+  Progress: 92500/100000
+  Progress: 93000/100000
+  Progress: 93500/100000
+  Progress: 94000/100000
+  Progress: 94500/100000
+  Progress: 95000/100000
+  Progress: 95500/100000
+  Progress: 96000/100000
+  Progress: 96500/100000
+  Progress: 97000/100000
+  Progress: 97500/100000
+  Progress: 98000/100000
+  Progress: 98500/100000
+  Progress: 99000/100000
+  Progress: 99500/100000
+[INFO] Embeddings shape: (100000, 128)
+[INFO] Labels shape: (100000,)
+[INFO] Train: 80000, Test: 20000
+[INFO] Training logistic regression probe...
+
+[RESULT] BASELINE - FUNC_BUCKET
+  Accuracy: 0.3209 (32.09%)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.35      0.42      0.38      4000
+           1       0.25      0.45      0.32      4000
+           2       0.29      0.21      0.24      4000
+           3       0.31      0.18      0.23      4000
+           4       0.52      0.35      0.41      4000
+
+    accuracy                           0.32     20000
+   macro avg       0.34      0.32      0.32     20000
+weighted avg       0.34      0.32      0.32     20000
+
+
+================================================================================
+Evaluating ADDRESSAWARE on FUNC_BUCKET
+================================================================================
+[INFO] Extracting embeddings for 100000 instructions...
+  Progress: 0/100000
+  Progress: 500/100000
+  Progress: 1000/100000
+  Progress: 1500/100000
+  Progress: 2000/100000
+  Progress: 2500/100000
+  Progress: 3000/100000
+  Progress: 3500/100000
+  Progress: 4000/100000
+  Progress: 4500/100000
+  Progress: 5000/100000
+  Progress: 5500/100000
+  Progress: 6000/100000
+  Progress: 6500/100000
+  Progress: 7000/100000
+  Progress: 7500/100000
+  Progress: 8000/100000
+  Progress: 8500/100000
+  Progress: 9000/100000
+  Progress: 9500/100000
+  Progress: 10000/100000
+  Progress: 10500/100000
+  Progress: 11000/100000
+  Progress: 11500/100000
+  Progress: 12000/100000
+  Progress: 12500/100000
+  Progress: 13000/100000
+  Progress: 13500/100000
+  Progress: 14000/100000
+  Progress: 14500/100000
+  Progress: 15000/100000
+  Progress: 15500/100000
+  Progress: 16000/100000
+  Progress: 16500/100000
+  Progress: 17000/100000
+  Progress: 17500/100000
+  Progress: 18000/100000
+  Progress: 18500/100000
+  Progress: 19000/100000
+  Progress: 19500/100000
+  Progress: 20000/100000
+  Progress: 20500/100000
+  Progress: 21000/100000
+  Progress: 21500/100000
+  Progress: 22000/100000
+  Progress: 22500/100000
+  Progress: 23000/100000
+  Progress: 23500/100000
+  Progress: 24000/100000
+  Progress: 24500/100000
+  Progress: 25000/100000
+  Progress: 25500/100000
+  Progress: 26000/100000
+  Progress: 26500/100000
+  Progress: 27000/100000
+  Progress: 27500/100000
+  Progress: 28000/100000
+  Progress: 28500/100000
+  Progress: 29000/100000
+  Progress: 29500/100000
+  Progress: 30000/100000
+  Progress: 30500/100000
+  Progress: 31000/100000
+  Progress: 31500/100000
+  Progress: 32000/100000
+  Progress: 32500/100000
+  Progress: 33000/100000
+  Progress: 33500/100000
+  Progress: 34000/100000
+  Progress: 34500/100000
+  Progress: 35000/100000
+  Progress: 35500/100000
+  Progress: 36000/100000
+  Progress: 36500/100000
+  Progress: 37000/100000
+  Progress: 37500/100000
+  Progress: 38000/100000
+  Progress: 38500/100000
+  Progress: 39000/100000
+  Progress: 39500/100000
+  Progress: 40000/100000
+  Progress: 40500/100000
+  Progress: 41000/100000
+  Progress: 41500/100000
+  Progress: 42000/100000
+  Progress: 42500/100000
+  Progress: 43000/100000
+  Progress: 43500/100000
+  Progress: 44000/100000
+  Progress: 44500/100000
+  Progress: 45000/100000
+  Progress: 45500/100000
+  Progress: 46000/100000
+  Progress: 46500/100000
+  Progress: 47000/100000
+  Progress: 47500/100000
+  Progress: 48000/100000
+  Progress: 48500/100000
+  Progress: 49000/100000
+  Progress: 49500/100000
+  Progress: 50000/100000
+  Progress: 50500/100000
+  Progress: 51000/100000
+  Progress: 51500/100000
+  Progress: 52000/100000
+  Progress: 52500/100000
+  Progress: 53000/100000
+  Progress: 53500/100000
+  Progress: 54000/100000
+  Progress: 54500/100000
+  Progress: 55000/100000
+  Progress: 55500/100000
+  Progress: 56000/100000
+  Progress: 56500/100000
+  Progress: 57000/100000
+  Progress: 57500/100000
+  Progress: 58000/100000
+  Progress: 58500/100000
+  Progress: 59000/100000
+  Progress: 59500/100000
+  Progress: 60000/100000
+  Progress: 60500/100000
+  Progress: 61000/100000
+  Progress: 61500/100000
+  Progress: 62000/100000
+  Progress: 62500/100000
+  Progress: 63000/100000
+  Progress: 63500/100000
+  Progress: 64000/100000
+  Progress: 64500/100000
+  Progress: 65000/100000
+  Progress: 65500/100000
+  Progress: 66000/100000
+  Progress: 66500/100000
+  Progress: 67000/100000
+  Progress: 67500/100000
+  Progress: 68000/100000
+  Progress: 68500/100000
+  Progress: 69000/100000
+  Progress: 69500/100000
+  Progress: 70000/100000
+  Progress: 70500/100000
+  Progress: 71000/100000
+  Progress: 71500/100000
+  Progress: 72000/100000
+  Progress: 72500/100000
+  Progress: 73000/100000
+  Progress: 73500/100000
+  Progress: 74000/100000
+  Progress: 74500/100000
+  Progress: 75000/100000
+  Progress: 75500/100000
+  Progress: 76000/100000
+  Progress: 76500/100000
+  Progress: 77000/100000
+  Progress: 77500/100000
+  Progress: 78000/100000
+  Progress: 78500/100000
+  Progress: 79000/100000
+  Progress: 79500/100000
+  Progress: 80000/100000
+  Progress: 80500/100000
+  Progress: 81000/100000
+  Progress: 81500/100000
+  Progress: 82000/100000
+  Progress: 82500/100000
+  Progress: 83000/100000
+  Progress: 83500/100000
+  Progress: 84000/100000
+  Progress: 84500/100000
+  Progress: 85000/100000
+  Progress: 85500/100000
+  Progress: 86000/100000
+  Progress: 86500/100000
+  Progress: 87000/100000
+  Progress: 87500/100000
+  Progress: 88000/100000
+  Progress: 88500/100000
+  Progress: 89000/100000
+  Progress: 89500/100000
+  Progress: 90000/100000
+  Progress: 90500/100000
+  Progress: 91000/100000
+  Progress: 91500/100000
+  Progress: 92000/100000
+  Progress: 92500/100000
+  Progress: 93000/100000
+  Progress: 93500/100000
+  Progress: 94000/100000
+  Progress: 94500/100000
+  Progress: 95000/100000
+  Progress: 95500/100000
+  Progress: 96000/100000
+  Progress: 96500/100000
+  Progress: 97000/100000
+  Progress: 97500/100000
+  Progress: 98000/100000
+  Progress: 98500/100000
+  Progress: 99000/100000
+  Progress: 99500/100000
+[INFO] Embeddings shape: (100000, 128)
+[INFO] Labels shape: (100000,)
+[INFO] Train: 80000, Test: 20000
+[INFO] Training logistic regression probe...
+
+[RESULT] ADDRESSAWARE - FUNC_BUCKET
+  Accuracy: 0.8153 (81.53%)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           0       0.85      0.85      0.85      4000
+           1       0.77      0.75      0.76      4000
+           2       0.77      0.78      0.78      4000
+           3       0.76      0.80      0.78      4000
+           4       0.94      0.90      0.92      4000
+
+    accuracy                           0.82     20000
+   macro avg       0.82      0.82      0.82     20000
+weighted avg       0.82      0.82      0.82     20000
+
+
+================================================================================
+Task: BINARY_BUCKET (Combined dataset from 5 binaries)
+================================================================================
+
+[INFO] Original distribution for binary_bucket:
+  Bucket 0: 0 samples
+  Bucket 1: 57309 samples
+  Bucket 2: 578998 samples
+  Bucket 3: 608360 samples
+  Bucket 4: 223707 samples
+  [WARN] Bucket 0 has 0 samples, skipping
+[INFO] Balanced: 80000 samples
+
+================================================================================
+Evaluating BASELINE on BINARY_BUCKET
+================================================================================
+[INFO] Extracting embeddings for 80000 instructions...
+  Progress: 0/80000
+  Progress: 500/80000
+  Progress: 1000/80000
+  Progress: 1500/80000
+  Progress: 2000/80000
+  Progress: 2500/80000
+  Progress: 3000/80000
+  Progress: 3500/80000
+  Progress: 4000/80000
+  Progress: 4500/80000
+  Progress: 5000/80000
+  Progress: 5500/80000
+  Progress: 6000/80000
+  Progress: 6500/80000
+  Progress: 7000/80000
+  Progress: 7500/80000
+  Progress: 8000/80000
+  Progress: 8500/80000
+  Progress: 9000/80000
+  Progress: 9500/80000
+  Progress: 10000/80000
+  Progress: 10500/80000
+  Progress: 11000/80000
+  Progress: 11500/80000
+  Progress: 12000/80000
+  Progress: 12500/80000
+  Progress: 13000/80000
+  Progress: 13500/80000
+  Progress: 14000/80000
+  Progress: 14500/80000
+  Progress: 15000/80000
+  Progress: 15500/80000
+  Progress: 16000/80000
+  Progress: 16500/80000
+  Progress: 17000/80000
+  Progress: 17500/80000
+  Progress: 18000/80000
+  Progress: 18500/80000
+  Progress: 19000/80000
+  Progress: 19500/80000
+  Progress: 20000/80000
+  Progress: 20500/80000
+  Progress: 21000/80000
+  Progress: 21500/80000
+  Progress: 22000/80000
+  Progress: 22500/80000
+  Progress: 23000/80000
+  Progress: 23500/80000
+  Progress: 24000/80000
+  Progress: 24500/80000
+  Progress: 25000/80000
+  Progress: 25500/80000
+  Progress: 26000/80000
+  Progress: 26500/80000
+  Progress: 27000/80000
+  Progress: 27500/80000
+  Progress: 28000/80000
+  Progress: 28500/80000
+  Progress: 29000/80000
+  Progress: 29500/80000
+  Progress: 30000/80000
+  Progress: 30500/80000
+  Progress: 31000/80000
+  Progress: 31500/80000
+  Progress: 32000/80000
+  Progress: 32500/80000
+  Progress: 33000/80000
+  Progress: 33500/80000
+  Progress: 34000/80000
+  Progress: 34500/80000
+  Progress: 35000/80000
+  Progress: 35500/80000
+  Progress: 36000/80000
+  Progress: 36500/80000
+  Progress: 37000/80000
+  Progress: 37500/80000
+  Progress: 38000/80000
+  Progress: 38500/80000
+  Progress: 39000/80000
+  Progress: 39500/80000
+  Progress: 40000/80000
+  Progress: 40500/80000
+  Progress: 41000/80000
+  Progress: 41500/80000
+  Progress: 42000/80000
+  Progress: 42500/80000
+  Progress: 43000/80000
+  Progress: 43500/80000
+  Progress: 44000/80000
+  Progress: 44500/80000
+  Progress: 45000/80000
+  Progress: 45500/80000
+  Progress: 46000/80000
+  Progress: 46500/80000
+  Progress: 47000/80000
+  Progress: 47500/80000
+  Progress: 48000/80000
+  Progress: 48500/80000
+  Progress: 49000/80000
+  Progress: 49500/80000
+  Progress: 50000/80000
+  Progress: 50500/80000
+  Progress: 51000/80000
+  Progress: 51500/80000
+  Progress: 52000/80000
+  Progress: 52500/80000
+  Progress: 53000/80000
+  Progress: 53500/80000
+  Progress: 54000/80000
+  Progress: 54500/80000
+  Progress: 55000/80000
+  Progress: 55500/80000
+  Progress: 56000/80000
+  Progress: 56500/80000
+  Progress: 57000/80000
+  Progress: 57500/80000
+  Progress: 58000/80000
+  Progress: 58500/80000
+  Progress: 59000/80000
+  Progress: 59500/80000
+  Progress: 60000/80000
+  Progress: 60500/80000
+  Progress: 61000/80000
+  Progress: 61500/80000
+  Progress: 62000/80000
+  Progress: 62500/80000
+  Progress: 63000/80000
+  Progress: 63500/80000
+  Progress: 64000/80000
+  Progress: 64500/80000
+  Progress: 65000/80000
+  Progress: 65500/80000
+  Progress: 66000/80000
+  Progress: 66500/80000
+  Progress: 67000/80000
+  Progress: 67500/80000
+  Progress: 68000/80000
+  Progress: 68500/80000
+  Progress: 69000/80000
+  Progress: 69500/80000
+  Progress: 70000/80000
+  Progress: 70500/80000
+  Progress: 71000/80000
+  Progress: 71500/80000
+  Progress: 72000/80000
+  Progress: 72500/80000
+  Progress: 73000/80000
+  Progress: 73500/80000
+  Progress: 74000/80000
+  Progress: 74500/80000
+  Progress: 75000/80000
+  Progress: 75500/80000
+  Progress: 76000/80000
+  Progress: 76500/80000
+  Progress: 77000/80000
+  Progress: 77500/80000
+  Progress: 78000/80000
+  Progress: 78500/80000
+  Progress: 79000/80000
+  Progress: 79500/80000
+[INFO] Embeddings shape: (80000, 128)
+[INFO] Labels shape: (80000,)
+[INFO] Train: 64000, Test: 16000
+[INFO] Training logistic regression probe...
+
+[RESULT] BASELINE - BINARY_BUCKET
+  Accuracy: 0.4324 (43.24%)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           1       0.48      0.51      0.49      4000
+           2       0.54      0.31      0.40      4000
+           3       0.44      0.28      0.34      4000
+           4       0.36      0.62      0.46      4000
+
+    accuracy                           0.43     16000
+   macro avg       0.46      0.43      0.42     16000
+weighted avg       0.46      0.43      0.42     16000
+
+
+================================================================================
+Evaluating ADDRESSAWARE on BINARY_BUCKET
+================================================================================
+[INFO] Extracting embeddings for 80000 instructions...
+  Progress: 0/80000
+  Progress: 500/80000
+  Progress: 1000/80000
+  Progress: 1500/80000
+  Progress: 2000/80000
+  Progress: 2500/80000
+  Progress: 3000/80000
+  Progress: 3500/80000
+  Progress: 4000/80000
+  Progress: 4500/80000
+  Progress: 5000/80000
+  Progress: 5500/80000
+  Progress: 6000/80000
+  Progress: 6500/80000
+  Progress: 7000/80000
+  Progress: 7500/80000
+  Progress: 8000/80000
+  Progress: 8500/80000
+  Progress: 9000/80000
+  Progress: 9500/80000
+  Progress: 10000/80000
+  Progress: 10500/80000
+  Progress: 11000/80000
+  Progress: 11500/80000
+  Progress: 12000/80000
+  Progress: 12500/80000
+  Progress: 13000/80000
+  Progress: 13500/80000
+  Progress: 14000/80000
+  Progress: 14500/80000
+  Progress: 15000/80000
+  Progress: 15500/80000
+  Progress: 16000/80000
+  Progress: 16500/80000
+  Progress: 17000/80000
+  Progress: 17500/80000
+  Progress: 18000/80000
+  Progress: 18500/80000
+  Progress: 19000/80000
+  Progress: 19500/80000
+  Progress: 20000/80000
+  Progress: 20500/80000
+  Progress: 21000/80000
+  Progress: 21500/80000
+  Progress: 22000/80000
+  Progress: 22500/80000
+  Progress: 23000/80000
+  Progress: 23500/80000
+  Progress: 24000/80000
+  Progress: 24500/80000
+  Progress: 25000/80000
+  Progress: 25500/80000
+  Progress: 26000/80000
+  Progress: 26500/80000
+  Progress: 27000/80000
+  Progress: 27500/80000
+  Progress: 28000/80000
+  Progress: 28500/80000
+  Progress: 29000/80000
+  Progress: 29500/80000
+  Progress: 30000/80000
+  Progress: 30500/80000
+  Progress: 31000/80000
+  Progress: 31500/80000
+  Progress: 32000/80000
+  Progress: 32500/80000
+  Progress: 33000/80000
+  Progress: 33500/80000
+  Progress: 34000/80000
+  Progress: 34500/80000
+  Progress: 35000/80000
+  Progress: 35500/80000
+  Progress: 36000/80000
+  Progress: 36500/80000
+  Progress: 37000/80000
+  Progress: 37500/80000
+  Progress: 38000/80000
+  Progress: 38500/80000
+  Progress: 39000/80000
+  Progress: 39500/80000
+  Progress: 40000/80000
+  Progress: 40500/80000
+  Progress: 41000/80000
+  Progress: 41500/80000
+  Progress: 42000/80000
+  Progress: 42500/80000
+  Progress: 43000/80000
+  Progress: 43500/80000
+  Progress: 44000/80000
+  Progress: 44500/80000
+  Progress: 45000/80000
+  Progress: 45500/80000
+  Progress: 46000/80000
+  Progress: 46500/80000
+  Progress: 47000/80000
+  Progress: 47500/80000
+  Progress: 48000/80000
+  Progress: 48500/80000
+  Progress: 49000/80000
+  Progress: 49500/80000
+  Progress: 50000/80000
+  Progress: 50500/80000
+  Progress: 51000/80000
+  Progress: 51500/80000
+  Progress: 52000/80000
+  Progress: 52500/80000
+  Progress: 53000/80000
+  Progress: 53500/80000
+  Progress: 54000/80000
+  Progress: 54500/80000
+  Progress: 55000/80000
+  Progress: 55500/80000
+  Progress: 56000/80000
+  Progress: 56500/80000
+  Progress: 57000/80000
+  Progress: 57500/80000
+  Progress: 58000/80000
+  Progress: 58500/80000
+  Progress: 59000/80000
+  Progress: 59500/80000
+  Progress: 60000/80000
+  Progress: 60500/80000
+  Progress: 61000/80000
+  Progress: 61500/80000
+  Progress: 62000/80000
+  Progress: 62500/80000
+  Progress: 63000/80000
+  Progress: 63500/80000
+  Progress: 64000/80000
+  Progress: 64500/80000
+  Progress: 65000/80000
+  Progress: 65500/80000
+  Progress: 66000/80000
+  Progress: 66500/80000
+  Progress: 67000/80000
+  Progress: 67500/80000
+  Progress: 68000/80000
+  Progress: 68500/80000
+  Progress: 69000/80000
+  Progress: 69500/80000
+  Progress: 70000/80000
+  Progress: 70500/80000
+  Progress: 71000/80000
+  Progress: 71500/80000
+  Progress: 72000/80000
+  Progress: 72500/80000
+  Progress: 73000/80000
+  Progress: 73500/80000
+  Progress: 74000/80000
+  Progress: 74500/80000
+  Progress: 75000/80000
+  Progress: 75500/80000
+  Progress: 76000/80000
+  Progress: 76500/80000
+  Progress: 77000/80000
+  Progress: 77500/80000
+  Progress: 78000/80000
+  Progress: 78500/80000
+  Progress: 79000/80000
+  Progress: 79500/80000
+[INFO] Embeddings shape: (80000, 128)
+[INFO] Labels shape: (80000,)
+[INFO] Train: 64000, Test: 16000
+[INFO] Training logistic regression probe...
+
+[RESULT] ADDRESSAWARE - BINARY_BUCKET
+  Accuracy: 0.8250 (82.50%)
+
+Classification Report:
+              precision    recall  f1-score   support
+
+           1       0.87      0.88      0.87      4000
+           2       0.81      0.80      0.80      4000
+           3       0.77      0.73      0.75      4000
+           4       0.85      0.89      0.87      4000
+
+    accuracy                           0.82     16000
+   macro avg       0.82      0.82      0.82     16000
+weighted avg       0.82      0.82      0.82     16000
+
+
+================================================================================
+FINAL SUMMARY
+================================================================================
+Evaluated on 5 binaries: _ecodes.cpython-313-x86_64-linux-gnu.so, _input.cpython-313-x86_64-linux-gnu.so, _uinput.cpython-313-x86_64-linux-gnu.so, atilibusb.so, ghex
+Combined dataset size: 1468374 instructions
+Samples per bucket: 20000
+================================================================================
+
+
+Results from combined dataset of 5 binaries:
+
+BB_BUCKET:
+  Baseline:       0.3868 (38.68%)
+  Address-Aware:  0.7714 (77.14%)
+  Improvement:    +99.44%
+
+FUNC_BUCKET:
+  Baseline:       0.3209 (32.09%)
+  Address-Aware:  0.8153 (81.53%)
+  Improvement:    +154.07%
+
+BINARY_BUCKET:
+  Baseline:       0.4324 (43.24%)
+  Address-Aware:  0.8250 (82.50%)
+  Improvement:    +90.78%
+
+[INFO] Results saved to results/bucket_comparison.json
+
+========================================================================
+Evaluation complete! Results saved to: results/bucket_comparison.json
+========================================================================

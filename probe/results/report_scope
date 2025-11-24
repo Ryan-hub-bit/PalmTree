@@ -1,0 +1,107 @@
+================================================================================
+Bucket Probe Testing Suite
+================================================================================
+Configuration:
+  Data Directory: data_5bucket
+  Vocabulary: ../pre-trained_model/palmtree/vocab
+  Address-Aware Model: ../addressaware/output_addressaware_scope/best_bert.pt
+  Baseline Model: ../pre-trained_model/palmtree/transformer.ep19
+  Number of Buckets: 5
+================================================================================
+
+################################################################################
+# 1. BB-Level Bucket Probe (Instruction Position within Basic Block)
+################################################################################
+
+Running BB bucket probe...
+Output directory: probe_results_bb_5bucket
+
+Using device: cuda
+
+Loading vocabulary from: ../pre-trained_model/palmtree/vocab
+Vocabulary size: 6631
+
+Loading data from directory: data_5bucket
+  Loaded 5621 instructions from a52dec__liba52.so.0.0.0_instructions.txt
+  Loaded 2335 instructions from 6tunnel__6tunnel_instructions.txt
+  Loaded 473 instructions from a2jmidid__a2jmidi_bridge_instructions.txt
+  Loaded 1157 instructions from 389-ds-base__libderef-plugin.so_instructions.txt
+  Loaded 186 instructions from aalib__aasavefont_instructions.txt
+
+Total: 9772 instructions
+Label distribution (before balancing):
+  Bucket 0: 2867 (29.3%)
+  Bucket 1: 1402 (14.3%)
+  Bucket 2: 1427 (14.6%)
+  Bucket 3: 1500 (15.3%)
+  Bucket 4: 2576 (26.4%)
+
+Balancing buckets...
+Min bucket size: 1402, using this for all buckets
+
+Balanced dataset: 7010 instructions
+Label distribution (after balancing):
+  Bucket 0: 1402 (20.0%)
+  Bucket 1: 1402 (20.0%)
+  Bucket 2: 1402 (20.0%)
+  Bucket 3: 1402 (20.0%)
+  Bucket 4: 1402 (20.0%)
+
+======================================================================
+Processing Address-Aware Model
+======================================================================
+Loading model from: ../addressaware/output_addressaware_scope/best_bert.pt
+Extracted embeddings: (7010, 128)
+Training probe (linear): 5608 train, 1402 test samples
+Train accuracy: 0.6421
+Test accuracy: 0.6020
+Results saved to: probe_results_bb_5bucket/addressaware_results.json
+
+======================================================================
+Processing Baseline Model
+======================================================================
+Loading model from: ../pre-trained_model/palmtree/transformer.ep19
+Extracted embeddings: (7010, 128)
+Training probe (linear): 5608 train, 1402 test samples
+Train accuracy: 0.4747
+Test accuracy: 0.4315
+Results saved to: probe_results_bb_5bucket/baseline_results.json
+
+======================================================================
+Comparison: Address-Aware vs Baseline
+======================================================================
+
+Address-Aware Model:
+  Train Accuracy: 0.6421
+  Test Accuracy:  0.6020
+
+Baseline Model:
+  Train Accuracy: 0.4747
+  Test Accuracy:  0.4315
+
+Improvement (Address-Aware - Baseline):
+  Train Accuracy: +0.1674
+  Test Accuracy:  +0.1705
+
+Comparison saved to: probe_results_bb_5bucket/comparison.json
+
+======================================================================
+✓ BB Bucket Probe Complete!
+======================================================================
+
+BB-Level Results:
+    "improvement": {
+        "train_acc": 0.16743937232524964,
+        "test_acc": 0.17047075606276746
+    }
+}
+
+================================================================================
+
+################################################################################
+# 2. Function-Level Bucket Probe (Instruction Position within Function)
+################################################################################
+
+Running function bucket probe...
+Output directory: probe_results_function_5bucket
+

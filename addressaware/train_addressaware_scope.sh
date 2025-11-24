@@ -13,29 +13,30 @@ CFG_DATA="../data/ncfg/all_cfg_combined.txt"
 DFG_DATA="../data/ndfg/all_dfg_combined.txt"
 SCOPE_DATA="../data/scope/all_scope.txt"
 VOCAB_FILE="../pre-trained_model/palmtree/vocab"
-DATA_PERCENTAGE=1.0  # Use 100% of dataset (0.0-1.0)
-TRAIN_SPLIT=0.9      # 90% train, 10% validation
+DATA_PERCENTAGE=1.0 # Use 100% of dataset (0.0-1.0)
+TRAIN_SPLIT=0.9     # 90% train, 10% validation
 
 # Pre-trained PalmTree model (for initialization)
 PALMTREE_CHECKPOINT="../pre-trained_model/palmtree/transformer.ep19"
 
 # Output
-OUTPUT_DIR="output_addressaware_scope_0.3"
+OUTPUT_DIR="output_addressaware_scope_0.1_0.0005"
 LOG_DIR="log"
 
 # Model configuration (must match PalmTree checkpoint)
-HIDDEN=128          # PalmTree's hidden size (must match checkpoint!)
-N_LAYERS=12         # PalmTree's number of layers
-ATTN_HEADS=8        # PalmTree's attention heads
-MAX_LEN=20          # 8 instructions * ~10 tokens/instruction
+HIDDEN=128   # PalmTree's hidden size (must match checkpoint!)
+N_LAYERS=12  # PalmTree's number of layers
+ATTN_HEADS=8 # PalmTree's attention heads
+MAX_LEN=20   # 8 instructions * ~10 tokens/instruction
 
 # Training configuration
-EPOCHS=20
-BATCH_SIZE=1024     # Reduced from 512 due to longer sequences (4x length → 4x memory)
-LEARNING_RATE=0.00001
-DROPOUT=0.3
+EPOCHS=40
+BATCH_SIZE=1024 # Reduced from 512 due to longer sequences (4x length → 4x memory)
+LEARNING_RATE=0.0005
+DROPOUT=0.1
 MASK_PROB=0.15
 NSP_PROB=0.5
+EARLY_STOPPING_PATIENCE=8 # Stop if no improvement for 8 epochs (allows for validation loss fluctuation)
 
 # Hardware
 USE_CUDA="--cuda"
@@ -52,28 +53,28 @@ mkdir -p ${OUTPUT_DIR}
 mkdir -p ${LOG_DIR}
 
 if [ ! -f "${CFG_DATA}" ]; then
-    echo "Error: CFG data file not found: ${CFG_DATA}"
-    exit 1
+  echo "Error: CFG data file not found: ${CFG_DATA}"
+  exit 1
 fi
 
 if [ ! -f "${DFG_DATA}" ]; then
-    echo "Error: DFG data file not found: ${DFG_DATA}"
-    exit 1
+  echo "Error: DFG data file not found: ${DFG_DATA}"
+  exit 1
 fi
 
 if [ ! -f "${SCOPE_DATA}" ]; then
-    echo "Error: Scope data file not found: ${SCOPE_DATA}"
-    exit 1
+  echo "Error: Scope data file not found: ${SCOPE_DATA}"
+  exit 1
 fi
 
 if [ ! -f "${PALMTREE_CHECKPOINT}" ]; then
-    echo "Error: PalmTree checkpoint not found: ${PALMTREE_CHECKPOINT}"
-    exit 1
+  echo "Error: PalmTree checkpoint not found: ${PALMTREE_CHECKPOINT}"
+  exit 1
 fi
 
 if [ ! -f "${VOCAB_FILE}" ]; then
-    echo "Error: Vocabulary file not found: ${VOCAB_FILE}"
-    exit 1
+  echo "Error: Vocabulary file not found: ${VOCAB_FILE}"
+  exit 1
 fi
 
 echo "========================================================================"
@@ -101,8 +102,9 @@ echo "  Task Heads: MLM + NSP(CFG) + NSP(DFG) + SCOPE(3-class)"
 echo ""
 echo "Training:"
 echo "  Epochs: ${EPOCHS}, Batch Size: ${BATCH_SIZE}"
-echo "  Learning Rate: ${LEARNING_RATE}"
+echo "  Learning Rate: ${LEARNING_RATE}, Dropout: ${DROPOUT}"
 echo "  Mask Prob: ${MASK_PROB}, NSP Prob: ${NSP_PROB}"
+echo "  Early Stopping Patience: ${EARLY_STOPPING_PATIENCE}"
 echo ""
 echo "Output: ${OUTPUT_DIR}"
 echo "Logs: ${LOG_DIR}"
@@ -111,29 +113,30 @@ echo ""
 
 # Train
 python3 train.py \
-    --cfg_train "${CFG_DATA}" \
-    --dfg_train "${DFG_DATA}" \
-    --scope_train "${SCOPE_DATA}" \
-    --vocab "${VOCAB_FILE}" \
-    --data_percentage ${DATA_PERCENTAGE} \
-    --train_split ${TRAIN_SPLIT} \
-    --palmtree_checkpoint "${PALMTREE_CHECKPOINT}" \
-    --hidden ${HIDDEN} \
-    --layers ${N_LAYERS} \
-    --attn_heads ${ATTN_HEADS} \
-    --seq_len ${MAX_LEN} \
-    --epochs ${EPOCHS} \
-    --batch_size ${BATCH_SIZE} \
-    --lr ${LEARNING_RATE} \
-    --dropout ${DROPOUT} \
-    --mask_prob ${MASK_PROB} \
-    --nsp_prob ${NSP_PROB} \
-    --output_dir "${OUTPUT_DIR}" \
-    --log_dir "${LOG_DIR}" \
-    --num_workers 4 \
-    --log_freq 50 \
-    ${USE_CUDA} \
-    ${USE_MULTI_GPU}
+  --cfg_train "${CFG_DATA}" \
+  --dfg_train "${DFG_DATA}" \
+  --scope_train "${SCOPE_DATA}" \
+  --vocab "${VOCAB_FILE}" \
+  --data_percentage ${DATA_PERCENTAGE} \
+  --train_split ${TRAIN_SPLIT} \
+  --palmtree_checkpoint "${PALMTREE_CHECKPOINT}" \
+  --hidden ${HIDDEN} \
+  --layers ${N_LAYERS} \
+  --attn_heads ${ATTN_HEADS} \
+  --seq_len ${MAX_LEN} \
+  --epochs ${EPOCHS} \
+  --batch_size ${BATCH_SIZE} \
+  --lr ${LEARNING_RATE} \
+  --dropout ${DROPOUT} \
+  --mask_prob ${MASK_PROB} \
+  --nsp_prob ${NSP_PROB} \
+  --early_stopping_patience ${EARLY_STOPPING_PATIENCE} \
+  --output_dir "${OUTPUT_DIR}" \
+  --log_dir "${LOG_DIR}" \
+  --num_workers 4 \
+  --log_freq 50 \
+  ${USE_CUDA} \
+  ${USE_MULTI_GPU}
 
 echo ""
 echo "========================================================================"

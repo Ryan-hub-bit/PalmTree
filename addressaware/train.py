@@ -337,6 +337,7 @@ def main():
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate")
     parser.add_argument("--warmup_steps", type=int, default=10000, help="Warmup steps")
     parser.add_argument("--num_workers", type=int, default=4, help="Number of data loader workers")
+    parser.add_argument("--early_stopping_patience", type=int, default=5, help="Early stopping patience (epochs without improvement)")
     
     # Masking args
     parser.add_argument("--mask_prob", type=float, default=0.15, help="Probability of masking a token")
@@ -569,6 +570,8 @@ def main():
     logger.info("Starting training...")
     logger.info("="*80)
     best_val_loss = float('inf')
+    epochs_without_improvement = 0
+    epochs_without_improvement = 0
     
     for epoch in range(args.epochs):
         logger.info(f"\nEpoch {epoch + 1}/{args.epochs}")
@@ -620,6 +623,18 @@ def main():
                 logger.info(f"Saved best model (val_loss: {best_val_loss:.4f})")
                 logger.info(f"  - Full model: {best_model_path}")
                 logger.info(f"  - BERT encoder: {best_bert_path}")
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement += 1
+                logger.info(f"No improvement for {epochs_without_improvement} epoch(s)")
+                
+                # Early stopping check
+                if epochs_without_improvement >= args.early_stopping_patience:
+                    logger.info("="*80)
+                    logger.info(f"Early stopping triggered after {epochs_without_improvement} epochs without improvement")
+                    logger.info(f"Best validation loss: {best_val_loss:.4f}")
+                    logger.info("="*80)
+                    break
         
         # Save checkpoint
         # if (epoch + 1) % args.save_freq == 0:

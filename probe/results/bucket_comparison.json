@@ -1,26 +1,26 @@
 {
   "summary": {
     "bb_bucket": {
-      "baseline_avg": 0.3846,
-      "addressaware_avg": 0.77245,
-      "improvement_pct": 100.84503380135206
+      "baseline_avg": 0.3868,
+      "addressaware_avg": 0.77145,
+      "improvement_pct": 99.44415718717684
     },
     "func_bucket": {
-      "baseline_avg": 0.3221,
-      "addressaware_avg": 0.66875,
-      "improvement_pct": 107.62185656628375
+      "baseline_avg": 0.3209,
+      "addressaware_avg": 0.8153,
+      "improvement_pct": 154.06668744157056
     },
     "binary_bucket": {
-      "baseline_avg": 0.4385625,
-      "addressaware_avg": 0.9498125,
-      "improvement_pct": 116.57403448767279
+      "baseline_avg": 0.4324375,
+      "addressaware_avg": 0.825,
+      "improvement_pct": 90.77901430842607
     }
   },
   "all_results": [
     {
       "model_type": "baseline",
       "bucket_key": "bb_bucket",
-      "accuracy": 0.3846,
+      "accuracy": 0.3868,
       "n_train": 80000,
       "n_test": 20000,
       "binary": "combined_5_binaries",
@@ -35,7 +35,7 @@
     {
       "model_type": "addressaware",
       "bucket_key": "bb_bucket",
-      "accuracy": 0.77245,
+      "accuracy": 0.77145,
       "n_train": 80000,
       "n_test": 20000,
       "binary": "combined_5_binaries",
@@ -50,7 +50,7 @@
     {
       "model_type": "baseline",
       "bucket_key": "func_bucket",
-      "accuracy": 0.3221,
+      "accuracy": 0.3209,
       "n_train": 80000,
       "n_test": 20000,
       "binary": "combined_5_binaries",
@@ -65,7 +65,7 @@
     {
       "model_type": "addressaware",
       "bucket_key": "func_bucket",
-      "accuracy": 0.66875,
+      "accuracy": 0.8153,
       "n_train": 80000,
       "n_test": 20000,
       "binary": "combined_5_binaries",
@@ -80,7 +80,7 @@
     {
       "model_type": "baseline",
       "bucket_key": "binary_bucket",
-      "accuracy": 0.4385625,
+      "accuracy": 0.4324375,
       "n_train": 64000,
       "n_test": 16000,
       "binary": "combined_5_binaries",
@@ -95,7 +95,7 @@
     {
       "model_type": "addressaware",
       "bucket_key": "binary_bucket",
-      "accuracy": 0.9498125,
+      "accuracy": 0.825,
       "n_train": 64000,
       "n_test": 16000,
       "binary": "combined_5_binaries",

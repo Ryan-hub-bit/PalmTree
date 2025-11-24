@@ -15,7 +15,7 @@
 JSON_DIR="data/json_labels"
 VOCAB="../pre-trained_model/palmtree/vocab"
 BASELINE_CHECKPOINT="../addressaware/output_baseline_new/best_bert.pt"
-ADDRESSAWARE_CHECKPOINT="../addressaware/output_address_new/best_bert.pt"
+ADDRESSAWARE_CHECKPOINT="../addressaware/output_addressaware_scope_0.1_0.0005/best_bert.pt"
 OUTPUT="results/bucket_comparison.json"
 
 # Model config
@@ -24,11 +24,11 @@ N_LAYERS=12
 ATTN_HEADS=8
 
 # Evaluation config
-SAMPLES_PER_BUCKET=20000  # Increased from 500 for better training
-BINARY_LIMIT=5  # Increased from 1 to test on 5 binaries
+SAMPLES_PER_BUCKET=20000 # Increased from 500 for better training
+BINARY_LIMIT=5           # Increased from 1 to test on 5 binaries
 
 # Device
-DEVICE="cuda"  # or "cpu"
+DEVICE="cuda" # or "cpu"
 
 echo "========================================================================"
 echo "Comprehensive Bucket Prediction Evaluation"
@@ -43,17 +43,17 @@ echo "========================================================================"
 echo ""
 
 python3 comprehensive_bucket_evaluation.py \
-    --json_dir "${JSON_DIR}" \
-    --vocab "${VOCAB}" \
-    --baseline_checkpoint "${BASELINE_CHECKPOINT}" \
-    --addressaware_checkpoint "${ADDRESSAWARE_CHECKPOINT}" \
-    --hidden ${HIDDEN} \
-    --n_layers ${N_LAYERS} \
-    --attn_heads ${ATTN_HEADS} \
-    --samples_per_bucket ${SAMPLES_PER_BUCKET} \
-    --binary_limit ${BINARY_LIMIT} \
-    --device ${DEVICE} \
-    --output "${OUTPUT}"
+  --json_dir "${JSON_DIR}" \
+  --vocab "${VOCAB}" \
+  --baseline_checkpoint "${BASELINE_CHECKPOINT}" \
+  --addressaware_checkpoint "${ADDRESSAWARE_CHECKPOINT}" \
+  --hidden ${HIDDEN} \
+  --n_layers ${N_LAYERS} \
+  --attn_heads ${ATTN_HEADS} \
+  --samples_per_bucket ${SAMPLES_PER_BUCKET} \
+  --binary_limit ${BINARY_LIMIT} \
+  --device ${DEVICE} \
+  --output "${OUTPUT}"
 
 echo ""
 echo "========================================================================"
