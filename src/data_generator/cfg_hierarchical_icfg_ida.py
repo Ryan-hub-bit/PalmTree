@@ -61,7 +61,7 @@ def normalize_and_mask(ins_raw: str, symbol_map: dict, string_map: dict):
 
 def random_walk(g: nx.DiGraph, length: int, max_sequences: int = 5000):
     """
-    Perform random walks on the inter-procedural CFG.
+    Perform random walks on the inter-procedural CFG (OPTIMIZED).
     
     Args:
         g: The global ICFG (includes call/return edges)
@@ -71,9 +71,17 @@ def random_walk(g: nx.DiGraph, length: int, max_sequences: int = 5000):
     sequences = []
     nodes_with_data = [n for n in g if 'text' in g.nodes[n] and 'mask' in g.nodes[n]]
     
-    for start_node in nodes_with_data:
+    print(f"[INFO] Starting random walks from {len(nodes_with_data)} valid nodes...")
+    
+    # Cache successors to avoid repeated lookups
+    successors_cache = {node: list(g.successors(node)) for node in nodes_with_data}
+    
+    for idx, start_node in enumerate(nodes_with_data):
         if len(sequences) >= max_sequences:
             break
+        
+        if idx % 5000 == 0:
+            print(f"[INFO] Random walk progress: {idx}/{len(nodes_with_data)}, {len(sequences)} sequences generated")
             
         s = []
         steps = 0
@@ -81,7 +89,11 @@ def random_walk(g: nx.DiGraph, length: int, max_sequences: int = 5000):
         cur = start_node
         
         while steps < length:
-            succ = list(g.successors(cur))
+            # Use cached successors
+            if cur not in successors_cache:
+                successors_cache[cur] = list(g.successors(cur))
+            succ = successors_cache[cur]
+            
             if not succ:
                 break
             
@@ -330,23 +342,20 @@ def clean_ida_disasm(ea):
     else:
         return mnem
 
-def get_basic_blocks_ida(func_ea):
+def get_basic_blocks_ida(func_ea, flowchart=None):
     """
     Get basic blocks for a function in IDA Pro.
     Returns list of (bb_start, bb_end) tuples.
+    If flowchart is provided, reuse it instead of creating a new one.
     """
     func = ida_funcs.get_func(func_ea)
     if not func:
         return []
     
-    flowchart = idaapi.FlowChart(func)
-    blocks = []
+    if flowchart is None:
+        flowchart = idaapi.FlowChart(func)
     
-    for block in flowchart:
-        bb_start = block.start_ea
-        bb_end = block.end_ea
-        blocks.append((bb_start, bb_end))
-    
+    blocks = [(block.start_ea, block.end_ea) for block in flowchart]
     return blocks
 
 
@@ -404,8 +413,15 @@ def process_file_ida(fpath: str, out_dir: str):
         traceback.print_exc()
         return
     
-    # First pass: Collect function and BB information
-    for func_ea in idautils.Functions():
+    # First pass: Collect function and BB information (OPTIMIZED)
+    print("[INFO] First pass: Collecting function and BB information...")
+    all_functions = list(idautils.Functions())
+    print(f"[INFO] Found {len(all_functions)} functions")
+    
+    for idx, func_ea in enumerate(all_functions):
+        if idx % 100 == 0:
+            print(f"[INFO] Progress: {idx}/{len(all_functions)} functions")
+        
         func = ida_funcs.get_func(func_ea)
         if not func:
             continue
@@ -415,25 +431,27 @@ def process_file_ida(fpath: str, out_dir: str):
         func_name = ida_funcs.get_func_name(func_ea)
         func_entry_map[func_start] = func_ea
         
-        # Collect basic blocks for this function
-        func_bbs = get_basic_blocks_ida(func_ea)
+        # Create flowchart once and reuse
+        flowchart = idaapi.FlowChart(func)
+        func_bbs = get_basic_blocks_ida(func_ea, flowchart)
+        
         for bb_start, bb_end in func_bbs:
             bb_range_map[bb_start] = (bb_start, bb_end)
         
-        func_info.append((func_name, func_start, func_end, func_bbs))
-        bb_info[func_name] = sorted(func_bbs, key=lambda x: x[0])
+        func_info.append((func_name, func_start, func_end, func_bbs, flowchart))
+        bb_info[func_name] = func_bbs
     
-    # Second pass: Build nodes and intra-procedural edges
-    for func_ea in idautils.Functions():
-        func = ida_funcs.get_func(func_ea)
-        if not func:
-            continue
+    # Second pass: Build nodes and intra-procedural edges (OPTIMIZED)
+    print("[INFO] Second pass: Building nodes and edges...")
+    
+    for idx, (func_name, func_start, func_end, func_bbs, flowchart) in enumerate(func_info):
+        if idx % 100 == 0:
+            print(f"[INFO] Progress: {idx}/{len(func_info)} functions, {bin_counter} instructions")
         
-        func_start = func.start_ea
-        func_end = func.end_ea
-        func_name = ida_funcs.get_func_name(func_ea)
-        
-        flowchart = idaapi.FlowChart(func)
+        # Build BB successor map for faster edge lookup
+        bb_successors = {}
+        for block in flowchart:
+            bb_successors[block.start_ea] = [succ.start_ea for succ in block.succs()]
         
         for block in flowchart:
             bb_start = block.start_ea
@@ -441,101 +459,109 @@ def process_file_ida(fpath: str, out_dir: str):
             
             curr = bb_start
             predecessor = None
+            bb_instructions = []
             
-            # Iterate through instructions in this basic block
+            # Collect all instructions in BB first
             while curr < bb_end:
-                # Get clean disassembly using IDA API to resolve all symbols to addresses
-                disasm_raw = clean_ida_disasm(curr)
-                if not disasm_raw:
-                    break
-                
-                # Normalize
-                norm_text, mask_line = normalize_and_mask(disasm_raw, symbol_map, string_map)
-                G.add_node(curr, text=norm_text, mask=mask_line)
-                
-                # Store: (bin_counter, addr, func_name, bb_start, func_start, func_end)
-                addr_positions[curr] = (bin_counter, curr, func_name, bb_start, func_start, func_end)
-                bin_counter += 1
-                
-                # Sequential edge within BB
-                if predecessor is not None:
-                    G.add_edge(predecessor, curr)
-                
-                # Check if this is a DIRECT call instruction
-                mnem = idc.print_insn_mnem(curr)
-                if mnem and mnem.lower() == 'call':
-                    # Check if it's a direct call
-                    hex_match = re.search(r'0x[0-9a-fA-F]+', disasm_raw)
-                    if hex_match:
-                        inst_len = idc.get_item_size(curr)
-                        next_addr = curr + inst_len  # Return address
-                        call_sites.append((curr, disasm_raw, next_addr))
-                
-                predecessor = curr
+                bb_instructions.append(curr)
                 curr = idc.next_head(curr, bb_end)
                 if curr == idaapi.BADADDR or curr >= bb_end:
                     break
             
-            # Add edges to jump targets (intra-procedural)
-            for succ_block in flowchart:
-                if block.id in [pred.id for pred in flowchart if succ_block.id in [s.id for s in idaapi.FlowChart(func)]]:
-                    # This is a successor block
-                    if predecessor is not None and succ_block.start_ea != idaapi.BADADDR:
-                        G.add_edge(predecessor, succ_block.start_ea)
+            # Process instructions
+            for inst_addr in bb_instructions:
+                # Get clean disassembly
+                disasm_raw = clean_ida_disasm(inst_addr)
+                if not disasm_raw:
+                    continue
+                
+                # Normalize
+                norm_text, mask_line = normalize_and_mask(disasm_raw, symbol_map, string_map)
+                G.add_node(inst_addr, text=norm_text, mask=mask_line)
+                
+                # Store position info
+                addr_positions[inst_addr] = (bin_counter, inst_addr, func_name, bb_start, func_start, func_end)
+                bin_counter += 1
+                
+                # Sequential edge within BB
+                if predecessor is not None:
+                    G.add_edge(predecessor, inst_addr)
+                
+                # Check if this is a DIRECT call instruction
+                mnem = idc.print_insn_mnem(inst_addr)
+                if mnem and mnem.lower() == 'call':
+                    hex_match = re.search(r'0x[0-9a-fA-F]+', disasm_raw)
+                    if hex_match:
+                        inst_len = idc.get_item_size(inst_addr)
+                        next_addr = inst_addr + inst_len
+                        call_sites.append((inst_addr, disasm_raw, next_addr))
+                
+                predecessor = inst_addr
+            
+            # Add edges to successor BBs (using cached successor map)
+            if predecessor is not None and bb_start in bb_successors:
+                for succ_bb_start in bb_successors[bb_start]:
+                    if succ_bb_start != idaapi.BADADDR:
+                        G.add_edge(predecessor, succ_bb_start)
 
     total_bin = bin_counter
     
-    # Third pass: Add inter-procedural DIRECT call and return edges
-    print(f"[INFO] Processing {len(call_sites)} potential call sites...")
+    # Third pass: Add inter-procedural DIRECT call and return edges (OPTIMIZED)
+    print(f"[INFO] Third pass: Processing {len(call_sites)} call sites...")
+    
+    # Pre-compute all return instructions for each function
+    func_returns = {}  # func_start -> [return_addresses]
+    for func_name, func_start, func_end, func_bbs, flowchart in func_info:
+        returns = []
+        for block in flowchart:
+            # Find the last instruction in this block
+            curr = block.start_ea
+            last_inst_addr = None
+            while curr < block.end_ea:
+                last_inst_addr = curr
+                curr = idc.next_head(curr, block.end_ea)
+                if curr == idaapi.BADADDR or curr >= block.end_ea:
+                    break
+            
+            if last_inst_addr is not None:
+                mnem = idc.print_insn_mnem(last_inst_addr)
+                if mnem and mnem.lower().startswith('ret'):
+                    returns.append(last_inst_addr)
+        
+        func_returns[func_start] = returns
+    
+    print(f"[INFO] Found return instructions in {len(func_returns)} functions")
+    
     call_edges_added = 0
     return_edges_added = 0
     
-    for call_addr, call_disasm, next_addr in call_sites:
+    for idx, (call_addr, call_disasm, next_addr) in enumerate(call_sites):
+        if idx % 1000 == 0:
+            print(f"[INFO] Call sites progress: {idx}/{len(call_sites)}")
+        
         try:
-            # Parse the call target from the disassembly
-            call_target = None
-            
-            # Extract hex address from call instruction (direct calls only)
+            # Extract hex address from call instruction
             hex_match = re.search(r'0x[0-9a-fA-F]+', call_disasm)
-            if hex_match:
-                try:
-                    call_target = int(hex_match.group(), 16)
-                except ValueError:
-                    pass
+            if not hex_match:
+                continue
             
-            if call_target is not None and call_target in func_entry_map:
-                # Direct call to a known function
-                # Add edge: call_instruction → function_entry
+            try:
+                call_target = int(hex_match.group(), 16)
+            except ValueError:
+                continue
+            
+            if call_target in func_entry_map:
+                # Add call edge
                 G.add_edge(call_addr, call_target)
                 call_edges_added += 1
                 
-                # Find all return instructions in the called function
-                called_func_ea = func_entry_map[call_target]
-                called_func = ida_funcs.get_func(called_func_ea)
-                
-                if called_func:
-                    flowchart = idaapi.FlowChart(called_func)
-                    for block in flowchart:
-                        # Find the last instruction in this block
-                        curr = block.start_ea
-                        last_inst_addr = None
-                        while curr < block.end_ea:
-                            last_inst_addr = curr
-                            curr = idc.next_head(curr, block.end_ea)
-                            if curr == idaapi.BADADDR or curr >= block.end_ea:
-                                break
-                        
-                        if last_inst_addr is not None:
-                            # Check if it's a return instruction
-                            mnem = idc.print_insn_mnem(last_inst_addr)
-                            if mnem and mnem.lower().startswith('ret'):
-                                # Add edge: return_instruction → return_address
-                                if next_addr in addr_positions:
-                                    G.add_edge(last_inst_addr, next_addr)
-                                    return_edges_added += 1
+                # Add return edges using cached return instructions
+                if call_target in func_returns and next_addr in addr_positions:
+                    for ret_addr in func_returns[call_target]:
+                        G.add_edge(ret_addr, next_addr)
+                        return_edges_added += 1
         
-        except Exception as e:
-            # Skip indirect calls or calls we can't resolve
+        except Exception:
             continue
     
     print(f"[INFO] Added {call_edges_added} DIRECT call edges and {return_edges_added} return edges")
