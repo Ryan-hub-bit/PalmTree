@@ -9,8 +9,8 @@ DFG_SCRIPT="$SCRIPT_DIR/dfg_hierarchical_idfg_ida.py"
 
 # Default parameters
 SEG_LEN=${1:-8}
-BIN_FOLDER=${2:-"/data/kun/addressbin_val"}
-OUTPUT_DIR=${3:-"/data/kun/dataset/val_cdfg"}
+BIN_FOLDER=${2:-"/data/kun/addressbin_test"}
+OUTPUT_DIR=${3:-"/data/kun/dataset/test_cdfg"}
 
 export OUTPUT_DIR
 export SEG_LEN

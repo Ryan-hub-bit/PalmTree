@@ -24,7 +24,7 @@ from ida_hexrays import *
 # Config
 # ---------------------------
 SEG_LEN = int(os.environ.get('SEG_LEN', 2))
-WALK_LEN = 40  # max steps per random walk
+WALK_LEN = 30  # max steps per random walk
 
 HEX_RE = re.compile(r"0x[0-9a-fA-F]+")
 
@@ -175,29 +175,52 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
         return None
     
     def format_data_address_positions(addr):
-        """Format hierarchical positions for data/non-code addresses."""
+        """
+        Format hierarchical positions for data/non-code addresses.
+        
+        Only apply section normalization for data-like sections (.data, .rodata, .bss*):
+          Position 1: section's position in binary = (section_start - min_addr) / (max_addr - min_addr)
+          Position 2: address position inside section = (addr - section_start) / (section_end - section_start)
+          Position 3: 0.0 (no BB context for data)
+        
+        For other sections or no section at all:
+          return sentinel "2.00000000:0.00000000:0.00000000"
+        """
         section_info = get_section_for_addr(addr)
         
-        if section_info is not None:
-            sec_start, sec_end, sec_name = section_info
-            
-            if max_addr > min_addr:
-                sec_in_binary = (sec_start - min_addr) / float(max_addr - min_addr)
-                sec_in_binary = max(0.0, min(1.0, sec_in_binary))
-            else:
-                sec_in_binary = 0.0
-            
-            if sec_end > sec_start:
-                addr_in_section = (addr - sec_start) / float(sec_end - sec_start)
-                addr_in_section = max(0.0, min(1.0, addr_in_section))
-            else:
-                addr_in_section = 0.0
-            
-            bb_pos = 0.0
-            
-            return f"{sec_in_binary:.8f}:{addr_in_section:.8f}:{bb_pos:.8f}"
+        # No section at all → external/garbage/special
+        if section_info is None:
+            return "2.00000000:0.00000000:0.00000000"
+        
+        sec_start, sec_end, sec_name = section_info
+        sname = sec_name.lower()
+        
+        # Only treat true data-like segments as meaningful
+        is_data_like = (
+            ".data" in sname or
+            ".rodata" in sname or
+            ".bss" in sname
+        )
+        
+        if not is_data_like:
+            # PLT/GOT/import/debug/etc. → special category
+            return "2.00000000:0.00000000:0.00000000"
+        
+        # ---- Real data section: compute normalized positions ----
+        if max_addr > min_addr:
+            sec_in_binary = (sec_start - min_addr) / float(max_addr - min_addr)
+            sec_in_binary = max(0.0, min(1.0, sec_in_binary))
         else:
-            return "0.00000000:0.00000000:0.00000000"
+            sec_in_binary = 0.0
+        
+        if sec_end > sec_start:
+            addr_in_section = (addr - sec_start) / float(sec_end - sec_start)
+            addr_in_section = max(0.0, min(1.0, addr_in_section))
+        else:
+            addr_in_section = 0.0
+        
+        bb_pos = 0.0
+        return f"{sec_in_binary:.8f}:{addr_in_section:.8f}:{bb_pos:.8f}"
     
     def format_hierarchical_positions(entry):
         """Format hierarchical positions for code addresses."""
@@ -241,10 +264,17 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
         for i, tok in enumerate(operands):
             mk = operand_masks[i] if i < len(operand_masks) else "0"
             mk_hex = None
+            
+            # Check mask first (from normalize_and_mask)
             if isinstance(mk, str) and mk.startswith('0x'):
                 mk_hex = mk
+            # Check token for 0x prefix
             elif isinstance(tok, str) and tok.startswith('0x') and bool(HEX_RE.fullmatch(tok)):
                 mk_hex = tok
+            # Check token for Intel hex suffix (e.g., 1234ABCDh)
+            elif isinstance(tok, str) and re.match(r'^[0-9A-Fa-f]+h$', tok, re.IGNORECASE):
+                # Convert Intel hex to 0x format
+                mk_hex = '0x' + tok[:-1]
 
             if mk_hex is not None:
                 try:
@@ -252,27 +282,36 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                 except Exception:
                     tgt = None
 
+                # Filter out immediate values:
+                # - Values below binary base are likely immediate constants
+                # - Very large values that are likely bit masks (e.g., 0xfffffffffffffff0)
                 is_immediate = False
                 if tgt is not None:
-                    if tgt < min_addr:
+                    if tgt < min_addr:  # below binary base
                         is_immediate = True
-                    elif tgt > 0xffffffffffff0000:
+                    elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
                         is_immediate = True
 
                 if tgt is not None and tgt >= min_addr and not is_immediate:
                     if tgt in addr_positions:
+                        # Code address: use hierarchical positions (func, bb, inst)
                         entry = addr_positions[tgt]
                         pos = format_hierarchical_positions(entry)
                         formatted_ops.append(f"address({mk_hex}:{pos})")
                     else:
+                        # Data address (not in text section): use section-based hierarchical positions
                         pos = format_data_address_positions(tgt)
                         formatted_ops.append(f"address({mk_hex}:{pos})")
                 else:
-                    formatted_ops.append(mk_hex)
+                    # It's an immediate value
+                    formatted_ops.append("imm")
             else:
-                if tok in ("symbol", "string"):
-                    continue
-                formatted_ops.append(tok)
+                if tok.startswith("var_"):
+                    formatted_ops.append("var")
+                elif tok.startswith("arg_"):
+                    formatted_ops.append("arg")
+                else:
+                    formatted_ops.append(tok)
 
         if addr in addr_positions:
             addr_hdr = f"{hex(addr)}:{format_hierarchical_positions(addr_positions[addr])}"

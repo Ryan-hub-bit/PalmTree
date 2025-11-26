@@ -146,41 +146,49 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
         """
         Format hierarchical positions for data/non-code addresses.
         
-        Position 1: Section's position in binary = (section_start - min_addr) / (max_addr - min_addr)
-        Position 2: Address position inside section = (addr - section_start) / (section_end - section_start)
-        Position 3: BB position = 0.0 (no BB context for data)
+        Only apply section normalization for data-like sections (.data, .rodata, .bss*):
+          Position 1: section's position in binary = (section_start - min_addr) / (max_addr - min_addr)
+          Position 2: address position inside section = (addr - section_start) / (section_end - section_start)
+          Position 3: 0.0 (no BB context for data)
+        
+        For other sections or no section at all:
+          return sentinel "2.00000000:0.00000000:0.00000000"
         """
         section_info = get_section_for_addr(addr)
         
-        if section_info is not None:
-            sec_start, sec_end, sec_name = section_info
-            
-            # Position 1: Section's position in binary
-            if max_addr > min_addr:
-                sec_in_binary = (sec_start - min_addr) / float(max_addr - min_addr)
-                sec_in_binary = max(0.0, min(1.0, sec_in_binary))
-            else:
-                sec_in_binary = 0.0
-            
-            # Position 2: Address position inside section
-            if sec_end > sec_start:
-                addr_in_section = (addr - sec_start) / float(sec_end - sec_start)
-                addr_in_section = max(0.0, min(1.0, addr_in_section))
-            else:
-                addr_in_section = 0.0
-            
-            # Position 3: BB position (always 0 for data addresses)
-            bb_pos = 0.0
-            
-            return f"{sec_in_binary:.8f}:{addr_in_section:.8f}:{bb_pos:.8f}"
+        # No section at all → external/garbage/special
+        if section_info is None:
+            return "2.00000000:0.00000000:0.00000000"
+        
+        sec_start, sec_end, sec_name = section_info
+        sname = sec_name.lower()
+        
+        # Only treat true data-like segments as meaningful
+        is_data_like = (
+            ".data" in sname or
+            ".rodata" in sname or
+            ".bss" in sname
+        )
+        
+        if not is_data_like:
+            # PLT/GOT/import/debug/etc. → special category
+            return "2.00000000:0.00000000:0.00000000"
+        
+        # ---- Real data section: compute normalized positions ----
+        if max_addr > min_addr:
+            sec_in_binary = (sec_start - min_addr) / float(max_addr - min_addr)
+            sec_in_binary = max(0.0, min(1.0, sec_in_binary))
         else:
-            # Address not in any section, fallback to binary-level position only
-            if max_addr > min_addr:
-                bin_norm = (addr - min_addr) / float(max_addr - min_addr)
-                bin_norm = max(0.0, min(1.0, bin_norm))
-            else:
-                bin_norm = 0.0
-            return f"{bin_norm:.8f}:0.00000000:0.00000000"
+            sec_in_binary = 0.0
+        
+        if sec_end > sec_start:
+            addr_in_section = (addr - sec_start) / float(sec_end - sec_start)
+            addr_in_section = max(0.0, min(1.0, addr_in_section))
+        else:
+            addr_in_section = 0.0
+        
+        bb_pos = 0.0
+        return f"{sec_in_binary:.8f}:{addr_in_section:.8f}:{bb_pos:.8f}"
 
     def format_hierarchical_positions(entry):
         """
@@ -234,10 +242,17 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
         for i, tok in enumerate(operands):
             mk = operand_masks[i] if i < len(operand_masks) else "0"
             mk_hex = None
+            
+            # Check mask first (from normalize_and_mask)
             if isinstance(mk, str) and mk.startswith('0x'):
                 mk_hex = mk
+            # Check token for 0x prefix
             elif isinstance(tok, str) and tok.startswith('0x') and bool(HEX_RE.fullmatch(tok)):
                 mk_hex = tok
+            # Check token for Intel hex suffix (e.g., 1234ABCDh)
+            elif isinstance(tok, str) and re.match(r'^[0-9A-Fa-f]+h$', tok, re.IGNORECASE):
+                # Convert Intel hex to 0x format
+                mk_hex = '0x' + tok[:-1]
 
             if mk_hex is not None:
                 try:
@@ -254,7 +269,7 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                         is_immediate = True
                     elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
                         is_immediate = True
-
+                
                 if tgt is not None and tgt >= min_addr and not is_immediate:
                     if tgt in addr_positions:
                         # Code address: use hierarchical positions (func, bb, inst)
@@ -269,12 +284,16 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                         pos = format_data_address_positions(tgt)
                         formatted_ops.append(f"address({mk_hex}:{pos})")
                 else:
-                    formatted_ops.append(mk_hex)
+                    # It's an immediate value
+                    formatted_ops.append("imm")
             else:
-                # drop symbol/string
-                if tok in ("symbol", "string"):
-                    continue
-                formatted_ops.append(tok)
+                if tok.startswith("var_"):
+                    formatted_ops.append("var")
+                elif tok.startswith("arg_"):
+                    formatted_ops.append("arg")
+                else: 
+                    formatted_ops.append(tok)
+
 
         if addr in addr_positions:
             addr_hdr = f"{hex(addr)}:{format_hierarchical_positions(addr_positions[addr])}"
@@ -407,6 +426,29 @@ def process_file_ida(fpath: str, out_dir: str):
         bb_info = {}    # func_name -> [(bb_start, bb_end), ...]
 
         print("[INFO] Building inter-procedural CFG with direct call/return edges...")
+        
+        # Calculate min/max addresses FIRST (from segments)
+        print("[INFO] Calculating binary address range from segments...")
+        sections = []
+        for n in range(ida_segment.get_segm_qty()):
+            seg = ida_segment.getnseg(n)
+            if seg:
+                start = seg.start_ea
+                end = seg.end_ea
+                name = ida_segment.get_segm_name(seg)
+                sections.append((start, end, name))
+                print(f"[INFO]   Segment: {name} [{hex(start)} - {hex(end)}]")
+        
+        # Get min/max from all segments
+        if sections:
+            min_addr = min(s[0] for s in sections)
+            max_addr = max(s[1] for s in sections)
+        else:
+            min_addr = 0
+            max_addr = 0
+        
+        print(f"[INFO] Binary address range: {hex(min_addr)} - {hex(max_addr)}")
+        
     except Exception as e:
         print(f"[ERROR] Graph initialization failed: {e}")
         import traceback
@@ -475,7 +517,7 @@ def process_file_ida(fpath: str, out_dir: str):
                 if not disasm_raw:
                     continue
                 
-                # Normalize
+                # Normalize and mask the disassembly
                 norm_text, mask_line = normalize_and_mask(disasm_raw, symbol_map, string_map)
                 G.add_node(inst_addr, text=norm_text, mask=mask_line)
                 
