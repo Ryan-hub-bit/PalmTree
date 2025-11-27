@@ -63,6 +63,8 @@ def clean_ida_disasm(ea):
     """
     Get clean disassembly preserving IDA keywords (offset, short, etc.)
     but replacing symbol names with hex addresses.
+    Mark immediate values with 'imm' token.
+    Mark displacement operands (o_displ) with 'disp_0xXX' prefix to prevent address() wrapping.
     """
     mnem = idc.print_insn_mnem(ea)
     if not mnem:
@@ -77,8 +79,12 @@ def clean_ida_disasm(ea):
         op_type = idc.get_operand_type(ea, i)
         op_value = idc.get_operand_value(ea, i)
         
+        # Check if it's an immediate value
+        if op_type == idc.o_imm:
+            # It's an immediate - mark it
+            op = "imm"
         # Handle keywords and symbol replacement
-        if 'offset' in op and op_value != idaapi.BADADDR and op_value != 0:
+        elif 'offset' in op and op_value != idaapi.BADADDR and op_value != 0:
             op = f"offset {hex(op_value)}"
         elif 'short' in op and op_value != idaapi.BADADDR and op_value != 0:
             op = f"short {hex(op_value)}"
@@ -86,7 +92,15 @@ def clean_ida_disasm(ea):
             op = f"large {hex(op_value)}"
         elif any(seg in op for seg in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']) and op_value != idaapi.BADADDR and op_value != 0:
             op = hex(op_value)
-        elif op_type in [idc.o_near, idc.o_mem, idc.o_far, idc.o_displ]:
+        # Handle displacement operands (like [rax + 0x20]) - mark for special treatment
+        elif op_type == idc.o_displ:
+            # Mark displacement values with special token so they won't be wrapped with address()
+            if op_value != idaapi.BADADDR and op_value != 0:
+                if not op.startswith('0x') and not op.startswith('['):
+                    op = f"disp_{hex(op_value)}"
+                # Keep the original format if it's already formatted
+        # For operands that reference code/data addresses (but NOT displacements)
+        elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
             if op_value != idaapi.BADADDR and op_value != 0:
                 if not op.startswith('0x') and not op.startswith('['):
                     op = hex(op_value)
@@ -232,7 +246,8 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
         else:
             func_binary_norm = 0.0
         
-        if func_end > func_start:
+        # Handle case where bb_start is None (instruction not matched to a BB)
+        if bb_start is not None and func_end > func_start:
             bb_function_norm = (bb_start - func_start) / float(func_end - func_start)
             bb_function_norm = max(0.0, min(1.0, bb_function_norm))
         else:
@@ -265,6 +280,14 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
             mk = operand_masks[i] if i < len(operand_masks) else "0"
             mk_hex = None
             
+            # Check if this is a displacement token (marked with "disp_" prefix)
+            if isinstance(tok, str) and tok.startswith('disp_0x'):
+                # This is a displacement operand - keep the hex value without address() wrapper
+                # hex_part = tok[5:]  # Remove "disp_" prefix
+                hex_part = "disp"  # Remove "disp_" prefix
+                formatted_ops.append(hex_part)
+                continue
+            
             # Check mask first (from normalize_and_mask)
             if isinstance(mk, str) and mk.startswith('0x'):
                 mk_hex = mk
@@ -285,14 +308,14 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                 # Filter out immediate values:
                 # - Values below binary base are likely immediate constants
                 # - Very large values that are likely bit masks (e.g., 0xfffffffffffffff0)
-                is_immediate = False
-                if tgt is not None:
-                    if tgt < min_addr:  # below binary base
-                        is_immediate = True
-                    elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
-                        is_immediate = True
+                # is_immediate = False
+                # if tgt is not None:
+                #     if tgt < min_addr:  # below binary base
+                #         is_immediate = True
+                #     elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
+                #         is_immediate = True
 
-                if tgt is not None and tgt >= min_addr and not is_immediate:
+                if tgt is not None:
                     if tgt in addr_positions:
                         # Code address: use hierarchical positions (func, bb, inst)
                         entry = addr_positions[tgt]
@@ -444,11 +467,27 @@ def process_file_ida(fpath, out_dir):
                                 continue
                             
                             # Find which assembly basic block this belongs to
+                            # Microcode addresses might not align perfectly with assembly BBs,
+                            # so find the BB that contains this address or the closest preceding BB
                             bb_start_for_addr = None
-                            for bb_start, bb_end in get_basic_blocks_ida(func_ea):
+                            bbs = list(get_basic_blocks_ida(func_ea))
+                            for bb_start, bb_end in bbs:
                                 if bb_start <= addr <= bb_end:
                                     bb_start_for_addr = bb_start
                                     break
+                            
+                            # If no exact match, find the closest preceding BB within the function
+                            if bb_start_for_addr is None and bbs:
+                                closest_bb = None
+                                min_distance = float('inf')
+                                for bb_start, bb_end in bbs:
+                                    if bb_start <= addr:
+                                        distance = addr - bb_start
+                                        if distance < min_distance:
+                                            min_distance = distance
+                                            closest_bb = bb_start
+                                if closest_bb is not None:
+                                    bb_start_for_addr = closest_bb
                             
                             norm_text, mask_line = normalize_and_mask(disasm_raw, symbol_map, string_map)
                             G.add_node(addr, text=norm_text, mask=mask_line)

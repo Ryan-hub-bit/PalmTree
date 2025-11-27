@@ -135,27 +135,27 @@ for binary in "$BIN_FOLDER"/*; do
   # ==========================================
   # Step 2: Generate DFG (if not exists)
   # ==========================================
-  dfg_time=0
-  if [ "$dfg_exists" = false ]; then
-    log "[INFO] Generating DFG for $basename..."
-    dfg_start=$(date +%s)
-    "$IDA_PATH/idat" -A -S"$DFG_SCRIPT" "$binary" >/dev/null 2>&1
-    dfg_end=$(date +%s)
-    dfg_time=$((dfg_end - dfg_start))
+  # dfg_time=0
+  # if [ "$dfg_exists" = false ]; then
+  #   log "[INFO] Generating DFG for $basename..."
+  #   dfg_start=$(date +%s)
+  #   "$IDA_PATH/idat" -A -S"$DFG_SCRIPT" "$binary" >/dev/null 2>&1
+  #   dfg_end=$(date +%s)
+  #   dfg_time=$((dfg_end - dfg_start))
 
-    if [ $? -eq 0 ]; then
-      log "[SUCCESS] DFG generation completed in ${dfg_time}s"
-    else
-      log "[WARNING] DFG generation may have issues (${dfg_time}s)"
-    fi
+  #   if [ $? -eq 0 ]; then
+  #     log "[SUCCESS] DFG generation completed in ${dfg_time}s"
+  #   else
+  #     log "[WARNING] DFG generation may have issues (${dfg_time}s)"
+  #   fi
 
-    # Clean up IDA database files after DFG
-    cleanup_ida_files "$binary"
-  fi
+  #   # Clean up IDA database files after DFG
+  #   cleanup_ida_files "$binary"
+  # fi
 
-  # Verify output files were created
-  cfg_file="$OUTPUT_DIR/${basename}_cfg_${SEG_LEN}_inline.txt"
-  dfg_file="$OUTPUT_DIR/${basename}_dfg_${SEG_LEN}_inline.txt"
+  # # Verify output files were created
+  # cfg_file="$OUTPUT_DIR/${basename}_cfg_${SEG_LEN}_inline.txt"
+  # dfg_file="$OUTPUT_DIR/${basename}_dfg_${SEG_LEN}_inline.txt"
 
   if [ -f "$cfg_file" ]; then
     cfg_lines=$(wc -l <"$cfg_file")
@@ -164,12 +164,12 @@ for binary in "$BIN_FOLDER"/*; do
     log "  → CFG: [MISSING]"
   fi
 
-  if [ -f "$dfg_file" ]; then
-    dfg_lines=$(wc -l <"$dfg_file")
-    log "  → DFG: $dfg_lines sequences"
-  else
-    log "  → DFG: [MISSING]"
-  fi
+  # if [ -f "$dfg_file" ]; then
+  #   dfg_lines=$(wc -l <"$dfg_file")
+  #   log "  → DFG: $dfg_lines sequences"
+  # else
+  #   log "  → DFG: [MISSING]"
+  # fi
 
   # Calculate and display total time
   end_time=$(date +%s)

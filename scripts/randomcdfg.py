@@ -1,7 +1,7 @@
 import os
 import math
 
-root = "/data/kun/val_cdfg"
+root = "/data/kun/dataset/val_cdfg"
 out_cfg = "/data/kun/dataset/val_cfg.txt"
 out_dfg = "/data/kun/dataset/val_dfg.txt"
 

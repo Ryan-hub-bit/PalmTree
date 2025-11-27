@@ -243,6 +243,14 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
             mk = operand_masks[i] if i < len(operand_masks) else "0"
             mk_hex = None
             
+            # Check if this is a displacement token (marked with "disp_" prefix)
+            if isinstance(tok, str) and tok.startswith('disp_0x'):
+                # # This is a displacement operand - keep the hex value without address() wrapper
+                # hex_part = tok[5:]  # Remove "disp_" prefix
+                hex_part = "disp"  # Remove "disp_" prefix
+                formatted_ops.append(hex_part)
+                continue
+            
             # Check mask first (from normalize_and_mask)
             if isinstance(mk, str) and mk.startswith('0x'):
                 mk_hex = mk
@@ -263,14 +271,14 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                 # Filter out immediate values:
                 # - Values below binary base are likely immediate constants
                 # - Very large values that are likely bit masks (e.g., 0xfffffffffffffff0)
-                is_immediate = False
-                if tgt is not None:
-                    if tgt < min_addr:  # below binary base
-                        is_immediate = True
-                    elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
-                        is_immediate = True
+                # is_immediate = False
+                # if tgt is not None:
+                #     if tgt < min_addr:  # below binary base
+                #         is_immediate = True
+                #     elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
+                #         is_immediate = True
                 
-                if tgt is not None and tgt >= min_addr and not is_immediate:
+                if tgt is not None and tgt >= min_addr:
                     if tgt in addr_positions:
                         # Code address: use hierarchical positions (func, bb, inst)
                         entry = addr_positions[tgt]
@@ -316,6 +324,8 @@ def clean_ida_disasm(ea):
     """
     Get clean disassembly preserving IDA keywords (offset, short, etc.)
     but replacing symbol names with hex addresses.
+    Mark immediate values with 'imm' token.
+    Mark displacement operands (o_displ) with 'disp_0xXX' prefix to prevent address() wrapping.
     """
     # Get mnemonic
     mnem = idc.print_insn_mnem(ea)
@@ -333,9 +343,13 @@ def clean_ida_disasm(ea):
         op_type = idc.get_operand_type(ea, i)
         op_value = idc.get_operand_value(ea, i)
         
+        # Check if it's an immediate value
+        if op_type == idc.o_imm:
+            # It's an immediate - mark it
+            op = "imm"
         # Check if operand contains keywords or symbols that need address replacement
         # Handle "offset symbol_name" -> "offset 0xADDR"
-        if 'offset' in op and op_value != idaapi.BADADDR and op_value != 0:
+        elif 'offset' in op and op_value != idaapi.BADADDR and op_value != 0:
             op = f"offset {hex(op_value)}"
         # Handle "short symbol_name" -> "short 0xADDR"
         elif 'short' in op and op_value != idaapi.BADADDR and op_value != 0:
@@ -346,13 +360,19 @@ def clean_ida_disasm(ea):
         # Handle segment prefix "cs:symbol" -> just "0xADDR" (remove cs:, ds:, etc.)
         elif any(seg in op for seg in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']) and op_value != idaapi.BADADDR and op_value != 0:
             op = hex(op_value)
-        # For operands that reference code/data addresses
-        elif op_type in [idc.o_near, idc.o_mem, idc.o_far, idc.o_displ]:
+        # Handle displacement operands (like [rax + 0x20]) - mark for special treatment
+        elif op_type == idc.o_displ:
+            # Mark displacement values with special token so they won't be wrapped with address()
+            if op_value != idaapi.BADADDR and op_value != 0:
+                if not op.startswith('0x') and not op.startswith('['):
+                    op = f"disp_{hex(op_value)}"
+                # Keep the original format if it's already formatted
+        # For operands that reference code/data addresses (but NOT displacements)
+        elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
             if op_value != idaapi.BADADDR and op_value != 0:
                 # Check if it's a symbol name (not already a hex address)
                 if not op.startswith('0x') and not op.startswith('['):
                     op = hex(op_value)
-        
         operands.append(op)
     
     # Build clean disassembly
