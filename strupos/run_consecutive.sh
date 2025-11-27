@@ -20,7 +20,7 @@ echo "========================================"
 echo ""
 
 # Check if vocab.txt exists
-VOCAB_FILE="./vocab.txt"
+VOCAB_FILE="./vocab.pkl"
 
 if [ -f "$VOCAB_FILE" ]; then
     echo -e "${GREEN}✓ Vocabulary file found: $VOCAB_FILE${NC}"
@@ -77,19 +77,22 @@ echo "========================================"
 echo ""
 
 # Training configuration (command-line arguments)
+# Training configuration (command-line arguments)
 CFG_TRAIN="/data/kun/dataset/train_cfg.txt"
 DFG_TRAIN="/data/kun/dataset/train_dfg.txt"
 CFG_VAL="/data/kun/dataset/val_cfg.txt"
 DFG_VAL="/data/kun/dataset/val_dfg.txt"
-VOCAB_PATH="./vocab.txt"
+SCOPE_TRAIN="./scope_train.txt"
+SCOPE_VAL="./scope_val.txt"
+VOCAB_PATH="./vocab.pkl"
 
 # ==================== Task Selection (Ablation Study) ====================
 # Enable/disable each pretraining task
 ENABLE_MLM=true              # Masked Language Modeling (CFG only)
-ENABLE_NSP_CFG=false         # Next Sentence Prediction for CFG
-ENABLE_NSP_DFG=false         # Next Sentence Prediction for DFG
+ENABLE_NSP_CFG=true         # Next Sentence Prediction for CFG
+ENABLE_NSP_DFG=true         # Next Sentence Prediction for DFG
 ENABLE_SCOPE=false           # Scope Prediction (3-class)
-USE_ADDRESS_EMBEDDING=false  # Use 3-level address-aware embeddings
+USE_ADDRESS_EMBEDDING=true  # Use 3-level address-aware embeddings
 
 # Build task flags for command line
 TASK_FLAGS=""
@@ -135,19 +138,20 @@ if [ -z "$MODEL_NAME" ]; then
     MODEL_NAME="baseline"
 fi
 
-OUTPUT_DIR="./output_${MODEL_NAME}"
-LOG_DIR="./log_${MODEL_NAME}"
+OUTPUT_DIR="../output/${MODEL_NAME}"
+LOG_DIR="../log/${MODEL_NAME}"
 
 # Model architecture
 HIDDEN=768
 LAYERS=12
 ATTN_HEADS=12
-SEQ_LEN=100
+SEQ_LEN=60
+NSP_CONTENT_MAX=20  # Maximum content length for CFG/DFG NSP pairs
 DROPOUT=0.1
 
 # Training hyperparameters
 EPOCHS=10
-BATCH_SIZE=1024
+BATCH_SIZE=300 # Further reduced to avoid OOM (was 256, original 1024)
 LR=1e-4
 WARMUP_STEPS=10000
 NUM_WORKERS=4
@@ -156,12 +160,12 @@ EARLY_STOPPING_PATIENCE=5
 # Data processing
 MASK_PROB=0.15
 NSP_PROB=0.5
-DATA_PERCENTAGE=1.0
-TRAIN_SPLIT=0.9
+TRAIN_PERCENTAGE=0.001  # Training data percentage (0.01 = 1%)
+VAL_PERCENTAGE=0.0001   # Validation data percentage (0.01 = 1%)
 
 # Device
 CUDA="--cuda"
-MULTI_GPU=""
+MULTI_GPU="--multi_gpu"
 
 # Show configuration
 echo "Configuration:"
@@ -173,12 +177,18 @@ echo "    - NSP-CFG: ${ENABLE_NSP_CFG}"
 echo "    - NSP-DFG: ${ENABLE_NSP_DFG}"
 echo "    - SCOPE: ${ENABLE_SCOPE}"
 echo "    - Address Embedding: ${USE_ADDRESS_EMBEDDING}"
+echo "  Model architecture:"
+echo "    - Seq length: ${SEQ_LEN}"
+echo "    - NSP pair max: ${NSP_CONTENT_MAX}"
 echo "  Batch size: ${BATCH_SIZE}"
 echo "  Learning rate: ${LR}"
 echo "  Epochs: ${EPOCHS}"
 echo "  Vocab: ${VOCAB_PATH}"
 echo "  Train: ${CFG_TRAIN} / ${DFG_TRAIN}"
 echo "  Val: ${CFG_VAL} / ${DFG_VAL}"
+if [ "$ENABLE_SCOPE" = true ]; then
+    echo "  Scope: ${SCOPE_TRAIN} / ${SCOPE_VAL}"
+fi
 echo ""
 echo "Starting training script..."
 echo ""
@@ -193,11 +203,14 @@ python train_from_scratch.py \
     --dfg_train "${DFG_TRAIN}" \
     --cfg_val "${CFG_VAL}" \
     --dfg_val "${DFG_VAL}" \
+    --scope_train "${SCOPE_TRAIN}" \
+    --scope_val "${SCOPE_VAL}" \
     --vocab "${VOCAB_PATH}" \
     --hidden ${HIDDEN} \
     --layers ${LAYERS} \
     --attn_heads ${ATTN_HEADS} \
     --seq_len ${SEQ_LEN} \
+    --nsp_content_max ${NSP_CONTENT_MAX} \
     --dropout ${DROPOUT} \
     --epochs ${EPOCHS} \
     --batch_size ${BATCH_SIZE} \
@@ -207,8 +220,8 @@ python train_from_scratch.py \
     --early_stopping_patience ${EARLY_STOPPING_PATIENCE} \
     --mask_prob ${MASK_PROB} \
     --nsp_prob ${NSP_PROB} \
-    --data_percentage ${DATA_PERCENTAGE} \
-    --train_split ${TRAIN_SPLIT} \
+    --data_percentage ${TRAIN_PERCENTAGE} \
+    --val_percentage ${VAL_PERCENTAGE} \
     --output_dir "${OUTPUT_DIR}" \
     --log_dir "${LOG_DIR}" \
     ${TASK_FLAGS} \

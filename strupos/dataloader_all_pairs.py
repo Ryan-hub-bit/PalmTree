@@ -38,6 +38,7 @@ class AllConsecutivePairsDataset(Dataset):
         dfg_corpus_path,
         vocab,
         seq_len=512,
+        nsp_content_max=20,
         encoding="utf-8",
         on_memory=True,
         nsp_prob=0.5,
@@ -48,6 +49,7 @@ class AllConsecutivePairsDataset(Dataset):
     ):
         self.vocab = vocab
         self.seq_len = seq_len
+        self.nsp_content_max = nsp_content_max
         self.nsp_prob = nsp_prob
         self.mask_prob = mask_prob
         
@@ -173,10 +175,15 @@ class AllConsecutivePairsDataset(Dataset):
             for operand in operands_text.split():
                 nested_match = self.nested_addr_pattern.match(operand)
                 if nested_match:
+                    # Extract position info from the address(...) wrapper
+                    nested_binary_pos = float(nested_match.group(2))
+                    nested_function_pos = float(nested_match.group(3))
+                    nested_bb_pos = float(nested_match.group(4))
                     tokens.append('address')
+                    positions.append((nested_binary_pos, nested_function_pos, nested_bb_pos))
                 else:
                     tokens.append(operand)
-                positions.append((binary_pos, function_pos, bb_pos))
+                    positions.append((0.0, 0.0, 0.0))
         
         return tokens, positions
     
@@ -313,35 +320,47 @@ class AllConsecutivePairsDataset(Dataset):
         # Apply MLM masking
         cfg_mlm_input, cfg_mlm_label = self._mask_tokens(cfg_mlm_combined)
         
-        # Pad CFG MLM
-        mlm_padding = self.seq_len - len(cfg_mlm_input)
+        # Pad CFG MLM (handle both padding and truncation)
         cfg_mlm_input = self._pad_sequence(cfg_mlm_input, self.seq_len, self.vocab.pad_index)
         cfg_mlm_label = self._pad_sequence(cfg_mlm_label, self.seq_len, -1)
-        cfg_mlm_pos_combined = cfg_mlm_pos_combined + [(0.0, 0.0, 0.0)] * mlm_padding
+        
+        # Ensure position list matches seq_len (truncate or pad as needed)
+        if len(cfg_mlm_pos_combined) > self.seq_len:
+            cfg_mlm_pos_combined = cfg_mlm_pos_combined[:self.seq_len]
+        else:
+            mlm_padding = self.seq_len - len(cfg_mlm_pos_combined)
+            cfg_mlm_pos_combined = cfg_mlm_pos_combined + [(0.0, 0.0, 0.0)] * mlm_padding
         
         cfg_mlm_binary_pos = [pos[0] for pos in cfg_mlm_pos_combined]
         cfg_mlm_function_pos = [pos[1] for pos in cfg_mlm_pos_combined]
         cfg_mlm_bb_pos = [pos[2] for pos in cfg_mlm_pos_combined]
         
         # === Process CFG for NSP (uses consecutive pair) ===
+        # Limit the content length for NSP pairs to a smaller value (e.g. 20)
+        # This controls how many tokens from the pair are kept before padding
         cfg_nsp_combined = ['<sos>'] + cfg_nsp1_tokens + ['<eos>'] + cfg_nsp2_tokens + ['<eos>']
         cfg_nsp_pos_combined = [(0.0, 0.0, 0.0)] + cfg_nsp1_pos + [(0.0, 0.0, 0.0)] + cfg_nsp2_pos + [(0.0, 0.0, 0.0)]
         cfg_segment_labels = [0] * (len(cfg_nsp1_tokens) + 2) + [1] * (len(cfg_nsp2_tokens) + 1)
         
-        # Truncate if needed
-        if len(cfg_nsp_combined) > self.seq_len:
-            cfg_nsp_combined = cfg_nsp_combined[:self.seq_len]
-            cfg_nsp_pos_combined = cfg_nsp_pos_combined[:self.seq_len]
-            cfg_segment_labels = cfg_segment_labels[:self.seq_len]
+        # Truncate pair content to nsp_content_max tokens (keeps tensors compatible with overall seq_len)
+        if len(cfg_nsp_combined) > self.nsp_content_max:
+            cfg_nsp_combined = cfg_nsp_combined[:self.nsp_content_max]
+            cfg_nsp_pos_combined = cfg_nsp_pos_combined[:self.nsp_content_max]
+            cfg_segment_labels = cfg_segment_labels[:self.nsp_content_max]
         
         # Convert to indices (no masking for NSP)
         cfg_nsp_input = [self.vocab.stoi.get(token, self.vocab.unk_index) for token in cfg_nsp_combined]
         
-        # Pad CFG NSP
-        nsp_padding = self.seq_len - len(cfg_nsp_input)
+        # Pad CFG NSP (handle both padding and truncation)
         cfg_nsp_input = self._pad_sequence(cfg_nsp_input, self.seq_len, self.vocab.pad_index)
         cfg_segment_labels = self._pad_sequence(cfg_segment_labels, self.seq_len, 0)
-        cfg_nsp_pos_combined = cfg_nsp_pos_combined + [(0.0, 0.0, 0.0)] * nsp_padding
+        
+        # Ensure position list matches seq_len
+        if len(cfg_nsp_pos_combined) > self.seq_len:
+            cfg_nsp_pos_combined = cfg_nsp_pos_combined[:self.seq_len]
+        else:
+            nsp_padding = self.seq_len - len(cfg_nsp_pos_combined)
+            cfg_nsp_pos_combined = cfg_nsp_pos_combined + [(0.0, 0.0, 0.0)] * nsp_padding
         
         cfg_nsp_binary_pos = [pos[0] for pos in cfg_nsp_pos_combined]
         cfg_nsp_function_pos = [pos[1] for pos in cfg_nsp_pos_combined]
@@ -352,20 +371,25 @@ class AllConsecutivePairsDataset(Dataset):
         dfg_nsp_pos_combined = [(0.0, 0.0, 0.0)] + dfg_nsp1_pos + [(0.0, 0.0, 0.0)] + dfg_nsp2_pos + [(0.0, 0.0, 0.0)]
         dfg_segment_labels = [0] * (len(dfg_nsp1_tokens) + 2) + [1] * (len(dfg_nsp2_tokens) + 1)
         
-        # Truncate if needed
-        if len(dfg_nsp_combined) > self.seq_len:
-            dfg_nsp_combined = dfg_nsp_combined[:self.seq_len]
-            dfg_nsp_pos_combined = dfg_nsp_pos_combined[:self.seq_len]
-            dfg_segment_labels = dfg_segment_labels[:self.seq_len]
+        # Truncate DFG pair content similarly to nsp_content_max
+        if len(dfg_nsp_combined) > self.nsp_content_max:
+            dfg_nsp_combined = dfg_nsp_combined[:self.nsp_content_max]
+            dfg_nsp_pos_combined = dfg_nsp_pos_combined[:self.nsp_content_max]
+            dfg_segment_labels = dfg_segment_labels[:self.nsp_content_max]
         
         # Convert to indices (no masking for DFG)
         dfg_nsp_input = [self.vocab.stoi.get(token, self.vocab.unk_index) for token in dfg_nsp_combined]
         
-        # Pad DFG NSP
-        dfg_padding = self.seq_len - len(dfg_nsp_input)
+        # Pad DFG NSP (handle both padding and truncation)
         dfg_nsp_input = self._pad_sequence(dfg_nsp_input, self.seq_len, self.vocab.pad_index)
         dfg_segment_labels = self._pad_sequence(dfg_segment_labels, self.seq_len, 0)
-        dfg_nsp_pos_combined = dfg_nsp_pos_combined + [(0.0, 0.0, 0.0)] * dfg_padding
+        
+        # Ensure position list matches seq_len
+        if len(dfg_nsp_pos_combined) > self.seq_len:
+            dfg_nsp_pos_combined = dfg_nsp_pos_combined[:self.seq_len]
+        else:
+            dfg_padding = self.seq_len - len(dfg_nsp_pos_combined)
+            dfg_nsp_pos_combined = dfg_nsp_pos_combined + [(0.0, 0.0, 0.0)] * dfg_padding
         
         dfg_nsp_binary_pos = [pos[0] for pos in dfg_nsp_pos_combined]
         dfg_nsp_function_pos = [pos[1] for pos in dfg_nsp_pos_combined]

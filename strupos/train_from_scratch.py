@@ -16,10 +16,12 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 import argparse
 import os
 import sys
+import pickle
 from tqdm import tqdm
 import json
 import logging
 from datetime import datetime
+import re
 
 # Add parent directory to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
@@ -30,7 +32,134 @@ from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
 
-def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=100, logger=None):
+def preprocess_line(line):
+    """
+    Remove all address information in parentheses from a line.
+    
+    Examples:
+        mov(0x401000:0.5:0.3:0.2) eax ebx -> mov eax ebx
+        address(0x123:0.5:0.3:0.2) -> address
+    
+    Returns cleaned tokens as a list.
+    """
+    # Remove all patterns like (0xADDR:pos1:pos2:pos3)
+    cleaned = re.sub(r'\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)', '', line)
+    # Split by whitespace and tab, filter out empty strings
+    tokens = [tok for tok in cleaned.replace('\t', ' ').split() if tok]
+    return tokens
+
+
+class PreprocessedFile:
+    """
+    Wrapper that preprocesses lines from a file by removing address info.
+    Acts as an iterator that yields lists of tokens.
+    """
+    def __init__(self, file_handle):
+        self.file_handle = file_handle
+    
+    def __iter__(self):
+        for line in self.file_handle:
+            yield preprocess_line(line)
+            
+def create_vocab_if_needed(vocab_path, logger, train_cfg_dataset, train_dfg_dataset, val_cfg_dataset, val_dfg_dataset, test_cfg_dataset, test_dfg_dataset):
+    """
+    Create vocabulary if it doesn't exist using components from create_vocab.py.
+    Also validates existing vocab file is a valid pickle file.
+    
+    Args:
+        vocab_path: Path to vocabulary file
+        logger: Logger instance
+        *_dataset: Paths to dataset files
+    """
+    if os.path.exists(vocab_path):
+        # Check if it's a valid pickle file
+        try:
+            with open(vocab_path, "rb") as f:
+                pickle.load(f)
+            if logger:
+                logger.info(f"Vocabulary already exists at {vocab_path}")
+            return
+        except (pickle.UnpicklingError, UnicodeDecodeError) as e:
+            # Invalid pickle file (probably old text format), delete and recreate
+            msg = f"Existing vocab file '{vocab_path}' is not a valid pickle file (probably old text format). Deleting and recreating..."
+            if logger:
+                logger.warning(msg)
+            else:
+                print(msg)
+            os.remove(vocab_path)
+    
+    if logger:
+        logger.info(f"Vocabulary not found at {vocab_path}, creating it now...")
+        logger.info("Using WordVocab with max_size=13000, min_freq=1")
+    else:
+        print(f"Vocabulary not found at {vocab_path}, creating it now...")
+        print("Using WordVocab with max_size=13000, min_freq=1")
+    
+    
+    # Check if files exist
+    files_to_check = [
+        train_cfg_dataset, train_dfg_dataset,
+        val_cfg_dataset, val_dfg_dataset,
+        test_cfg_dataset, test_dfg_dataset
+    ]
+    
+    for fpath in files_to_check:
+        if not os.path.exists(fpath):
+            msg = f"ERROR: File not found: {fpath}"
+            if logger:
+                logger.error(msg)
+            else:
+                print(msg)
+            raise FileNotFoundError(fpath)
+        
+        msg = f"Found: {fpath}"
+        if logger:
+            logger.info(msg)
+        else:
+            print(msg)
+    
+    # Open all files and create vocabulary
+    with open(train_cfg_dataset, "r", encoding="utf-8") as f1, \
+         open(train_dfg_dataset, "r", encoding="utf-8") as f2, \
+         open(val_cfg_dataset, "r", encoding="utf-8") as f3, \
+         open(val_dfg_dataset, "r", encoding="utf-8") as f4, \
+         open(test_cfg_dataset, "r", encoding="utf-8") as f5, \
+         open(test_dfg_dataset, "r", encoding="utf-8") as f6:
+        
+        # Wrap each file with preprocessing (removes address info)
+        preprocessed_files = [
+            PreprocessedFile(f1),
+            PreprocessedFile(f2),
+            PreprocessedFile(f3),
+            PreprocessedFile(f4),
+            PreprocessedFile(f5),
+            PreprocessedFile(f6)
+        ]
+        
+        vocab = WordVocab(
+            preprocessed_files,
+            max_size=50000,
+            min_freq=2
+        )
+    
+    msg = f"VOCAB SIZE: {len(vocab)}"
+    if logger:
+        logger.info(msg)
+    else:
+        print(msg)
+    
+    # Save vocabulary
+    vocab.save_vocab(vocab_path)
+    
+    msg = f"Vocabulary saved to: {vocab_path}"
+    if logger:
+        logger.info(msg)
+    else:
+        print(msg)
+
+
+
+def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=100, logger=None, enable_mlm=True, enable_nsp_cfg=False, enable_nsp_dfg=False, enable_scope=False):
     """Train for one epoch with paired CFG+DFG samples and scope prediction."""
     model.train()
     
@@ -51,46 +180,65 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
     
     for i, batch in enumerate(progress):
         # === Process CFG (MLM + NSP) ===
-        cfg_token_ids = batch['cfg_bert_input'].to(device)
+        # MLM uses cfg_mlm_* keys
+        cfg_mlm_input = batch['cfg_mlm_input'].to(device)
+        cfg_mlm_binary_pos = batch['cfg_mlm_binary_pos'].to(device)
+        cfg_mlm_function_pos = batch['cfg_mlm_function_pos'].to(device)
+        cfg_mlm_bb_pos = batch['cfg_mlm_bb_pos'].to(device)
+        cfg_mlm_labels = batch['cfg_mlm_label'].to(device)
+        
+        # NSP uses cfg_nsp_* keys
+        cfg_nsp_input = batch['cfg_nsp_input'].to(device)
         cfg_segment_labels = batch['cfg_segment_label'].to(device)
-        cfg_binary_pos = batch['cfg_binary_pos'].to(device)
-        cfg_function_pos = batch['cfg_function_pos'].to(device)
-        cfg_bb_pos = batch['cfg_bb_pos'].to(device)
-        cfg_mlm_labels = batch['cfg_bert_label'].to(device)
+        cfg_nsp_binary_pos = batch['cfg_nsp_binary_pos'].to(device)
+        cfg_nsp_function_pos = batch['cfg_nsp_function_pos'].to(device)
+        cfg_nsp_bb_pos = batch['cfg_nsp_bb_pos'].to(device)
         cfg_nsp_labels = batch['cfg_is_next'].to(device)
         
-        # CFG forward pass
-        cfg_mlm_output, cfg_nsp_output = model(
-            cfg_token_ids, cfg_segment_labels, 
-            cfg_binary_pos, cfg_function_pos, cfg_bb_pos, 
-            corpus_type='cfg'
-        )
+        # CFG MLM forward pass (if enabled)
+        mlm_loss = torch.tensor(0.0, device=device)
+        if enable_mlm:
+            cfg_mlm_output, _ = model(
+                cfg_mlm_input, 
+                torch.zeros_like(cfg_mlm_input),  # No segment labels for MLM
+                cfg_mlm_binary_pos, cfg_mlm_function_pos, cfg_mlm_bb_pos, 
+                corpus_type='cfg'
+            )
+            mlm_loss = mlm_criterion(cfg_mlm_output.transpose(1, 2), cfg_mlm_labels)
         
-        # CFG losses
-        mlm_loss = mlm_criterion(cfg_mlm_output.transpose(1, 2), cfg_mlm_labels)
-        nsp_cfg_loss = nsp_criterion(cfg_nsp_output, cfg_nsp_labels)
+        # CFG NSP forward pass (if enabled)
+        nsp_cfg_loss = torch.tensor(0.0, device=device)
+        if enable_nsp_cfg:
+            _, cfg_nsp_output = model(
+                cfg_nsp_input, cfg_segment_labels,
+                cfg_nsp_binary_pos, cfg_nsp_function_pos, cfg_nsp_bb_pos, 
+                corpus_type='cfg'
+            )
+            nsp_cfg_loss = nsp_criterion(cfg_nsp_output, cfg_nsp_labels)
         
-        # === Process DFG (NSP only) ===
-        dfg_token_ids = batch['dfg_bert_input'].to(device)
-        dfg_segment_labels = batch['dfg_segment_label'].to(device)
-        dfg_binary_pos = batch['dfg_binary_pos'].to(device)
-        dfg_function_pos = batch['dfg_function_pos'].to(device)
-        dfg_bb_pos = batch['dfg_bb_pos'].to(device)
-        dfg_nsp_labels = batch['dfg_is_next'].to(device)
+        # === Process DFG (NSP only, if enabled) ===
+        nsp_dfg_loss = torch.tensor(0.0, device=device)
+        if enable_nsp_dfg:
+            dfg_nsp_input = batch['dfg_nsp_input'].to(device)
+            dfg_segment_labels = batch['dfg_segment_label'].to(device)
+            dfg_nsp_binary_pos = batch['dfg_nsp_binary_pos'].to(device)
+            dfg_nsp_function_pos = batch['dfg_nsp_function_pos'].to(device)
+            dfg_nsp_bb_pos = batch['dfg_nsp_bb_pos'].to(device)
+            dfg_nsp_labels = batch['dfg_is_next'].to(device)
+            
+            # DFG forward pass (NO MLM)
+            _, dfg_nsp_output = model(
+                dfg_nsp_input, dfg_segment_labels,
+                dfg_nsp_binary_pos, dfg_nsp_function_pos, dfg_nsp_bb_pos,
+                corpus_type='dfg'
+            )
+            
+            # DFG loss (NSP only)
+            nsp_dfg_loss = nsp_criterion(dfg_nsp_output, dfg_nsp_labels)
         
-        # DFG forward pass (NO MLM)
-        _, dfg_nsp_output = model(
-            dfg_token_ids, dfg_segment_labels,
-            dfg_binary_pos, dfg_function_pos, dfg_bb_pos,
-            corpus_type='dfg'
-        )
-        
-        # DFG loss (NSP only)
-        nsp_dfg_loss = nsp_criterion(dfg_nsp_output, dfg_nsp_labels)
-        
-        # === Process Scope (if available) ===
+        # === Process Scope (if available and enabled) ===
         scope_loss = torch.tensor(0.0, device=device)
-        if scope_iter is not None:
+        if enable_scope and scope_iter is not None:
             try:
                 scope_batch = next(scope_iter)
             except StopIteration:
@@ -130,28 +278,28 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
         nsp_dfg_loss_total += nsp_dfg_loss.item()
         scope_loss_total += scope_loss.item()
         
-        # Update progress bar
-        if i % log_freq == 0:
-            avg_loss = total_loss / (i + 1)
-            avg_mlm = mlm_loss_total / (i + 1)
-            avg_nsp_cfg = nsp_cfg_loss_total / (i + 1)
-            avg_nsp_dfg = nsp_dfg_loss_total / (i + 1)
-            avg_scope = scope_loss_total / (i + 1)
-            
-            progress.set_postfix({
-                'loss': f'{avg_loss:.4f}',
-                'mlm': f'{avg_mlm:.4f}',
-                'nsp_cfg': f'{avg_nsp_cfg:.4f}',
-                'nsp_dfg': f'{avg_nsp_dfg:.4f}',
-                'scope': f'{avg_scope:.4f}'
-            })
-            
-            # Log to file
-            if logger:
-                logger.info(f"Batch {i}/{len(data_loader)} - "
-                          f"Loss: {avg_loss:.4f} | MLM: {avg_mlm:.4f} | "
-                          f"NSP_CFG: {avg_nsp_cfg:.4f} | NSP_DFG: {avg_nsp_dfg:.4f} | "
-                          f"SCOPE: {avg_scope:.4f}")
+        # Calculate running averages for display
+        avg_loss = total_loss / (i + 1)
+        avg_mlm = mlm_loss_total / (i + 1)
+        avg_nsp_cfg = nsp_cfg_loss_total / (i + 1)
+        avg_nsp_dfg = nsp_dfg_loss_total / (i + 1)
+        avg_scope = scope_loss_total / (i + 1)
+        
+        # Update progress bar every iteration
+        progress.set_postfix({
+            'loss': f'{avg_loss:.4f}',
+            'mlm': f'{avg_mlm:.4f}',
+            'nsp_cfg': f'{avg_nsp_cfg:.4f}',
+            'nsp_dfg': f'{avg_nsp_dfg:.4f}',
+            'scope': f'{avg_scope:.4f}'
+        })
+        
+        # Log to file periodically
+        if i % log_freq == 0 and logger:
+            logger.info(f"Batch {i}/{len(data_loader)} - "
+                      f"Loss: {avg_loss:.4f} | MLM: {avg_mlm:.4f} | "
+                      f"NSP_CFG: {avg_nsp_cfg:.4f} | NSP_DFG: {avg_nsp_dfg:.4f} | "
+                      f"SCOPE: {avg_scope:.4f}")
     
     return {
         'total_loss': total_loss / len(data_loader),
@@ -162,7 +310,7 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
     }
 
 
-def validate(model, data_loader, scope_loader, device, logger=None):
+def validate(model, data_loader, scope_loader, device, logger=None, enable_mlm=True, enable_nsp_cfg=False, enable_nsp_dfg=False, enable_scope=False):
     """Validate the model on validation set with paired CFG+DFG samples and scope."""
     model.eval()
     
@@ -191,62 +339,82 @@ def validate(model, data_loader, scope_loader, device, logger=None):
     with torch.no_grad():
         for batch in tqdm(data_loader, desc="Validation", file=sys.stdout):
             # === Process CFG (MLM + NSP) ===
-            cfg_token_ids = batch['cfg_bert_input'].to(device)
+            # MLM uses cfg_mlm_* keys
+            cfg_mlm_input = batch['cfg_mlm_input'].to(device)
+            cfg_mlm_binary_pos = batch['cfg_mlm_binary_pos'].to(device)
+            cfg_mlm_function_pos = batch['cfg_mlm_function_pos'].to(device)
+            cfg_mlm_bb_pos = batch['cfg_mlm_bb_pos'].to(device)
+            cfg_mlm_labels = batch['cfg_mlm_label'].to(device)
+            
+            # NSP uses cfg_nsp_* keys
+            cfg_nsp_input = batch['cfg_nsp_input'].to(device)
             cfg_segment_labels = batch['cfg_segment_label'].to(device)
-            cfg_binary_pos = batch['cfg_binary_pos'].to(device)
-            cfg_function_pos = batch['cfg_function_pos'].to(device)
-            cfg_bb_pos = batch['cfg_bb_pos'].to(device)
-            cfg_mlm_labels = batch['cfg_bert_label'].to(device)
+            cfg_nsp_binary_pos = batch['cfg_nsp_binary_pos'].to(device)
+            cfg_nsp_function_pos = batch['cfg_nsp_function_pos'].to(device)
+            cfg_nsp_bb_pos = batch['cfg_nsp_bb_pos'].to(device)
             cfg_nsp_labels = batch['cfg_is_next'].to(device)
             
-            # CFG forward pass
-            cfg_mlm_output, cfg_nsp_output = model(
-                cfg_token_ids, cfg_segment_labels,
-                cfg_binary_pos, cfg_function_pos, cfg_bb_pos,
-                corpus_type='cfg'
-            )
+            # CFG MLM forward pass (if enabled)
+            mlm_loss = torch.tensor(0.0, device=device)
+            if enable_mlm:
+                cfg_mlm_output, _ = model(
+                    cfg_mlm_input,
+                    torch.zeros_like(cfg_mlm_input),  # No segment labels for MLM
+                    cfg_mlm_binary_pos, cfg_mlm_function_pos, cfg_mlm_bb_pos,
+                    corpus_type='cfg'
+                )
+                mlm_loss = mlm_criterion(cfg_mlm_output.transpose(1, 2), cfg_mlm_labels)
+                
+                # CFG MLM accuracy
+                mask = cfg_mlm_labels != -1
+                if mask.any():
+                    mlm_pred = torch.argmax(cfg_mlm_output[mask], dim=-1)
+                    mlm_correct += (mlm_pred == cfg_mlm_labels[mask]).sum().item()
+                    mlm_total += mask.sum().item()
             
-            # CFG losses
-            mlm_loss = mlm_criterion(cfg_mlm_output.transpose(1, 2), cfg_mlm_labels)
-            nsp_cfg_loss = nsp_criterion(cfg_nsp_output, cfg_nsp_labels)
+            # CFG NSP forward pass (if enabled)
+            nsp_cfg_loss = torch.tensor(0.0, device=device)
+            if enable_nsp_cfg:
+                _, cfg_nsp_output = model(
+                    cfg_nsp_input, cfg_segment_labels,
+                    cfg_nsp_binary_pos, cfg_nsp_function_pos, cfg_nsp_bb_pos,
+                    corpus_type='cfg'
+                )
+                nsp_cfg_loss = nsp_criterion(cfg_nsp_output, cfg_nsp_labels)
+                
+                # CFG NSP accuracy
+                nsp_cfg_pred = torch.argmax(cfg_nsp_output, dim=-1)
+                nsp_cfg_correct += (nsp_cfg_pred == cfg_nsp_labels).sum().item()
+                nsp_cfg_total += len(cfg_nsp_labels)
             
-            # CFG accuracy (MLM, NSP)
-            mask = cfg_mlm_labels != -1
-            if mask.any():
-                mlm_pred = torch.argmax(cfg_mlm_output[mask], dim=-1)
-                mlm_correct += (mlm_pred == cfg_mlm_labels[mask]).sum().item()
-                mlm_total += mask.sum().item()
+            # === Process DFG (NSP only, if enabled) ===
+            nsp_dfg_loss = torch.tensor(0.0, device=device)
+            if enable_nsp_dfg:
+                dfg_nsp_input = batch['dfg_nsp_input'].to(device)
+                dfg_segment_labels = batch['dfg_segment_label'].to(device)
+                dfg_nsp_binary_pos = batch['dfg_nsp_binary_pos'].to(device)
+                dfg_nsp_function_pos = batch['dfg_nsp_function_pos'].to(device)
+                dfg_nsp_bb_pos = batch['dfg_nsp_bb_pos'].to(device)
+                dfg_nsp_labels = batch['dfg_is_next'].to(device)
+                
+                # DFG forward pass (NO MLM)
+                _, dfg_nsp_output = model(
+                    dfg_nsp_input, dfg_segment_labels,
+                    dfg_nsp_binary_pos, dfg_nsp_function_pos, dfg_nsp_bb_pos,
+                    corpus_type='dfg'
+                )
+                
+                # DFG loss
+                nsp_dfg_loss = nsp_criterion(dfg_nsp_output, dfg_nsp_labels)
+                
+                # DFG accuracy
+                nsp_dfg_pred = torch.argmax(dfg_nsp_output, dim=-1)
+                nsp_dfg_correct += (nsp_dfg_pred == dfg_nsp_labels).sum().item()
+                nsp_dfg_total += len(dfg_nsp_labels)
             
-            nsp_cfg_pred = torch.argmax(cfg_nsp_output, dim=-1)
-            nsp_cfg_correct += (nsp_cfg_pred == cfg_nsp_labels).sum().item()
-            nsp_cfg_total += len(cfg_nsp_labels)
-            
-            # === Process DFG (NSP only) ===
-            dfg_token_ids = batch['dfg_bert_input'].to(device)
-            dfg_segment_labels = batch['dfg_segment_label'].to(device)
-            dfg_binary_pos = batch['dfg_binary_pos'].to(device)
-            dfg_function_pos = batch['dfg_function_pos'].to(device)
-            dfg_bb_pos = batch['dfg_bb_pos'].to(device)
-            dfg_nsp_labels = batch['dfg_is_next'].to(device)
-            
-            # DFG forward pass (NO MLM)
-            _, dfg_nsp_output = model(
-                dfg_token_ids, dfg_segment_labels,
-                dfg_binary_pos, dfg_function_pos, dfg_bb_pos,
-                corpus_type='dfg'
-            )
-            
-            # DFG loss
-            nsp_dfg_loss = nsp_criterion(dfg_nsp_output, dfg_nsp_labels)
-            
-            # DFG accuracy
-            nsp_dfg_pred = torch.argmax(dfg_nsp_output, dim=-1)
-            nsp_dfg_correct += (nsp_dfg_pred == dfg_nsp_labels).sum().item()
-            nsp_dfg_total += len(dfg_nsp_labels)
-            
-            # === Process Scope (if available) ===
+            # === Process Scope (if available and enabled) ===
             scope_loss = torch.tensor(0.0, device=device)
-            if scope_iter is not None:
+            if enable_scope and scope_iter is not None:
                 try:
                     scope_batch = next(scope_iter)
                 except StopIteration:
@@ -314,15 +482,18 @@ def main():
     parser.add_argument("--scope_train", type=str, default=None, help="Path to scope training data (optional)")
     parser.add_argument("--cfg_val", type=str, default=None, help="Path to CFG validation data (optional)")
     parser.add_argument("--dfg_val", type=str, default=None, help="Path to DFG validation data (optional)")
-    parser.add_argument("--vocab", type=str, default="./vocab.txt", help="Path to vocabulary file")
-    parser.add_argument("--data_percentage", type=float, default=1.0, help="Percentage of dataset to use (0.0-1.0)")
-    parser.add_argument("--train_split", type=float, default=0.9, help="Train/val split ratio (e.g., 0.9 = 90%% train, 10%% val)")
+    parser.add_argument("--cfg_test", type=str, default=None, help="Path to CFG test data (optional)")
+    parser.add_argument("--dfg_test", type=str, default=None, help="Path to DFG test data (optional)")
+    parser.add_argument("--vocab", type=str, default="./vocab.pkl", help="Path to vocabulary file (pickle format)")
+    parser.add_argument("--data_percentage", type=float, default=1.0, help="Percentage of training dataset to use (0.0-1.0)")
+    parser.add_argument("--val_percentage", type=float, default=1.0, help="Percentage of validation dataset to use (0.0-1.0)")
     
     # Model args
     parser.add_argument("--hidden", type=int, default=768, help="Hidden size")
     parser.add_argument("--layers", type=int, default=12, help="Number of transformer layers")
     parser.add_argument("--attn_heads", type=int, default=12, help="Number of attention heads")
     parser.add_argument("--seq_len", type=int, default=100, help="Maximum sequence length")
+    parser.add_argument("--nsp_content_max", type=int, default=20, help="Maximum content length for NSP pairs (CFG/DFG)")
     
     # Task selection args (for ablation studies)
     parser.add_argument("--enable_mlm", action="store_true", default=True, help="Enable Masked Language Modeling")
@@ -393,6 +564,9 @@ def main():
         json.dump(vars(args), f, indent=2)
     logger.info(f"Arguments saved to: {args_file}")
     
+    # Create vocabulary if it doesn't exist (runs create_vocab.py)
+    create_vocab_if_needed(args.vocab,logger,args.cfg_train, args.dfg_train, args.cfg_val, args.dfg_val, args.cfg_test, args.dfg_test)
+    
     # Load vocabulary
     logger.info(f"Loading vocabulary from {args.vocab}")
     vocab = WordVocab.load_vocab(args.vocab)
@@ -409,11 +583,12 @@ def main():
         dfg_corpus_path=args.dfg_train,
         vocab=vocab,
         seq_len=args.seq_len,
+        nsp_content_max=args.nsp_content_max,
         on_memory=True,
         nsp_prob=args.nsp_prob,
         mask_prob=args.mask_prob,
         data_percentage=args.data_percentage,
-        train_split=args.train_split,
+        train_split=1.0,  # Always 1.0 since data is pre-split into separate files
         is_train=True
     )
     
@@ -424,20 +599,21 @@ def main():
         num_workers=args.num_workers
     )
     
+    # Create validation dataset from separate files
     val_loader = None
     if args.cfg_val and args.dfg_val:
-        # Use separate validation files if provided
         logger.info("Creating validation dataset from separate files...")
         val_dataset = AllConsecutivePairsDataset(
             cfg_corpus_path=args.cfg_val,
             dfg_corpus_path=args.dfg_val,
             vocab=vocab,
             seq_len=args.seq_len,
+            nsp_content_max=args.nsp_content_max,
             on_memory=True,
             nsp_prob=args.nsp_prob,
             mask_prob=args.mask_prob,
-            data_percentage=1.0,  # Use all validation data
-            train_split=1.0,
+            data_percentage=args.val_percentage,
+            train_split=1.0,  # Always 1.0 since data is pre-split
             is_train=True
         )
         
@@ -447,28 +623,8 @@ def main():
             shuffle=False,
             num_workers=args.num_workers
         )
-    elif args.train_split < 1.0:
-        # Automatically create validation set from training data
-        logger.info("Creating validation dataset (automatic split)...")
-        val_dataset = AllConsecutivePairsDataset(
-            cfg_corpus_path=args.cfg_train,
-            dfg_corpus_path=args.dfg_train,
-            vocab=vocab,
-            seq_len=args.seq_len,
-            on_memory=True,
-            nsp_prob=args.nsp_prob,
-            mask_prob=args.mask_prob,
-            data_percentage=args.data_percentage,
-            train_split=args.train_split,
-            is_train=False
-        )
-        
-        val_loader = DataLoader(
-            val_dataset,
-            batch_size=args.batch_size,
-            shuffle=False,
-            num_workers=args.num_workers
-        )
+    else:
+        logger.warning("No validation data provided. Training without validation.")
     
     # Create scope datasets if provided
     scope_train_loader = None
@@ -481,7 +637,7 @@ def main():
             seq_len=args.seq_len,
             on_memory=True,
             data_percentage=args.data_percentage,
-            train_split=args.train_split,
+            train_split=1.0,  # Always 1.0 since data is pre-split
             is_train=True
         )
         
@@ -491,25 +647,32 @@ def main():
             shuffle=True,
             num_workers=args.num_workers
         )
+    
+    # Create test dataset if provided
+    test_loader = None
+    if args.cfg_test and args.dfg_test:
+        logger.info("Creating test dataset...")
+        test_dataset = AllConsecutivePairsDataset(
+            cfg_corpus_path=args.cfg_test,
+            dfg_corpus_path=args.dfg_test,
+            vocab=vocab,
+            seq_len=args.seq_len,
+            nsp_content_max=args.nsp_content_max,
+            on_memory=True,
+            nsp_prob=args.nsp_prob,
+            mask_prob=args.mask_prob,
+            data_percentage=1.0,  # Use all test data
+            train_split=1.0,
+            is_train=True
+        )
         
-        if args.train_split < 1.0:
-            logger.info("Creating scope validation dataset (automatic split)...")
-            scope_val_dataset = ScopeDataset(
-                scope_corpus_path=args.scope_train,
-                vocab=vocab,
-                seq_len=args.seq_len,
-                on_memory=True,
-                data_percentage=args.data_percentage,
-                train_split=args.train_split,
-                is_train=False
-            )
-            
-            scope_val_loader = DataLoader(
-                scope_val_dataset,
-                batch_size=args.batch_size,
-                shuffle=False,
-                num_workers=args.num_workers
-            )
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            num_workers=args.num_workers
+        )
+        logger.info(f"Test dataset size: {len(test_dataset)}")
     
     # Create model
     logger.info("Creating model (training from scratch - NO pre-trained PalmTree)...")
@@ -563,7 +726,8 @@ def main():
         logger.info("-"*80)
         
         # Train
-        train_metrics = train_epoch(model, train_loader, scope_train_loader, optimizer, device, args.log_freq, logger)
+        train_metrics = train_epoch(model, train_loader, scope_train_loader, optimizer, device, args.log_freq, logger, 
+                                    args.enable_mlm, args.enable_nsp_cfg, args.enable_nsp_dfg, args.enable_scope)
         scheduler.step()
         
         train_log = (f"Train Loss: {train_metrics['total_loss']:.4f} | "
@@ -575,7 +739,8 @@ def main():
         
         # Validate
         if val_loader is not None:
-            val_metrics = validate(model, val_loader, scope_val_loader, device, logger)
+            val_metrics = validate(model, val_loader, scope_val_loader, device, logger,
+                                  args.enable_mlm, args.enable_nsp_cfg, args.enable_nsp_dfg, args.enable_scope)
             val_log = (f"Val Loss: {val_metrics['total_loss']:.4f} | "
                       f"MLM: {val_metrics['mlm_loss']:.4f} ({val_metrics['mlm_acc']:.2%}) | "
                       f"NSP_CFG: {val_metrics['nsp_cfg_loss']:.4f} ({val_metrics['nsp_cfg_acc']:.2%}) | "
@@ -624,7 +789,50 @@ def main():
     
     logger.info("\n" + "="*80)
     logger.info("Training completed!")
-    logger.info(f"Logs saved to: {log_file}")
+    logger.info(f"Best validation loss: {best_val_loss:.4f}")
+    
+    # Final test evaluation if test data provided
+    if test_loader is not None:
+        logger.info("\n" + "="*80)
+        logger.info("Running final evaluation on test set...")
+        logger.info("="*80)
+        
+        # Load best model
+        best_model_path = os.path.join(args.output_dir, "best_model.pt")
+        if os.path.exists(best_model_path):
+            logger.info(f"Loading best model from {best_model_path}")
+            checkpoint = torch.load(best_model_path, map_location=device)
+            model.load_state_dict(checkpoint['model_state_dict'])
+            logger.info(f"Best model from epoch {checkpoint['epoch']} (val_loss: {checkpoint['val_loss']:.4f})")
+        else:
+            logger.info("WARNING: Best model not found, using current model state")
+        
+        # Evaluate on test set
+        test_metrics = validate(model, test_loader, scope_val_loader, device, logger,
+                               args.enable_mlm, args.enable_nsp_cfg, args.enable_nsp_dfg, args.enable_scope)
+        
+        logger.info("\n" + "="*80)
+        logger.info("TEST SET RESULTS:")
+        logger.info("="*80)
+        logger.info(f"Total Loss: {test_metrics['total_loss']:.4f}")
+        if args.enable_mlm:
+            logger.info(f"MLM Loss: {test_metrics['mlm_loss']:.4f} | Accuracy: {test_metrics['mlm_acc']:.2%}")
+        if args.enable_nsp_cfg:
+            logger.info(f"NSP-CFG Loss: {test_metrics['nsp_cfg_loss']:.4f} | Accuracy: {test_metrics['nsp_cfg_acc']:.2%}")
+        if args.enable_nsp_dfg:
+            logger.info(f"NSP-DFG Loss: {test_metrics['nsp_dfg_loss']:.4f} | Accuracy: {test_metrics['nsp_dfg_acc']:.2%}")
+        if args.enable_scope:
+            logger.info(f"SCOPE Loss: {test_metrics['scope_loss']:.4f} | Accuracy: {test_metrics['scope_acc']:.2%}")
+        logger.info("="*80)
+        
+        # Save test results to file
+        test_results_file = os.path.join(args.output_dir, "test_results.json")
+        with open(test_results_file, 'w') as f:
+            json.dump(test_metrics, f, indent=2)
+        logger.info(f"Test results saved to: {test_results_file}")
+    
+    logger.info(f"\nLogs saved to: {log_file}")
+    logger.info("="*80)
 
 
 if __name__ == "__main__":
