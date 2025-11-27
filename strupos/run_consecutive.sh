@@ -82,8 +82,11 @@ CFG_TRAIN="/data/kun/dataset/train_cfg.txt"
 DFG_TRAIN="/data/kun/dataset/train_dfg.txt"
 CFG_VAL="/data/kun/dataset/val_cfg.txt"
 DFG_VAL="/data/kun/dataset/val_dfg.txt"
-SCOPE_TRAIN="./scope_train.txt"
-SCOPE_VAL="./scope_val.txt"
+CFG_TEST="/data/kun/dataset/test_cfg.txt"
+DFG_TEST="/data/kun/dataset/test_dfg.txt"
+# SCOPE_TRAIN="./scope_train.txt"
+# SCOPE_VAL="./scope_val.txt"
+# SCOPE_TEST="./scope_test.txt"
 VOCAB_PATH="./vocab.pkl"
 
 # ==================== Task Selection (Ablation Study) ====================
@@ -186,8 +189,9 @@ echo "  Epochs: ${EPOCHS}"
 echo "  Vocab: ${VOCAB_PATH}"
 echo "  Train: ${CFG_TRAIN} / ${DFG_TRAIN}"
 echo "  Val: ${CFG_VAL} / ${DFG_VAL}"
+echo "  Test: ${CFG_TEST} / ${DFG_TEST}"
 if [ "$ENABLE_SCOPE" = true ]; then
-    echo "  Scope: ${SCOPE_TRAIN} / ${SCOPE_VAL}"
+    echo "  Scope: ${SCOPE_TRAIN} / ${SCOPE_VAL} / ${SCOPE_TEST}"
 fi
 echo ""
 echo "Starting training script..."
@@ -203,6 +207,8 @@ python train_from_scratch.py \
     --dfg_train "${DFG_TRAIN}" \
     --cfg_val "${CFG_VAL}" \
     --dfg_val "${DFG_VAL}" \
+    --cfg_test "${CFG_TEST}" \
+    --dfg_test "${DFG_TEST}" \
     --scope_train "${SCOPE_TRAIN}" \
     --scope_val "${SCOPE_VAL}" \
     --vocab "${VOCAB_PATH}" \

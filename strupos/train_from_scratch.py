@@ -482,6 +482,7 @@ def main():
     parser.add_argument("--scope_train", type=str, default=None, help="Path to scope training data (optional)")
     parser.add_argument("--cfg_val", type=str, default=None, help="Path to CFG validation data (optional)")
     parser.add_argument("--dfg_val", type=str, default=None, help="Path to DFG validation data (optional)")
+    parser.add_argument("--scope_val", type=str, default=None, help="Path to scope validation data (optional)")
     parser.add_argument("--cfg_test", type=str, default=None, help="Path to CFG test data (optional)")
     parser.add_argument("--dfg_test", type=str, default=None, help="Path to DFG test data (optional)")
     parser.add_argument("--vocab", type=str, default="./vocab.pkl", help="Path to vocabulary file (pickle format)")
@@ -645,6 +646,26 @@ def main():
             scope_train_dataset,
             batch_size=args.batch_size,
             shuffle=True,
+            num_workers=args.num_workers
+        )
+    
+    # Create scope validation dataset if provided
+    if args.scope_val:
+        logger.info(f"Creating scope validation dataset from {args.scope_val}...")
+        scope_val_dataset = ScopeDataset(
+            scope_corpus_path=args.scope_val,
+            vocab=vocab,
+            seq_len=args.seq_len,
+            on_memory=True,
+            data_percentage=args.val_percentage,
+            train_split=1.0,  # Always 1.0 since data is pre-split
+            is_train=False
+        )
+        
+        scope_val_loader = DataLoader(
+            scope_val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
             num_workers=args.num_workers
         )
     
