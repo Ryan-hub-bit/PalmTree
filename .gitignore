@@ -158,17 +158,9 @@ datalong
 result
 evaluation_result
 data2
-output_addressaware
-output_baseline
-output_addressaware_new
-output_addressaware_all
-output_baseline_new
 log
 test_data
 data_5bucket
 testres
 testbin
-output_address_new
-output_addressaware_scope
-output_addressaware_scope_0.3
 output

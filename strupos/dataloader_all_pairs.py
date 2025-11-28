@@ -252,47 +252,57 @@ class AllConsecutivePairsDataset(Dataset):
         cfg_mlm_tokens, cfg_mlm_positions = self._parse_line_with_separators(cfg_mlm_line)
         
         # Get DFG NSP pair (cycle through DFG lines)
-        dfg_idx = index % len(self.dfg_lines)
-        dfg_line = self.dfg_lines[dfg_idx]
-        
-        # Parse DFG line as tab-separated instructions (same as CFG)
-        dfg_instructions = dfg_line.split('\t')
-        
-        if len(dfg_instructions) >= 2:
-            # Get consecutive pair based on position within line
-            # Use modulo to cycle through all pairs in this line
-            pair_idx = (index // len(self.dfg_lines)) % max(1, len(dfg_instructions) - 1)
-            
-            dfg_inst1 = dfg_instructions[pair_idx]
-            dfg_inst2_original = dfg_instructions[pair_idx + 1]
-            
-            # Parse the two consecutive instructions
-            dfg_inst1_tokens, dfg_inst1_pos = self._parse_instruction(dfg_inst1)
-            dfg_inst2_tokens, dfg_inst2_pos = self._parse_instruction(dfg_inst2_original)
-            
-            # DFG NSP label
-            if random.random() < self.nsp_prob:
-                # NEGATIVE: Replace second instruction with random (ensure it's different)
-                dfg_inst2 = dfg_inst2_original
-                max_attempts = 10
-                attempts = 0
-                while dfg_inst2 == dfg_inst2_original and attempts < max_attempts:
-                    random_dfg = random.choice(self.dfg_lines)
-                    random_instructions = random_dfg.split('\t')
-                    dfg_inst2 = random.choice(random_instructions)
-                    attempts += 1
-                dfg_inst2_tokens, dfg_inst2_pos = self._parse_instruction(dfg_inst2)
-                dfg_is_next = 0
-            else:
-                # POSITIVE: Keep consecutive
-                dfg_is_next = 1
-        else:
-            # Fallback for lines with < 2 instructions
-            dfg_inst1_tokens, dfg_inst1_pos = self._parse_line(dfg_line)
-            dfg_inst2_tokens, dfg_inst2_pos = [], []
+        if len(self.dfg_lines) == 0:
+            # No DFG data available, use dummy data
+            dfg_inst1_tokens = [self.vocab.pad_index]
+            dfg_inst1_pos = [(0, 0, 0, 0)]
+            dfg_inst2_tokens = [self.vocab.pad_index]
+            dfg_inst2_pos = [(0, 0, 0, 0)]
             dfg_is_next = 1
+        else:
+            dfg_idx = index % len(self.dfg_lines)
+            dfg_line = self.dfg_lines[dfg_idx]
+            
+            # Parse DFG line as tab-separated instructions (same as CFG)
+            dfg_instructions = dfg_line.split('\t')
+            
+            if len(dfg_instructions) >= 2:
+                # Get consecutive pair based on position within line
+                # Use modulo to cycle through all pairs in this line
+                pair_idx = (index // len(self.dfg_lines)) % max(1, len(dfg_instructions) - 1)
+                
+                dfg_inst1 = dfg_instructions[pair_idx]
+                dfg_inst2_original = dfg_instructions[pair_idx + 1]
+                
+                # Parse the two consecutive instructions
+                dfg_inst1_tokens, dfg_inst1_pos = self._parse_instruction(dfg_inst1)
+                dfg_inst2_tokens, dfg_inst2_pos = self._parse_instruction(dfg_inst2_original)
+                
+                # DFG NSP label
+                if random.random() < self.nsp_prob:
+                    # NEGATIVE: Replace second instruction with random (ensure it's different)
+                    dfg_inst2 = dfg_inst2_original
+                    max_attempts = 10
+                    attempts = 0
+                    while dfg_inst2 == dfg_inst2_original and attempts < max_attempts:
+                        random_dfg = random.choice(self.dfg_lines)
+                        random_instructions = random_dfg.split('\t')
+                        dfg_inst2 = random.choice(random_instructions)
+                        attempts += 1
+                    dfg_inst2_tokens, dfg_inst2_pos = self._parse_instruction(dfg_inst2)
+                    dfg_is_next = 0
+                else:
+                    # POSITIVE: Keep consecutive
+                    dfg_is_next = 1
+            else:
+                # Single instruction or empty DFG line, use padding
+                dfg_inst1_tokens = [self.vocab.pad_index]
+                dfg_inst1_pos = [(0, 0, 0, 0)]
+                dfg_inst2_tokens = [self.vocab.pad_index]
+                dfg_inst2_pos = [(0, 0, 0, 0)]
+                dfg_is_next = 1
         
-        # Now convert to BERT format and return...
+        # Prepare CFG NSP output
         # (Rest of the processing - tokenization, masking, padding, etc.)
         # This is the same as in dataloader_paired.py
         
