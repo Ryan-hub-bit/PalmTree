@@ -23,7 +23,7 @@ TEST_OUTPUT="${DATA_DIR}/test_scope.txt"
 # Samples per type PER BINARY
 # Total samples per binary = SAMPLES_PER_BIN (balanced across 3 labels)
 # Each label gets SAMPLES_PER_BIN / 3, with easy/medium/hard difficulty levels
-TRAIN_SAMPLES_PER_BIN=300   # 300 total per binary (100 per label)
+TRAIN_SAMPLES_PER_BIN=150   # 300 total per binary (100 per label)
 VAL_SAMPLES_PER_BIN=150     # 150 total per binary (50 per label)
 TEST_SAMPLES_PER_BIN=150    # 150 total per binary (50 per label)
 
@@ -65,7 +65,7 @@ process_cdfg_dir() {
     echo ""
     
     # Create temporary directory for intermediate files
-    local temp_dir="${SCRIPT_DIR}/temp_${split_name}"
+    local temp_dir="${DATA_DIR}/scope"
     mkdir -p "${temp_dir}"
     
     # Find all CDFG files
