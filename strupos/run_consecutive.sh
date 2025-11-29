@@ -22,53 +22,81 @@ echo ""
 # Check if vocab.txt exists
 VOCAB_FILE="./vocab.pkl"
 
-if [ -f "$VOCAB_FILE" ]; then
-  echo -e "${GREEN}✓ Vocabulary file found: $VOCAB_FILE${NC}"
-  VOCAB_SIZE=$(wc -l <"$VOCAB_FILE")
-  echo "  Vocabulary size: $VOCAB_SIZE tokens"
-else
-  echo -e "${YELLOW}⚠ Vocabulary file not found: $VOCAB_FILE${NC}"
-  echo "  Creating vocabulary from train/val/test data..."
-  echo ""
+# if [ -f "$VOCAB_FILE" ]; then
+#   echo -e "${GREEN}✓ Vocabulary file found: $VOCAB_FILE${NC}"
+#   # Get vocab size from pickle file using Python (with error handling)
+#   VOCAB_SIZE=$(python3 -c "
+# import sys
+# sys.path.insert(0, '.')
+# try:
+#     from vocab import WordVocab
+#     vocab = WordVocab.load_vocab('$VOCAB_FILE')
+#     print(len(vocab))
+# except Exception as e:
+#     print('0')
+#     sys.exit(1)
+# " 2>/dev/null)
+  
+#   if [ "$VOCAB_SIZE" = "0" ] || [ -z "$VOCAB_SIZE" ]; then
+#     echo -e "${YELLOW}⚠ Vocabulary file exists but cannot be loaded (old format)${NC}"
+#     echo "  Deleting old vocabulary and creating new one..."
+#     rm -f "$VOCAB_FILE"
+#     python3 create_vocab.py
+#     if [ $? -eq 0 ]; then
+#       echo -e "${GREEN}✓ Vocabulary created successfully${NC}"
+#       VOCAB_SIZE=$(python3 -c "import sys; sys.path.insert(0, '.'); from vocab import WordVocab; vocab = WordVocab.load_vocab('$VOCAB_FILE'); print(len(vocab))")
+#       echo "  Vocabulary size: $VOCAB_SIZE tokens"
+#     else
+#       echo -e "${RED}✗ Failed to create vocabulary${NC}"
+#       exit 1
+#     fi
+#   else
+#     echo "  Vocabulary size: $VOCAB_SIZE tokens"
+#   fi
+# else
+#   echo -e "${YELLOW}⚠ Vocabulary file not found: $VOCAB_FILE${NC}"
+#   echo "  Creating vocabulary from train/val/test data..."
+#   echo ""
 
-  # Check if data files exist
-  DATA_FILES=(
-    "/data/kun/dataset/train_cfg.txt"
-    "/data/kun/dataset/train_dfg.txt"
-    "/data/kun/dataset/val_cfg.txt"
-    "/data/kun/dataset/val_dfg.txt"
-    "/data/kun/dataset/test_cfg.txt"
-    "/data/kun/dataset/test_dfg.txt"
-  )
+#   # Check if data files exist
+#   DATA_FILES=(
+#     "/data/kun/dataset/train_cfg.txt"
+#     "/data/kun/dataset/train_dfg.txt"
+#     "/data/kun/dataset/val_cfg.txt"
+#     "/data/kun/dataset/val_dfg.txt"
+#     "/data/kun/dataset/test_cfg.txt"
+#     "/data/kun/dataset/test_dfg.txt"
+#   )
 
-  MISSING_FILES=0
-  for FILE in "${DATA_FILES[@]}"; do
-    if [ ! -f "$FILE" ]; then
-      echo -e "${RED}  ✗ Missing: $FILE${NC}"
-      MISSING_FILES=$((MISSING_FILES + 1))
-    else
-      echo -e "${GREEN}  ✓ Found: $FILE${NC}"
-    fi
-  done
+#   MISSING_FILES=0
+#   for FILE in "${DATA_FILES[@]}"; do
+#     if [ ! -f "$FILE" ]; then
+#       echo -e "${RED}  ✗ Missing: $FILE${NC}"
+#       MISSING_FILES=$((MISSING_FILES + 1))
+#     else
+#       echo -e "${GREEN}  ✓ Found: $FILE${NC}"
+#     fi
+#   done
 
-  if [ $MISSING_FILES -gt 0 ]; then
-    echo -e "${RED}Error: Some data files are missing. Cannot create vocabulary.${NC}"
-    exit 1
-  fi
+#   if [ $MISSING_FILES -gt 0 ]; then
+#     echo -e "${RED}Error: Some data files are missing. Cannot create vocabulary.${NC}"
+#     exit 1
+#   fi
 
-  echo ""
-  echo "Creating vocabulary..."
-  python create_vocab.py
+#   echo ""
+#   echo "Creating vocabulary..."
+#   python3 create_vocab.py
 
-  if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Vocabulary created successfully${NC}"
-    VOCAB_SIZE=$(wc -l <"$VOCAB_FILE")
-    echo "  Vocabulary size: $VOCAB_SIZE tokens"
-  else
-    echo -e "${RED}✗ Failed to create vocabulary${NC}"
-    exit 1
-  fi
-fi
+#   if [ $? -eq 0 ]; then
+#     echo -e "${GREEN}✓ Vocabulary created successfully${NC}"
+#     # Get vocab size from pickle file using Python with local import
+#     VOCAB_SIZE=$(python3 -c "import sys; sys.path.insert(0, '.'); from vocab import WordVocab; vocab = WordVocab.load_vocab('$VOCAB_FILE'); print(len(vocab))")
+#     echo "  Vocabulary size: $VOCAB_SIZE tokens"
+#   else
+#     echo -e "${RED}✗ Failed to create vocabulary${NC}"
+#     exit 1
+#   fi
+# fi
 
 echo ""
 echo "========================================"
@@ -95,7 +123,7 @@ ENABLE_MLM=true             # Masked Language Modeling (CFG only)
 ENABLE_NSP_CFG=false        # Next Sentence Prediction for CFG
 ENABLE_NSP_DFG=false        # Next Sentence Prediction for DFG
 ENABLE_SCOPE=false          # Scope Prediction (3-class)
-USE_ADDRESS_EMBEDDING=false # Use 3-level address-aware embeddings
+USE_ADDRESS_EMBEDDING=true # Use 3-level address-aware embeddings
 # Build task flags for command line
 TASK_FLAGS=""
 if [ "$ENABLE_MLM" = true ]; then
@@ -153,11 +181,11 @@ DROPOUT=0.1
 
 # Training hyperparameters
 EPOCHS=10
-BATCH_SIZE=1024 # Further reduced to avoid OOM (was 256, original 1024)
+BATCH_SIZE=256 # Further reduced to avoid OOM (was 256, original 1024)
 LR=1e-4
 WARMUP_STEPS=10000
-NUM_WORKERS=4
-EARLY_STOPPING_PATIENCE=5
+NUM_WORKERS=8
+EARLY_STOPPING_PATIENCE=3
 
 # Data processing
 MASK_PROB=0.15
@@ -167,7 +195,7 @@ VAL_PERCENTAGE=0.2   # Validation data percentage (0.01 = 1%)
 
 # Device
 CUDA="--cuda"
-MULTI_GPU="--multi_gpu"
+MULTI_GPU=""
 
 # Show configuration
 echo "Configuration:"
@@ -206,6 +234,8 @@ python train_from_scratch.py \
   --dfg_train "${DFG_TRAIN}" \
   --cfg_val "${CFG_VAL}" \
   --dfg_val "${DFG_VAL}" \
+  --cfg_test "${CFG_TEST}" \
+  --dfg_test "${DFG_TEST}" \
   --scope_train "${SCOPE_TRAIN}" \
   --scope_val "${SCOPE_VAL}" \
   --vocab "${VOCAB_PATH}" \

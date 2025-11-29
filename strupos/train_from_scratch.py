@@ -23,10 +23,8 @@ import logging
 from datetime import datetime
 import re
 
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from palmtree.dataset.vocab import WordVocab
+# Import local modules
+from vocab import WordVocab
 from dataloader_all_pairs import AllConsecutivePairsDataset
 from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
@@ -72,14 +70,18 @@ def create_vocab_if_needed(vocab_path, logger, train_cfg_dataset, train_dfg_data
         *_dataset: Paths to dataset files
     """
     if os.path.exists(vocab_path):
-        # Check if it's a valid pickle file
+        # Check if it's a valid pickle file and can be loaded with local vocab module
         try:
             with open(vocab_path, "rb") as f:
-                pickle.load(f)
-            if logger:
-                logger.info(f"Vocabulary already exists at {vocab_path}")
-            return
-        except (pickle.UnpicklingError, UnicodeDecodeError) as e:
+                test_vocab = pickle.load(f)
+            # Try to access it as WordVocab to ensure it's the right type
+            if hasattr(test_vocab, 'stoi') and hasattr(test_vocab, 'itos'):
+                if logger:
+                    logger.info(f"Vocabulary already exists at {vocab_path}")
+                return
+            else:
+                raise ValueError("Vocab file doesn't have expected attributes")
+        except (pickle.UnpicklingError, UnicodeDecodeError, ModuleNotFoundError, AttributeError, ValueError) as e:
             # Invalid pickle file (probably old text format), delete and recreate
             msg = f"Existing vocab file '{vocab_path}' is not a valid pickle file (probably old text format). Deleting and recreating..."
             if logger:
@@ -96,7 +98,7 @@ def create_vocab_if_needed(vocab_path, logger, train_cfg_dataset, train_dfg_data
         print("Using WordVocab with max_size=13000, min_freq=1")
     
     
-    # Check if files exist
+    # Check if files exist (skip None values for optional test files)
     files_to_check = [
         train_cfg_dataset, train_dfg_dataset,
         val_cfg_dataset, val_dfg_dataset,
@@ -104,6 +106,8 @@ def create_vocab_if_needed(vocab_path, logger, train_cfg_dataset, train_dfg_data
     ]
     
     for fpath in files_to_check:
+        if fpath is None:
+            continue  # Skip optional files
         if not os.path.exists(fpath):
             msg = f"ERROR: File not found: {fpath}"
             if logger:
@@ -118,29 +122,37 @@ def create_vocab_if_needed(vocab_path, logger, train_cfg_dataset, train_dfg_data
         else:
             print(msg)
     
-    # Open all files and create vocabulary
-    with open(train_cfg_dataset, "r", encoding="utf-8") as f1, \
-         open(train_dfg_dataset, "r", encoding="utf-8") as f2, \
-         open(val_cfg_dataset, "r", encoding="utf-8") as f3, \
-         open(val_dfg_dataset, "r", encoding="utf-8") as f4, \
-         open(test_cfg_dataset, "r", encoding="utf-8") as f5, \
-         open(test_dfg_dataset, "r", encoding="utf-8") as f6:
-        
+    # Open files and create vocabulary from ALL data (train/val/test)
+    # Note: Test files are used for vocab creation but NOT for training
+    files_to_open = [
+        train_cfg_dataset,
+        train_dfg_dataset,
+        val_cfg_dataset,
+        val_dfg_dataset
+    ]
+    
+    # Add test files if they exist (important for vocab completeness)
+    if test_cfg_dataset:
+        files_to_open.append(test_cfg_dataset)
+    if test_dfg_dataset:
+        files_to_open.append(test_dfg_dataset)
+    
+    # Open all files
+    file_handles = [open(fpath, "r", encoding="utf-8") for fpath in files_to_open]
+    
+    try:
         # Wrap each file with preprocessing (removes address info)
-        preprocessed_files = [
-            PreprocessedFile(f1),
-            PreprocessedFile(f2),
-            PreprocessedFile(f3),
-            PreprocessedFile(f4),
-            PreprocessedFile(f5),
-            PreprocessedFile(f6)
-        ]
+        preprocessed_files = [PreprocessedFile(fh) for fh in file_handles]
         
         vocab = WordVocab(
             preprocessed_files,
             max_size=50000,
             min_freq=2
         )
+    finally:
+        # Close all file handles
+        for fh in file_handles:
+            fh.close()
     
     msg = f"VOCAB SIZE: {len(vocab)}"
     if logger:
@@ -567,6 +579,7 @@ def main():
     
     # Create vocabulary if it doesn't exist (runs create_vocab.py)
     create_vocab_if_needed(args.vocab,logger,args.cfg_train, args.dfg_train, args.cfg_val, args.dfg_val, args.cfg_test, args.dfg_test)
+
     
     # Load vocabulary
     logger.info(f"Loading vocabulary from {args.vocab}")

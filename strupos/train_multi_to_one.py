@@ -24,10 +24,8 @@ import logging
 from datetime import datetime
 import re
 
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from palmtree.dataset.vocab import WordVocab
+# Import local modules
+from vocab import WordVocab
 from dataloader_multi_to_one import MultiToOneDataset
 from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
@@ -496,6 +494,7 @@ def main():
     parser.add_argument("--attn_heads", type=int, default=12, help="Number of attention heads")
     parser.add_argument("--seq_len", type=int, default=100, help="Maximum sequence length")
     parser.add_argument("--nsp_content_max", type=int, default=20, help="Maximum content length for NSP pairs (CFG/DFG)")
+    parser.add_argument("--instruction_level_segment", action="store_true", default=False, help="Use instruction-level segment IDs (each instruction gets unique segment)")
     
     # Task selection args (for ablation studies)
     parser.add_argument("--enable_mlm", action="store_true", default=True, help="Enable Masked Language Modeling")
@@ -579,6 +578,10 @@ def main():
     
     # Use MultiToOneDataset for multi-to-one NSP strategy
     logger.info("Using MULTI-TO-ONE NSP strategy (first 7 instructions predict 8th)")
+    if args.instruction_level_segment:
+        logger.info("  Segment mode: INSTRUCTION-LEVEL (each instruction gets unique segment ID)")
+    else:
+        logger.info("  Segment mode: STANDARD (context=segment1, target=segment2)")
     
     train_dataset = MultiToOneDataset(
         cfg_corpus_path=args.cfg_train,
@@ -591,7 +594,8 @@ def main():
         mask_prob=args.mask_prob,
         data_percentage=args.data_percentage,
         train_split=1.0,  # Always 1.0 since data is pre-split into separate files
-        is_train=True
+        is_train=True,
+        instruction_level_segment=args.instruction_level_segment
     )
     
     train_loader = DataLoader(
@@ -616,7 +620,8 @@ def main():
             mask_prob=args.mask_prob,
             data_percentage=args.val_percentage,
             train_split=1.0,  # Always 1.0 since data is pre-split
-            is_train=True
+            is_train=True,
+            instruction_level_segment=args.instruction_level_segment
         )
         
         val_loader = DataLoader(
@@ -685,7 +690,8 @@ def main():
             mask_prob=args.mask_prob,
             data_percentage=1.0,  # Use all test data
             train_split=1.0,
-            is_train=True
+            is_train=True,
+            instruction_level_segment=args.instruction_level_segment
         )
         
         test_loader = DataLoader(

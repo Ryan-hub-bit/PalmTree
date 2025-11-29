@@ -77,7 +77,8 @@ VAL_PERCENTAGE=0.2
 
 # Device
 CUDA="--cuda"
-MULTI_GPU="--multi_gpu"
+# MULTI_GPU="--multi_gpu"
+MULTI_GPU=""
 
 # Check if vocab exists
 if [ ! -f "$VOCAB_PATH" ]; then

@@ -8,10 +8,8 @@ import os
 import sys
 import re
 
-# Add parent directory to path to import palmtree modules
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-
-from palmtree.dataset import vocab as dataset
+# Import local vocab module
+from vocab import WordVocab
 
 
 def preprocess_line(line):
@@ -96,7 +94,7 @@ if __name__ == "__main__":
             PreprocessedFile(f6)
         ]
         
-        vocab = dataset.WordVocab(
+        vocab = WordVocab(
             preprocessed_files,
             max_size=13000,
             min_freq=1

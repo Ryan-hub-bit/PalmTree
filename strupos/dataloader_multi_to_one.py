@@ -26,6 +26,10 @@ class MultiToOneDataset(Dataset):
     - MLM: Iterate through CFG lines (one MLM sample per line)
     - NSP-CFG: Use first N-1 instructions to predict Nth (e.g., [1-7] predict 8)
     - NSP-DFG: Use DFG lines as-is (already in pair format)
+    
+    Segmentation modes:
+    - instruction_level_segment=False: Context=segment1, Target=segment2 (standard BERT)
+    - instruction_level_segment=True: Each instruction gets its own segment ID
     """
     
     def __init__(
@@ -42,12 +46,14 @@ class MultiToOneDataset(Dataset):
         data_percentage=1.0,
         train_split=1.0,
         is_train=True,
+        instruction_level_segment=False,
     ):
         self.vocab = vocab
         self.seq_len = seq_len
         self.nsp_content_max = nsp_content_max
         self.on_memory = on_memory
         self.nsp_prob = nsp_prob
+        self.instruction_level_segment = instruction_level_segment
         self.mask_prob = mask_prob
         self.encoding = encoding
         
@@ -258,6 +264,13 @@ class MultiToOneDataset(Dataset):
         """Get NSP-CFG sample using multi-to-one strategy"""
         line_idx, context, target, label = self.nsp_cfg_samples[idx]
         
+        if self.instruction_level_segment:
+            return self._get_nsp_cfg_instruction_level(context, target, label)
+        else:
+            return self._get_nsp_cfg_standard(context, target, label)
+    
+    def _get_nsp_cfg_standard(self, context, target, label):
+        """Standard BERT segmentation: context=1, target=2"""
         # Parse context (N-1 instructions)
         context_tokens, context_positions = self._parse_instruction_sequence(context)
         
@@ -265,7 +278,7 @@ class MultiToOneDataset(Dataset):
         target_tokens, target_positions = self._parse_instruction(target)
         
         # Truncate context if too long (leave room for target)
-        max_context_len = self.nsp_content_max - len(target_tokens) - 1  # -1 for SEP
+        max_context_len = self.nsp_content_max - len(target_tokens) - 3  # -3 for [CLS] and 2 [SEP]
         if len(context_tokens) > max_context_len:
             context_tokens = context_tokens[:max_context_len]
             context_positions = context_positions[:max_context_len]
@@ -307,6 +320,71 @@ class MultiToOneDataset(Dataset):
             token_ids.extend([self.vocab.pad_index] * pad_len)
             positions.extend([(0.0, 0.0, 0.0)] * pad_len)
             segment_labels.extend([0] * pad_len)
+        
+        return {
+            "bert_input": token_ids,
+            "segment_label": segment_labels,
+            "nsp_label": label,
+            "binary_pos": [p[0] for p in positions],
+            "function_pos": [p[1] for p in positions],
+            "bb_pos": [p[2] for p in positions],
+        }
+    
+    def _get_nsp_cfg_instruction_level(self, context, target, label):
+        """Instruction-level segmentation: Each instruction gets its own segment ID"""
+        # Parse context and target as individual instructions
+        context_instructions = context.split('\t')
+        
+        # Build token sequence: [CLS] inst1 [SEP] inst2 [SEP] ... instN [SEP]
+        token_ids = [self.vocab.cls_index]
+        positions = [(0.0, 0.0, 0.0)]
+        segment_labels = [0]  # [CLS] gets segment 0
+        
+        current_segment = 1
+        
+        # Add each context instruction with its own segment ID
+        for inst in context_instructions:
+            inst_tokens, inst_positions = self._parse_instruction(inst)
+            
+            # Check if we have room
+            if len(token_ids) + len(inst_tokens) + 1 >= self.nsp_content_max - 10:  # Leave room for target
+                break
+            
+            # Add instruction tokens
+            for token in inst_tokens:
+                token_ids.append(self.vocab.stoi.get(token, self.vocab.unk_index))
+            positions.extend(inst_positions)
+            segment_labels.extend([current_segment] * len(inst_tokens))
+            
+            # Add SEP
+            token_ids.append(self.vocab.sep_index)
+            positions.append((0.0, 0.0, 0.0))
+            segment_labels.append(current_segment)
+            
+            current_segment += 1
+        
+        # Add target instruction with its own segment ID
+        target_tokens, target_positions = self._parse_instruction(target)
+        for token in target_tokens:
+            token_ids.append(self.vocab.stoi.get(token, self.vocab.unk_index))
+        positions.extend(target_positions)
+        segment_labels.extend([current_segment] * len(target_tokens))
+        
+        # Add final SEP
+        token_ids.append(self.vocab.sep_index)
+        positions.append((0.0, 0.0, 0.0))
+        segment_labels.append(current_segment)
+        
+        # Truncate or pad to nsp_content_max
+        if len(token_ids) > self.nsp_content_max:
+            token_ids = token_ids[:self.nsp_content_max]
+            positions = positions[:self.nsp_content_max]
+            segment_labels = segment_labels[:self.nsp_content_max]
+        else:
+            pad_len = self.nsp_content_max - len(token_ids)
+            token_ids.extend([self.vocab.pad_index] * pad_len)
+            positions.extend([(0.0, 0.0, 0.0)] * pad_len)
+            segment_labels.extend([0] * pad_len)  # Padding gets segment 0
         
         return {
             "bert_input": token_ids,
