@@ -165,3 +165,5 @@ testres
 testbin
 output
 temp_TRAIN
+data_test
+data

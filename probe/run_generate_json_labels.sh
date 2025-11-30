@@ -10,7 +10,7 @@
 # - Bucket distribution statistics
 #########################################################################
 
-CFG_DIR="../data/cfg_2"
+CFG_DIR="/data/kun/dataset/test_cdfg"
 OUTPUT_DIR="data/json_labels"
 BB_BUCKETS=5
 FUNC_BUCKETS=5

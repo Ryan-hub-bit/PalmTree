@@ -22,10 +22,10 @@ from collections import defaultdict
 import argparse
 
 # Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'addressaware'))
-
-from palmtree.dataset.vocab import WordVocab
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'strupos'))
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'addressaware'))
+from model import AddressAwareBERT
+from vocab import WordVocab
 import bert_pytorch
 
 
@@ -88,7 +88,6 @@ def load_addressaware_model(checkpoint_path, vocab_size, hidden=128, n_layers=12
     """Load address-aware BERT model."""
     print(f"[INFO] Loading address-aware model from {checkpoint_path}")
     
-    from model import AddressAwareBERT
     
     # Create model
     bert = AddressAwareBERT(
@@ -153,13 +152,14 @@ def tokenize_instruction(inst_text, vocab):
     return token_ids
 
 
-def get_embedding_baseline(model, token_ids, vocab, device='cuda'):
+def get_embedding_baseline(model, token_ids, positions, vocab, device='cuda'):
     """
     Get embedding from baseline model using mean pooling.
     
     Args:
         model: Baseline BERT model
         token_ids: List of token IDs
+        positions: Dict with 'binary_pos', 'func_pos', 'bb_pos'
         vocab: Vocabulary
         device: Device to use
     
@@ -167,19 +167,28 @@ def get_embedding_baseline(model, token_ids, vocab, device='cuda'):
         embedding: numpy array of shape (hidden_size,)
     """
     # Add [CLS] and [SEP]
-    cls_id = vocab.stoi.get('[CLS]', 1)
-    sep_id = vocab.stoi.get('[SEP]', 2)
+    cls_id = vocab.stoi.get('<sos>', 3)
+    sep_id = vocab.stoi.get('<eos>', 2)
     
     input_ids = [cls_id] + token_ids + [sep_id]
     segment_labels = [0] * len(input_ids)
     
+    # Position embeddings (same for all tokens in single instruction)
+    binary_positions = [positions['binary_pos']] * len(input_ids)
+    func_positions = [positions['func_pos']] * len(input_ids)
+    bb_positions = [positions['bb_pos']] * len(input_ids)
+    
     # Convert to tensors
     input_tensor = torch.LongTensor([input_ids]).to(device)
     segment_tensor = torch.LongTensor([segment_labels]).to(device)
+    binary_tensor = torch.FloatTensor([binary_positions]).to(device)
+    func_tensor = torch.FloatTensor([func_positions]).to(device)
+    bb_tensor = torch.FloatTensor([bb_positions]).to(device)
     
-    # Get embeddings
+    # Set use_address_embedding to False for baseline
+    model.use_address_embedding = False
     with torch.no_grad():
-        output = model(input_tensor, segment_tensor)  # [1, seq_len, hidden]
+        output = model(input_tensor, segment_tensor, binary_tensor, func_tensor, bb_tensor)  # [1, seq_len, hidden]
         
         # Mean pooling (excluding padding)
         mask = (input_tensor > 0).float().unsqueeze(-1)  # [1, seq_len, 1]
@@ -322,7 +331,7 @@ def evaluate_bucket_task(model, instructions, vocab, bucket_key, model_type='bas
         
         # Get embedding
         if model_type == 'baseline':
-            emb = get_embedding_baseline(model, token_ids, vocab, device)
+            emb = get_embedding_baseline(model, token_ids, inst['positions'], vocab, device)
         else:
             emb = get_embedding_addressaware(model, token_ids, inst['positions'], vocab, device)
         
@@ -376,9 +385,9 @@ def main():
                         help='Directory with JSON label files')
     parser.add_argument('--vocab', type=str, default='../pre-trained_model/palmtree/vocab',
                         help='Vocabulary file')
-    parser.add_argument('--baseline_checkpoint', type=str, default='../addressaware/output_baseline_new/best_bert.pt',
+    parser.add_argument('--baseline_checkpoint', type=str, default='../output/mlm/best_bert.pt',
                         help='Baseline model checkpoint')
-    parser.add_argument('--addressaware_checkpoint', type=str, default='../addressaware/output_address_new/best_bert.pt',
+    parser.add_argument('--addressaware_checkpoint', type=str, default='../output/mlm_address/best_bert.pt',
                         help='Address-aware model checkpoint')
     parser.add_argument('--hidden', type=int, default=128)
     parser.add_argument('--n_layers', type=int, default=12)

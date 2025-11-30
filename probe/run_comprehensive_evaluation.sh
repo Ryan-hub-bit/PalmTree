@@ -13,19 +13,19 @@
 
 # Paths
 JSON_DIR="data/json_labels"
-VOCAB="../pre-trained_model/palmtree/vocab"
-BASELINE_CHECKPOINT="../addressaware/output_baseline_new/best_bert.pt"
-ADDRESSAWARE_CHECKPOINT="../addressaware/output_addressaware_scope_0.1_0.0005/best_bert.pt"
-OUTPUT="results/bucket_comparison.json"
+VOCAB="../strupos/vocab.pkl"
+BASELINE_CHECKPOINT="../output/mlm/best_bert.pt"
+ADDRESSAWARE_CHECKPOINT="../output/mlm_address/best_bert.pt"
+OUTPUT="results_new/bucket_comparison.json"
 
 # Model config
-HIDDEN=128
+HIDDEN=768
 N_LAYERS=12
-ATTN_HEADS=8
+ATTN_HEADS=12
 
 # Evaluation config
 SAMPLES_PER_BUCKET=20000 # Increased from 500 for better training
-BINARY_LIMIT=5           # Increased from 1 to test on 5 binaries
+BINARY_LIMIT=60          # Increased from 1 to test on 5 binaries
 
 # Device
 DEVICE="cuda" # or "cpu"

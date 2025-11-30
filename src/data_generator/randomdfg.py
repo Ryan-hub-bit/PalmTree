@@ -1,8 +1,8 @@
 import os
 import math
 
-root = "/data/kun/dataset/val_cdfg"
-out_dfg = "/data/kun/dataset/val_dfg.txt"
+root = "/data/kun/dataset/test_cdfg"
+out_dfg = "/data/kun/dataset/test_dfg.txt"
 
 def evenly_sample(lines, ratio=0.02):
     n = len(lines)
