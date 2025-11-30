@@ -239,7 +239,7 @@ class MultiToOneDataset(Dataset):
         output_label = []
         for i, token_id in enumerate(token_ids):
             prob = random.random()
-            if prob < self.mask_prob and token_id not in [self.vocab.pad_index, self.vocab.cls_index, self.vocab.sep_index]:
+            if prob < self.mask_prob and token_id not in [self.vocab.pad_index, self.vocab.sos_index, self.vocab.eos_index]:
                 prob /= self.mask_prob
                 
                 if prob < 0.8:
@@ -284,7 +284,7 @@ class MultiToOneDataset(Dataset):
             context_positions = context_positions[:max_context_len]
         
         # Build token sequence: [CLS] context [SEP] target [SEP]
-        token_ids = [self.vocab.cls_index]
+        token_ids = [self.vocab.sos_index]
         positions = [(0.0, 0.0, 0.0)]
         segment_labels = [1]
         
@@ -295,7 +295,7 @@ class MultiToOneDataset(Dataset):
         segment_labels.extend([1] * len(context_tokens))
         
         # Add SEP
-        token_ids.append(self.vocab.sep_index)
+        token_ids.append(self.vocab.eos_index)
         positions.append((0.0, 0.0, 0.0))
         segment_labels.append(1)
         
@@ -306,7 +306,7 @@ class MultiToOneDataset(Dataset):
         segment_labels.extend([2] * len(target_tokens))
         
         # Add final SEP
-        token_ids.append(self.vocab.sep_index)
+        token_ids.append(self.vocab.eos_index)
         positions.append((0.0, 0.0, 0.0))
         segment_labels.append(2)
         
@@ -336,7 +336,7 @@ class MultiToOneDataset(Dataset):
         context_instructions = context.split('\t')
         
         # Build token sequence: [CLS] inst1 [SEP] inst2 [SEP] ... instN [SEP]
-        token_ids = [self.vocab.cls_index]
+        token_ids = [self.vocab.sos_index]
         positions = [(0.0, 0.0, 0.0)]
         segment_labels = [0]  # [CLS] gets segment 0
         
@@ -414,7 +414,7 @@ class MultiToOneDataset(Dataset):
         tokens2, positions2 = self._parse_instruction(inst2)
         
         # Build token sequence: [CLS] inst1 [SEP] inst2 [SEP]
-        token_ids = [self.vocab.cls_index]
+        token_ids = [self.vocab.sos_index]
         positions = [(0.0, 0.0, 0.0)]
         segment_labels = [1]
         

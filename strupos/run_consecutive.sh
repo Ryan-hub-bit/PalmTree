@@ -112,18 +112,18 @@ CFG_VAL="/data/kun/dataset/val_cfg.txt"
 DFG_VAL="/data/kun/dataset/val_dfg.txt"
 CFG_TEST="/data/kun/dataset/test_cfg.txt"
 DFG_TEST="/data/kun/dataset/test_dfg.txt"
-# SCOPE_TRAIN="./scope_train.txt"
-# SCOPE_VAL="./scope_val.txt"
-# SCOPE_TEST="./scope_test.txt"
-VOCAB_PATH="./vocab.pkl"
+SCOPE_TRAIN="/data/kun/dataset/scope_train.txt"
+SCOPE_VAL="/data/kun/dataset/scope_val.txt"
+SCOPE_TEST="/data/kun/dataset/scope_test.txt"
+VOCAB_PATH="/data/kun/dataset/vocab.pkl"
 
 # ==================== Task Selection (Ablation Study) ====================
 # Enable/disable each pretraining task
 ENABLE_MLM=true             # Masked Language Modeling (CFG only)
 ENABLE_NSP_CFG=false        # Next Sentence Prediction for CFG
 ENABLE_NSP_DFG=false        # Next Sentence Prediction for DFG
-ENABLE_SCOPE=false          # Scope Prediction (3-class)
-USE_ADDRESS_EMBEDDING=true # Use 3-level address-aware embeddings
+ENABLE_SCOPE=true          # Scope Prediction (3-class)
+USE_ADDRESS_EMBEDDING=false # Use 3-level address-aware embeddings
 # Build task flags for command line
 TASK_FLAGS=""
 if [ "$ENABLE_MLM" = true ]; then

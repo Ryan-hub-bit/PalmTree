@@ -193,17 +193,17 @@ BATCH_SIZE=1024 # Further reduced to avoid OOM (was 256, original 1024)
 LR=1e-4
 WARMUP_STEPS=10000
 NUM_WORKERS=4
-EARLY_STOPPING_PATIENCE=5
+EARLY_STOPPING_PATIENCE=3
 
 # Data processing
 MASK_PROB=0.15
 NSP_PROB=0.5
-TRAIN_PERCENTAGE=0.2 # Training data percentage (0.01 = 1%)
-VAL_PERCENTAGE=0.2   # Validation data percentage (0.01 = 1%)
+TRAIN_PERCENTAGE=0.001 # Training data percentage (0.01 = 1%)
+VAL_PERCENTAGE=0.001   # Validation data percentage (0.01 = 1%)
 
 # Device
 CUDA="--cuda"
-MULTI_GPU="--multi_gpu"
+MULTI_GPU=""
 
 # Show configuration
 echo "Configuration:"
@@ -237,6 +237,7 @@ echo ""
 mkdir -p "${OUTPUT_DIR}"
 mkdir -p "${LOG_DIR}"
 
+export CUDA_VISIBLE_DEVICES=1
 # Run training with command-line arguments (Multi-to-One NSP)
 python train_multi_to_one.py \
   --cfg_train "${CFG_TRAIN}" \
