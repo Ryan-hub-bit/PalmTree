@@ -49,8 +49,8 @@ CFG_VAL="/data/kun/dataset/val_cfg.txt"
 DFG_VAL="/data/kun/dataset/val_dfg.txt"
 CFG_TEST="/data/kun/dataset/test_cfg.txt"
 DFG_TEST="/data/kun/dataset/test_dfg.txt"
-SCOPE_TRAIN="/data/kun/dataset/scope_train.txt"
-SCOPE_VAL="/data/kun/dataset/scope_val.txt"
+SCOPE_TRAIN="/data/kun/dataset/train_scope.txt"
+SCOPE_VAL="/data/kun/dataset/val_scope.txt"
 VOCAB_PATH="./vocab.pkl"
 
 # Model architecture
@@ -63,11 +63,11 @@ DROPOUT=0.1
 
 # Training hyperparameters
 EPOCHS=10
-BATCH_SIZE=1024
+BATCH_SIZE=256
 LR=1e-4
 WARMUP_STEPS=10000
 NUM_WORKERS=4
-EARLY_STOPPING_PATIENCE=5
+EARLY_STOPPING_PATIENCE=3
 
 # Data processing
 MASK_PROB=0.15
@@ -193,6 +193,7 @@ run_experiment() {
     --val_percentage ${VAL_PERCENTAGE} \
     --output_dir "${OUTPUT_DIR}" \
     --log_dir "${LOG_DIR}" \
+    --resume \
     ${TASK_FLAGS} \
     ${CUDA} ${MULTI_GPU} \
     2>&1 | tee "${LOG_DIR}/training.log"
@@ -215,15 +216,15 @@ echo "Start time: $(date)"
 echo ""
 
 # Run all experiments in order
-run_experiment 1 "MLM + Address" true false false false true
+# run_experiment 1 "MLM + Address" true false false false true
 run_experiment 2 "MLM + Scope" true false false true false
 run_experiment 3 "MLM + Scope + Address" true false false true true
 run_experiment 4 "MLM + NSP-CFG" true true false false false
 run_experiment 5 "MLM + NSP-CFG + Address" true true false false true
-run_experiment 6 "MLM + NSP-DFG" true false true false false
-run_experiment 7 "MLM + NSP-DFG + Address" true false true false true
-run_experiment 8 "MLM + NSP-CFG + NSP-DFG + Scope" true true true true false
-run_experiment 9 "MLM + NSP-CFG + NSP-DFG + Scope + Address" true true true true true
+# run_experiment 6 "MLM + NSP-DFG" true false true false false
+# run_experiment 7 "MLM + NSP-DFG + Address" true false true false true
+run_experiment 8 "MLM + NSP-CFG + Scope" true true false true false
+run_experiment 9 "MLM + NSP-CFG + Scope + Address" true true false true true
 
 # Record end time and calculate duration
 END_TIME=$(date +%s)

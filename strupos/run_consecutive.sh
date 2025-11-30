@@ -184,7 +184,7 @@ EPOCHS=10
 BATCH_SIZE=256 # Further reduced to avoid OOM (was 256, original 1024)
 LR=1e-4
 WARMUP_STEPS=10000
-NUM_WORKERS=8
+NUM_WORKERS=4
 EARLY_STOPPING_PATIENCE=3
 
 # Data processing
@@ -195,7 +195,7 @@ VAL_PERCENTAGE=0.2   # Validation data percentage (0.01 = 1%)
 
 # Device
 CUDA="--cuda"
-MULTI_GPU=""
+MULTI_GPU=" "
 
 # Show configuration
 echo "Configuration:"
@@ -257,6 +257,7 @@ python train_from_scratch.py \
   --val_percentage ${VAL_PERCENTAGE} \
   --output_dir "${OUTPUT_DIR}" \
   --log_dir "${LOG_DIR}" \
+  --resume \
   ${TASK_FLAGS} \
   ${CUDA} ${MULTI_GPU} \
   2>&1 | tee train_strupos.log

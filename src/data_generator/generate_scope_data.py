@@ -226,12 +226,20 @@ class ScopeDataGenerator:
         print("=" * 80)
         print(f"Binaries processed: {binary_count}")
         print(f"Total pairs: {len(all_pairs)}")
-        print(f"\nLabel distribution (balanced):")
-        print(f"  Same BB (label 0): {label_counts[0]} ({100*label_counts[0]/len(all_pairs):.1f}%)")
-        print(f"  Cross BB (label 1): {label_counts[1]} ({100*label_counts[1]/len(all_pairs):.1f}%)")
-        print(f"  Cross Func (label 2): {label_counts[2]} ({100*label_counts[2]/len(all_pairs):.1f}%)")
-        print(f"\nEach label type contains easy/medium/hard difficulty levels")
-        print(f"\nOutput: {self.output_path}")
+        
+        if len(all_pairs) > 0:
+            print(f"\nLabel distribution (balanced):")
+            print(f"  Same BB (label 0): {label_counts[0]} ({100*label_counts[0]/len(all_pairs):.1f}%)")
+            print(f"  Cross BB (label 1): {label_counts[1]} ({100*label_counts[1]/len(all_pairs):.1f}%)")
+            print(f"  Cross Func (label 2): {label_counts[2]} ({100*label_counts[2]/len(all_pairs):.1f}%)")
+            print(f"\nEach label type contains easy/medium/hard difficulty levels")
+            print(f"\nOutput: {self.output_path}")
+        else:
+            print("\nWARNING: No pairs were generated!")
+            print("Possible reasons:")
+            print("  - Input file is empty or malformed")
+            print("  - No valid binary sections found")
+            print("  - Insufficient instructions in binaries")
         print("=" * 80)
 
 

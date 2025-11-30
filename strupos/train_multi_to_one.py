@@ -522,6 +522,7 @@ def main():
     parser.add_argument("--log_dir", type=str, required=True, help="Log directory")
     parser.add_argument("--save_freq", type=int, default=1, help="Save checkpoint every N epochs")
     parser.add_argument("--log_freq", type=int, default=100, help="Log every N batches")
+    parser.add_argument("--resume", action="store_true", default=True, help="Resume from latest checkpoint if available")
     
     # Device args
     parser.add_argument("--cuda", action="store_true", help="Use CUDA")
@@ -743,13 +744,38 @@ def main():
     optimizer = Adam(model.parameters(), lr=args.lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs * len(train_loader))
     
+    # Resume from checkpoint if requested and exists
+    start_epoch = 0
+    best_val_loss = float('inf')
+    epochs_without_improvement = 0
+    checkpoint_path = os.path.join(args.output_dir, "checkpoint_latest.pt")
+    
+    if args.resume and os.path.exists(checkpoint_path):
+        logger.info(f"Found checkpoint: {checkpoint_path}")
+        logger.info("Resuming training from checkpoint...")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        epochs_without_improvement = checkpoint.get('epochs_without_improvement', 0)
+        
+        logger.info(f"Resumed from epoch {checkpoint['epoch']}")
+        logger.info(f"Best validation loss so far: {best_val_loss:.4f}")
+        logger.info(f"Epochs without improvement: {epochs_without_improvement}")
+    elif args.resume:
+        logger.info(f"Resume requested but no checkpoint found at {checkpoint_path}")
+        logger.info("Starting training from scratch.")
+    else:
+        logger.info("Starting training from scratch.")
+    
     # Training loop
     logger.info("Starting training...")
     logger.info("="*80)
-    best_val_loss = float('inf')
-    epochs_without_improvement = 0
     
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         logger.info(f"\nEpoch {epoch + 1}/{args.epochs}")
         logger.info("-"*80)
         
@@ -814,6 +840,31 @@ def main():
                     logger.info("="*80)
                     break
         
+        # Save checkpoint at the end of each epoch
+        checkpoint_path = os.path.join(args.output_dir, "checkpoint_latest.pt")
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_val_loss': best_val_loss,
+            'epochs_without_improvement': epochs_without_improvement,
+        }, checkpoint_path)
+        logger.info(f"Saved checkpoint: {checkpoint_path}")
+        
+        # Optionally save periodic checkpoints
+        if (epoch + 1) % args.save_freq == 0:
+            periodic_checkpoint_path = os.path.join(args.output_dir, f"checkpoint_epoch_{epoch + 1}.pt")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_val_loss': best_val_loss,
+                'epochs_without_improvement': epochs_without_improvement,
+            }, periodic_checkpoint_path)
+            logger.info(f"Saved periodic checkpoint: {periodic_checkpoint_path}")
+    
     
     logger.info("\n" + "="*80)
     logger.info("Training completed!")

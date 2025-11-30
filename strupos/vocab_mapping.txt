@@ -1,7 +1,7 @@
 ================================================================================
 TOKEN-TO-ID MAPPINGS
 ================================================================================
-Vocabulary size: 1214
+Vocabulary size: 1157
 
 ID         Token                                              Frequency      
 --------------------------------------------------------------------------------
@@ -1162,60 +1162,3 @@ ID         Token                                              Frequency
 1154       words                                              2
 1155       y2                                                 2
 1156       y_root                                             2
-1157       __unused                                           1
-1158       barrier                                            1
-1159       clflush                                            1
-1160       cmpneqss                                           1
-1161       codeset                                            1
-1162       dataset                                            1
-1163       errcode                                            1
-1164       f_blocks                                           1
-1165       fdiv                                               1
-1166       file_actions                                       1
-1167       fini                                               1
-1168       fromfd                                             1
-1169       funcs_203D5E                                       1
-1170       funcs_5447B                                        1
-1171       g                                                  1
-1172       graphics_exposures                                 1
-1173       haystacklen                                        1
-1174       hblkhd                                             1
-1175       jpt_203639                                         1
-1176       jpt_2091F8                                         1
-1177       jpt_21EB19                                         1
-1178       jpt_2457CE                                         1
-1179       jpt_24F0C6                                         1
-1180       jpt_256677                                         1
-1181       jpt_2C52                                           1
-1182       jpt_52AF3                                          1
-1183       ldmxcsr                                            1
-1184       loop                                               1
-1185       machine                                            1
-1186       main                                               1
-1187       mnt_fsname                                         1
-1188       mnt_opts                                           1
-1189       mnt_type                                           1
-1190       mountdirfd                                         1
-1191       num_units                                          1
-1192       old_len                                            1
-1193       oss                                                1
-1194       pmaxub                                             1
-1195       pw_shell                                           1
-1196       rectangles                                         1
-1197       rmtp                                               1
-1198       rtld_fini                                          1
-1199       scasd                                              1
-1200       send_event                                         1
-1201       serial                                             1
-1202       ss_size                                            1
-1203       ss_sp                                              1
-1204       stack_end                                          1
-1205       stmxcsr                                            1
-1206       stosb                                              1
-1207       stosd                                              1
-1208       sysname                                            1
-1209       tm_wday                                            1
-1210       tms_cutime                                         1
-1211       uordblks                                           1
-1212       vbroadcastss                                       1
-1213       vpbroadcastb                                       1

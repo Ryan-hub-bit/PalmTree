@@ -185,12 +185,13 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
     nsp_criterion = nn.CrossEntropyLoss()
     scope_criterion = nn.CrossEntropyLoss()
     
-    progress = tqdm(data_loader, desc="Training", file=sys.stdout)
+    # Disable automatic tqdm updates - we'll control them manually
+    progress = tqdm(total=len(data_loader), desc="Training", file=sys.stdout)
     
     # Create scope iterator
     scope_iter = iter(scope_loader) if scope_loader is not None else None
     
-    for i, batch in enumerate(progress):
+    for i, batch in enumerate(data_loader):
         # === Process CFG (MLM + NSP) ===
         # MLM uses cfg_mlm_* keys
         cfg_mlm_input = batch['cfg_mlm_input'].to(device)
@@ -271,6 +272,19 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
                 scope_binary_pos, scope_function_pos, scope_bb_pos
             )
             
+            
+            # print("=== SCOPE DEBUG ===")
+            # print("input_ids:     ", scope_token_ids[0][:20].tolist())
+            # print("segment_labels:", scope_segment_labels[0][:20].tolist())
+            # print("binary_pos:    ", scope_binary_pos[0][:20].tolist())
+            # print("function_pos:  ", scope_function_pos[0][:20].tolist())
+            # print("bb_pos:        ", scope_bb_pos[0][:20].tolist())
+
+            # print("true_label:    ", scope_labels[0].item())
+            # print("pred_label:    ", torch.argmax(scope_output[0]).item())
+            # print("raw_logits:    ", scope_output[0].tolist())
+            # print("=" * 80)
+            
             # Scope loss
             scope_loss = scope_criterion(scope_output, scope_labels)
         
@@ -297,14 +311,16 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
         avg_nsp_dfg = nsp_dfg_loss_total / (i + 1)
         avg_scope = scope_loss_total / (i + 1)
         
-        # Update progress bar every iteration
-        progress.set_postfix({
-            'loss': f'{avg_loss:.4f}',
-            'mlm': f'{avg_mlm:.4f}',
-            'nsp_cfg': f'{avg_nsp_cfg:.4f}',
-            'nsp_dfg': f'{avg_nsp_dfg:.4f}',
-            'scope': f'{avg_scope:.4f}'
-        })
+        # Update progress bar every 100 iterations
+        if i % 100 == 0:
+            progress.set_postfix({
+                'loss': f'{avg_loss:.4f}',
+                'mlm': f'{avg_mlm:.4f}',
+                'nsp_cfg': f'{avg_nsp_cfg:.4f}',
+                'nsp_dfg': f'{avg_nsp_dfg:.4f}',
+                'scope': f'{avg_scope:.4f}'
+            })
+            progress.update(100 if i > 0 else 1)  # Update by 100 except first iteration
         
         # Log to file periodically
         if i % log_freq == 0 and logger:
@@ -312,6 +328,9 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
                       f"Loss: {avg_loss:.4f} | MLM: {avg_mlm:.4f} | "
                       f"NSP_CFG: {avg_nsp_cfg:.4f} | NSP_DFG: {avg_nsp_dfg:.4f} | "
                       f"SCOPE: {avg_scope:.4f}")
+    
+    # Close progress bar
+    progress.close()
     
     return {
         'total_loss': total_loss / len(data_loader),
@@ -533,7 +552,8 @@ def main():
     parser.add_argument("--output_dir", type=str, required=True, help="Output directory")
     parser.add_argument("--log_dir", type=str, required=True, help="Log directory")
     parser.add_argument("--save_freq", type=int, default=1, help="Save checkpoint every N epochs")
-    parser.add_argument("--log_freq", type=int, default=100, help="Log every N batches")
+    parser.add_argument("--log_freq", type=int, default=1000, help="Log every N batches")
+    parser.add_argument("--resume", action="store_true", default=True, help="Resume from latest checkpoint if available")
     
     # Device args
     parser.add_argument("--cuda", action="store_true", help="Use CUDA")
@@ -749,13 +769,38 @@ def main():
     optimizer = Adam(model.parameters(), lr=args.lr)
     scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs * len(train_loader))
     
+    # Resume from checkpoint if requested and exists
+    start_epoch = 0
+    best_val_loss = float('inf')
+    epochs_without_improvement = 0
+    checkpoint_path = os.path.join(args.output_dir, "checkpoint_latest.pt")
+    
+    if args.resume and os.path.exists(checkpoint_path):
+        logger.info(f"Found checkpoint: {checkpoint_path}")
+        logger.info("Resuming training from checkpoint...")
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        best_val_loss = checkpoint.get('best_val_loss', float('inf'))
+        epochs_without_improvement = checkpoint.get('epochs_without_improvement', 0)
+        
+        logger.info(f"Resumed from epoch {checkpoint['epoch']}")
+        logger.info(f"Best validation loss so far: {best_val_loss:.4f}")
+        logger.info(f"Epochs without improvement: {epochs_without_improvement}")
+    elif args.resume:
+        logger.info(f"Resume requested but no checkpoint found at {checkpoint_path}")
+        logger.info("Starting training from scratch.")
+    else:
+        logger.info("Starting training from scratch.")
+    
     # Training loop
     logger.info("Starting training...")
     logger.info("="*80)
-    best_val_loss = float('inf')
-    epochs_without_improvement = 0
     
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         logger.info(f"\nEpoch {epoch + 1}/{args.epochs}")
         logger.info("-"*80)
         
@@ -820,6 +865,31 @@ def main():
                     logger.info("="*80)
                     break
         
+        # Save checkpoint at the end of each epoch
+        checkpoint_path = os.path.join(args.output_dir, "checkpoint_latest.pt")
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': scheduler.state_dict(),
+            'best_val_loss': best_val_loss,
+            'epochs_without_improvement': epochs_without_improvement,
+        }, checkpoint_path)
+        logger.info(f"Saved checkpoint: {checkpoint_path}")
+        
+        # Optionally save periodic checkpoints
+        if (epoch + 1) % args.save_freq == 0:
+            periodic_checkpoint_path = os.path.join(args.output_dir, f"checkpoint_epoch_{epoch + 1}.pt")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_val_loss': best_val_loss,
+                'epochs_without_improvement': epochs_without_improvement,
+            }, periodic_checkpoint_path)
+            logger.info(f"Saved periodic checkpoint: {periodic_checkpoint_path}")
+    
     
     logger.info("\n" + "="*80)
     logger.info("Training completed!")

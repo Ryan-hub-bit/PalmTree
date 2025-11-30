@@ -95,40 +95,48 @@ class ScopeDataset(Dataset):
         
         Returns:
             tokens: List of token strings
-            binary_pos: Binary-level normalized position
-            function_pos: Function-level normalized position
-            bb_pos: Basic block-level normalized position
+            positions: List of (binary_pos, function_pos, bb_pos) tuples for each token
         """
         inst_str = inst_str.strip()
         if not inst_str:
-            return [], 0.0, 0.0, 0.0
+            return [], []
         
         # Match main instruction pattern
         main_match = self.addr_pattern.match(inst_str)
         if not main_match:
             # No address info, treat as regular tokens
-            return inst_str.split(), 0.0, 0.0, 0.0
+            return inst_str.split(), [(0.0, 0.0, 0.0)] * len(inst_str.split())
         
         opcode = main_match.group(1)
-        addr = main_match.group(2)
         bnorm = float(main_match.group(3))
         fnorm = float(main_match.group(4))
         bbnorm = float(main_match.group(5))
         
+        # Start with opcode and its position
+        tokens = [opcode]
+        positions = [(bnorm, fnorm, bbnorm)]
+        
         # Get operands (everything after the address part)
         operands_str = inst_str[main_match.end():].strip()
         
-        # Parse operands and replace nested addresses
-        operand_tokens = []
+        # Parse operands
         if operands_str:
-            # Replace nested address(...) with just 'address'
-            operands_str = self.nested_addr_pattern.sub('address', operands_str)
-            operand_tokens = operands_str.split()
+            for operand in operands_str.split():
+                # Check if operand is address(...)
+                nested_match = self.nested_addr_pattern.match(operand)
+                if nested_match:
+                    # Extract position info from the address(...) wrapper
+                    nested_bnorm = float(nested_match.group(2))
+                    nested_fnorm = float(nested_match.group(3))
+                    nested_bbnorm = float(nested_match.group(4))
+                    tokens.append('address')
+                    positions.append((nested_bnorm, nested_fnorm, nested_bbnorm))
+                else:
+                    # Regular operand (rax, imm, etc.) - no position info
+                    tokens.append(operand)
+                    positions.append((0.0, 0.0, 0.0))
         
-        # Combine: opcode + operands
-        tokens = [opcode] + operand_tokens
-        
-        return tokens, bnorm, fnorm, bbnorm
+        return tokens, positions
     
     def _convert_to_ids(self, tokens):
         """Convert token strings to vocabulary IDs."""
@@ -168,8 +176,8 @@ class ScopeDataset(Dataset):
             scope_label = int(parts[2]) if parts[2].isdigit() else 0
         
         # Parse both instructions
-        tokens1, bnorm1, fnorm1, bbnorm1 = self._parse_instruction(inst1_str)
-        tokens2, bnorm2, fnorm2, bbnorm2 = self._parse_instruction(inst2_str)
+        tokens1, positions1 = self._parse_instruction(inst1_str)
+        tokens2, positions2 = self._parse_instruction(inst2_str)
         
         # Convert to IDs
         ids1 = self._convert_to_ids(tokens1)
@@ -179,15 +187,20 @@ class ScopeDataset(Dataset):
         max_len_per_inst = (self.seq_len - 3) // 2  # Reserve 3 for [SOS], [EOS], [EOS]
         ids1 = ids1[:max_len_per_inst]
         ids2 = ids2[:max_len_per_inst]
+        positions1 = positions1[:max_len_per_inst]
+        positions2 = positions2[:max_len_per_inst]
         
         # Build sequence: [SOS] inst1 [EOS] inst2 [EOS]
         bert_input = [self.vocab.sos_index] + ids1 + [self.vocab.eos_index] + ids2 + [self.vocab.eos_index]
         segment_labels = [0] * (1 + len(ids1) + 1) + [1] * (len(ids2) + 1)
         
-        # Build position sequences (use first instruction's position for [CLS], avg for [SEP])
-        binary_pos = [bnorm1] + [bnorm1] * len(ids1) + [bnorm1] + [bnorm2] * len(ids2) + [bnorm2]
-        function_pos = [fnorm1] + [fnorm1] * len(ids1) + [fnorm1] + [fnorm2] * len(ids2) + [fnorm2]
-        bb_pos = [bbnorm1] + [bbnorm1] * len(ids1) + [bbnorm1] + [bbnorm2] * len(ids2) + [bbnorm2]
+        # Build position sequences
+        # Special tokens ([SOS], [EOS]) get (0.0, 0.0, 0.0) - no position info
+        all_positions = [(0.0, 0.0, 0.0)] + positions1 + [(0.0, 0.0, 0.0)] + positions2 + [(0.0, 0.0, 0.0)]
+        
+        binary_pos = [pos[0] for pos in all_positions]
+        function_pos = [pos[1] for pos in all_positions]
+        bb_pos = [pos[2] for pos in all_positions]
         
         # Pad to seq_len
         padding_len = self.seq_len - len(bert_input)

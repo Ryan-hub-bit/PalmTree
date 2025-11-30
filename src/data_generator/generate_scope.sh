@@ -68,11 +68,11 @@ process_cdfg_dir() {
     local temp_dir="${DATA_DIR}/scope"
     mkdir -p "${temp_dir}"
     
-    # Find all CDFG files
-    local cdfg_files=($(find "${input_dir}" -name "*.txt" -type f))
+    # Find all CFG files only (skip DFG files)
+    local cdfg_files=($(find "${input_dir}" -name "*_cfg_*.txt" -type f))
     local num_files=${#cdfg_files[@]}
     
-    echo "Found ${num_files} CDFG files"
+    echo "Found ${num_files} CFG files"
     echo ""
     
     # Process each CDFG file
@@ -107,20 +107,20 @@ process_cdfg_dir() {
 }
 
 # Generate training data
-if [ -f "${TRAIN_OUTPUT}" ]; then
-    echo "⚠️  ${TRAIN_OUTPUT} already exists, skipping..."
-    echo ""
-else
-    process_cdfg_dir "${TRAIN_CDFG}" "${TRAIN_OUTPUT}" ${TRAIN_SAMPLES_PER_BIN} "TRAIN"
-fi
+# if [ -f "${TRAIN_OUTPUT}" ]; then
+#     echo "⚠️  ${TRAIN_OUTPUT} already exists, skipping..."
+#     echo ""
+# else
+#     process_cdfg_dir "${TRAIN_CDFG}" "${TRAIN_OUTPUT}" ${TRAIN_SAMPLES_PER_BIN} "TRAIN"
+# fi
 
-# Generate validation data
-if [ -f "${VAL_OUTPUT}" ]; then
-    echo "⚠️  ${VAL_OUTPUT} already exists, skipping..."
-    echo ""
-else
-    process_cdfg_dir "${VAL_CDFG}" "${VAL_OUTPUT}" ${VAL_SAMPLES_PER_BIN} "VAL"
-fi
+# # Generate validation data
+# if [ -f "${VAL_OUTPUT}" ]; then
+#     echo "⚠️  ${VAL_OUTPUT} already exists, skipping..."
+#     echo ""
+# else
+#     process_cdfg_dir "${VAL_CDFG}" "${VAL_OUTPUT}" ${VAL_SAMPLES_PER_BIN} "VAL"
+# fi
 
 # Generate test data
 if [ -f "${TEST_OUTPUT}" ]; then
