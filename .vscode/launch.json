@@ -136,6 +136,51 @@
         "CUDA_VISIBLE_DEVICES": "0"
       },
       "justMyCode": false
+    },
+    {
+      "name": "Debug Instruction Mask (IMC+IMD+MLM+Scope+Address)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/strupos/train_with_instruction_mask.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/strupos",
+      "args": [
+        "--cfg_train", "/data/kun/dataset/train_cfg.txt",
+        "--dfg_train", "/data/kun/dataset/train_dfg.txt",
+        "--cfg_val", "/data/kun/dataset/val_cfg.txt",
+        "--dfg_val", "/data/kun/dataset/val_dfg.txt",
+        "--scope_train", "/data/kun/dataset/train_scope.txt",
+        "--scope_val", "/data/kun/dataset/val_scope.txt",
+        "--vocab", "./vocab.pkl",
+        "--hidden", "128",
+        "--layers", "12",
+        "--attn_heads", "8",
+        "--seq_len", "60",
+        "--dropout", "0.1",
+        "--epochs", "10",
+        "--batch_size", "256",
+        "--lr", "1e-4",
+        "--warmup_steps", "1000",
+        "--num_workers", "4",
+        "--early_stopping_patience", "3",
+        "--token_mask_prob", "0.15",
+        "--instruction_mask_prob", "0.15",
+        "--data_percentage", "0.01",
+        "--val_percentage", "0.1",
+        "--output_dir", "./output_imc_imd_mlm_scope_address",
+        "--log_dir", "./log_imc_imd_mlm_scope_address",
+        "--enable_imc",
+        "--enable_imd",
+        "--enable_mlm",
+        "--enable_scope",
+        "--use_address_embedding",
+        "--cuda"
+      ],
+      "env": { 
+        "PYTHONPATH": "${workspaceFolder}",
+        "CUDA_VISIBLE_DEVICES": "0"
+      },
+      "justMyCode": false
     }
   ]
 }

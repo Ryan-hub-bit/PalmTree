@@ -7,13 +7,12 @@ This is different from token-level MLM which masks individual tokens.
 For a line with 8 instructions and instruction_mask_rate=0.15:
 - ~1 instruction will be fully masked (all its tokens replaced with [MASK])
 - The model must predict all tokens of the masked instruction
-- Also supports standard token-level MLM and NSP
+- Also supports standard token-level MLM
 
 Tasks:
-- IM (Instruction Masking): Mask entire instructions
+- IMC (Instruction Masking CFG): Mask entire instructions in CFG sequences
+- IMD (Instruction Masking DFG): Mask entire instructions in DFG sequences  
 - MLM (Masked Language Model): Mask individual tokens  
-- NSP-CFG: Next sentence prediction on CFG pairs
-- NSP-DFG: Next sentence prediction on DFG pairs
 """
 
 import torch
@@ -28,10 +27,9 @@ class InstructionMaskingDataset(Dataset):
     Dataset that implements instruction-level masking.
     
     Strategy:
-    - IM: Mask entire instructions at instruction_mask_rate (e.g., 15%)
+    - IMC: Mask entire instructions in CFG at instruction_mask_rate (e.g., 15%)
+    - IMD: Mask entire instructions in DFG at instruction_mask_rate (e.g., 15%)
     - MLM: Mask individual tokens at token_mask_rate (e.g., 15%)
-    - NSP-CFG: Create one random consecutive pair per line
-    - NSP-DFG: Use DFG lines as-is
     """
     
     def __init__(
@@ -40,22 +38,20 @@ class InstructionMaskingDataset(Dataset):
         dfg_corpus_path,
         vocab,
         seq_len=512,
-        nsp_content_max=20,
         encoding="utf-8",
         on_memory=True,
-        nsp_prob=0.5,
         token_mask_prob=0.15,  # Standard MLM masking rate
         instruction_mask_prob=0.25,  # Instruction-level masking rate
         data_percentage=1.0,
         train_split=1.0,
         is_train=True,
+        enable_imd=False,  # Enable DFG instruction masking (controlled by args)
     ):
         self.vocab = vocab
         self.seq_len = seq_len
-        self.nsp_content_max = nsp_content_max
-        self.nsp_prob = nsp_prob
         self.token_mask_prob = token_mask_prob
         self.instruction_mask_prob = instruction_mask_prob
+        self.enable_imd = enable_imd
         
         # Special token IDs
         self.pad_idx = vocab.stoi.get('<pad>', 0)
@@ -73,42 +69,40 @@ class InstructionMaskingDataset(Dataset):
         self.cfg_lines = self._load_corpus(cfg_corpus_path)
         print(f"Loaded {len(self.cfg_lines)} CFG lines")
         
-        # Load DFG data
-        print(f"Loading DFG corpus from {dfg_corpus_path}")
-        self.dfg_lines = self._load_corpus(dfg_corpus_path)
-        print(f"Loaded {len(self.dfg_lines)} DFG lines")
+        # Load DFG data if enabled
+        self.dfg_lines = []
+        if self.enable_imd and dfg_corpus_path:
+            print(f"Loading DFG corpus from {dfg_corpus_path}")
+            self.dfg_lines = self._load_corpus(dfg_corpus_path)
+            print(f"Loaded {len(self.dfg_lines)} DFG lines")
         
         # Apply data percentage
         if data_percentage < 1.0:
             cfg_size = int(len(self.cfg_lines) * data_percentage)
-            dfg_size = int(len(self.dfg_lines) * data_percentage)
             self.cfg_lines = self.cfg_lines[:cfg_size]
-            self.dfg_lines = self.dfg_lines[:dfg_size]
+            if self.dfg_lines:
+                dfg_size = int(len(self.dfg_lines) * data_percentage)
+                self.dfg_lines = self.dfg_lines[:dfg_size]
         
         # Apply train/val split
         if train_split < 1.0:
             cfg_train_size = int(len(self.cfg_lines) * train_split)
-            dfg_train_size = int(len(self.dfg_lines) * train_split)
             
             if is_train:
                 self.cfg_lines = self.cfg_lines[:cfg_train_size]
-                self.dfg_lines = self.dfg_lines[:dfg_train_size]
+                if self.dfg_lines:
+                    dfg_train_size = int(len(self.dfg_lines) * train_split)
+                    self.dfg_lines = self.dfg_lines[:dfg_train_size]
             else:
                 self.cfg_lines = self.cfg_lines[cfg_train_size:]
-                self.dfg_lines = self.dfg_lines[dfg_train_size:]
-        
-        # Create one random NSP pair per CFG line
-        print("Creating one random NSP pair per CFG line...")
-        self.cfg_nsp_pairs = []
-        for line_idx, line in enumerate(tqdm(self.cfg_lines, desc="CFG NSP")):
-            pair = self._create_random_consecutive_pair(line, line_idx)
-            if pair is not None:
-                self.cfg_nsp_pairs.append(pair)
+                if self.dfg_lines:
+                    dfg_train_size = int(len(self.dfg_lines) * train_split)
+                    self.dfg_lines = self.dfg_lines[dfg_train_size:]
         
         print(f"Dataset size:")
-        print(f"  CFG lines (for IM+MLM): {len(self.cfg_lines)}")
-        print(f"  CFG NSP pairs: {len(self.cfg_nsp_pairs)}")
-        print(f"  DFG lines (NSP only): {len(self.dfg_lines)}")
+        print(f"  CFG lines (for IMC+MLM): {len(self.cfg_lines)}")
+        if self.dfg_lines:
+            print(f"  DFG lines (for IMD): {len(self.dfg_lines)}")
         print(f"  Instruction mask rate: {instruction_mask_prob}")
         print(f"  Token mask rate: {token_mask_prob}")
     
@@ -121,38 +115,6 @@ class InstructionMaskingDataset(Dataset):
                 if line:
                     lines.append(line)
         return lines
-    
-    def _create_random_consecutive_pair(self, line, line_idx):
-        """Create one random consecutive pair from a line"""
-        instructions = line.split('\t')
-        
-        if len(instructions) < 2:
-            return None
-        
-        # Randomly pick a starting position
-        i = random.randint(0, len(instructions) - 2)
-        
-        inst1 = instructions[i]
-        inst2_original = instructions[i + 1]
-        
-        # Decide if positive or negative
-        if random.random() < self.nsp_prob:
-            # NEGATIVE: Replace inst2 with random instruction
-            inst2 = inst2_original
-            max_attempts = 10
-            attempts = 0
-            while inst2 == inst2_original and attempts < max_attempts:
-                random_line = random.choice(self.cfg_lines)
-                random_instructions = random_line.split('\t')
-                inst2 = random.choice(random_instructions)
-                attempts += 1
-            label = 0
-        else:
-            # POSITIVE: Keep consecutive
-            inst2 = inst2_original
-            label = 1
-        
-        return (line_idx, inst1, inst2, label)
     
     def _parse_instruction(self, inst_text):
         """Parse a single instruction and extract tokens + positions"""
@@ -379,90 +341,34 @@ class InstructionMaskingDataset(Dataset):
             'bb_pos': torch.FloatTensor(bb_pos),
         }
     
-    def _process_nsp_pair(self, inst1_text, inst2_text, is_next):
-        """Process a pair of instructions for NSP"""
-        inst1_tokens, inst1_pos = self._parse_instruction(inst1_text)
-        inst2_tokens, inst2_pos = self._parse_instruction(inst2_text)
-        
-        # Convert to IDs (no masking for NSP)
-        inst1_ids = [self.vocab.stoi.get(t, self.unk_idx) for t in inst1_tokens]
-        inst2_ids = [self.vocab.stoi.get(t, self.unk_idx) for t in inst2_tokens]
-        
-        # Combine sequences
-        tokens = [self.sos_idx] + inst1_ids + [self.eos_idx] + inst2_ids + [self.eos_idx]
-        positions = [(0.0, 0.0, 0.0)] + inst1_pos + [(0.0, 0.0, 0.0)] + inst2_pos + [(0.0, 0.0, 0.0)]
-        segment_label = [0] * (len(inst1_ids) + 2) + [1] * (len(inst2_ids) + 1)
-        
-        # Truncate or pad
-        if len(tokens) > self.seq_len:
-            tokens = tokens[:self.seq_len]
-            positions = positions[:self.seq_len]
-            segment_label = segment_label[:self.seq_len]
-        else:
-            padding_len = self.seq_len - len(tokens)
-            tokens += [self.pad_idx] * padding_len
-            positions += [(0.0, 0.0, 0.0)] * padding_len
-            segment_label += [0] * padding_len
-        
-        binary_pos = [p[0] for p in positions]
-        function_pos = [p[1] for p in positions]
-        bb_pos = [p[2] for p in positions]
-        
-        return {
-            'bert_input': torch.LongTensor(tokens),
-            'segment_label': torch.LongTensor(segment_label),
-            'is_next': torch.LongTensor([is_next]),
-            'binary_pos': torch.FloatTensor(binary_pos),
-            'function_pos': torch.FloatTensor(function_pos),
-            'bb_pos': torch.FloatTensor(bb_pos),
-        }
-    
     def __len__(self):
-        """Length = number of NSP pairs"""
-        return len(self.cfg_nsp_pairs)
+        """Length = number of CFG lines"""
+        return len(self.cfg_lines)
     
     def __getitem__(self, index):
         """
-        Get one training sample with IM, MLM, and NSP.
+        Get one training sample with IMC, IMD, and MLM.
         
         Returns:
-            - im_data: Dict with instruction-masked data from full CFG line
+            - imc_data: Dict with instruction-masked data from full CFG line
+            - imd_data: Dict with instruction-masked data from full DFG line (if enabled)
             - mlm_data: Dict with token-masked data from full CFG line (different masking)
-            - nsp_cfg_data: Dict with NSP pair from CFG
-            - nsp_dfg_data: Dict with NSP pair from DFG
         """
-        # Get CFG NSP pair
-        line_idx, cfg_inst1, cfg_inst2, cfg_is_next = self.cfg_nsp_pairs[index]
+        # IMC: Process the full CFG line with instruction-level masking
+        imc_data = self._process_line_for_instruction_masking(self.cfg_lines[index])
         
-        # IM: Process the full line with instruction-level masking
-        im_data = self._process_line_for_instruction_masking(self.cfg_lines[line_idx])
+        # MLM: Process the full CFG line with token-level masking (independent from IMC)
+        mlm_data = self._process_line_for_token_masking(self.cfg_lines[index])
         
-        # MLM: Process the full line with token-level masking (independent from IM)
-        mlm_data = self._process_line_for_token_masking(self.cfg_lines[line_idx])
-        
-        # NSP-CFG: Process the pair
-        nsp_cfg_data = self._process_nsp_pair(cfg_inst1, cfg_inst2, cfg_is_next)
-        
-        # NSP-DFG: Get corresponding DFG pair
-        dfg_idx = index % len(self.dfg_lines)
-        dfg_line = self.dfg_lines[dfg_idx]
-        dfg_instructions = dfg_line.split('\t')
-        
-        if len(dfg_instructions) >= 2:
-            # DFG is already in pair format, take first two
-            dfg_inst1, dfg_inst2 = dfg_instructions[0], dfg_instructions[1]
-            dfg_is_next = 1  # Assume positive
-        else:
-            # Fallback
-            dfg_inst1 = dfg_instructions[0] if dfg_instructions else ""
-            dfg_inst2 = dfg_instructions[0] if dfg_instructions else ""
-            dfg_is_next = 1
-        
-        nsp_dfg_data = self._process_nsp_pair(dfg_inst1, dfg_inst2, dfg_is_next)
-        
-        return {
-            'im': im_data,
+        result = {
+            'imc': imc_data,
             'mlm': mlm_data,
-            'nsp_cfg': nsp_cfg_data,
-            'nsp_dfg': nsp_dfg_data,
         }
+        
+        # IMD: Process the full DFG line with instruction-level masking (if enabled)
+        if self.enable_imd and self.dfg_lines:
+            dfg_index = index % len(self.dfg_lines)
+            imd_data = self._process_line_for_instruction_masking(self.dfg_lines[dfg_index])
+            result['imd'] = imd_data
+        
+        return result

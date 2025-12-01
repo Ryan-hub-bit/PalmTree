@@ -18,14 +18,19 @@ echo ""
 # Experiment selection
 # Uncomment ONE of the following experiments:
 
-# Experiment 1: IM + MLM + Address
-EXPERIMENT="im_mlm_address"
-TASKS="--enable_im --enable_mlm"
+# Experiment 1: IMC + MLM + Address
+EXPERIMENT="imc_mlm_address"
+TASKS="--enable_imc --enable_mlm"
 ADDRESS_FLAG=""
 
-# Experiment 2: IM + MLM + Address + Scope
-# EXPERIMENT="im_mlm_address_scope"
-# TASKS="--enable_im --enable_mlm --enable_scope"
+# Experiment 2: IMC + IMD + MLM + Address
+# EXPERIMENT="imc_imd_mlm_address"
+# TASKS="--enable_imc --enable_imd --enable_mlm"
+# ADDRESS_FLAG=""
+
+# Experiment 3: IMC + MLM + Address + Scope
+# EXPERIMENT="imc_mlm_address_scope"
+# TASKS="--enable_imc --enable_mlm --enable_scope"
 # ADDRESS_FLAG=""
 
 # Configuration
@@ -38,7 +43,6 @@ HIDDEN=128
 LAYERS=12
 ATTN_HEADS=8
 SEQ_LEN=60
-NSP_CONTENT_MAX=20
 
 # Training parameters
 BATCH_SIZE=256
@@ -50,8 +54,7 @@ EARLY_STOPPING=3
 
 # Masking parameters
 TOKEN_MASK_PROB=0.15      # Standard MLM masking rate
-INSTRUCTION_MASK_PROB=0.15  # NEW: Instruction-level masking rate
-NSP_PROB=0.5
+INSTRUCTION_MASK_PROB=0.15  # Instruction-level masking rate
 
 # Data parameters
 TRAIN_PERCENTAGE=1  # Use 20% of training data
@@ -67,10 +70,10 @@ SCOPE_TRAIN="/data/kun/dataset/train_scope.txt"
 SCOPE_VAL="/data/kun/dataset/val_scope.txt"
 
 # Task flags - Enable what you want to train
-TASKS="--enable_im"                    # NEW: Instruction Masking
-TASKS="${TASKS} --enable_mlm"        # Token-level MLM (optional)
-# TASKS="${TASKS} --enable_nsp_cfg"    # NSP on CFG (optional)
-# TASKS="${TASKS} --enable_nsp_dfg"    # NSP on DFG (optional)
+TASKS=""
+TASKS="${TASKS} --enable_imc"        # IMC: Instruction Masking for CFG
+# TASKS="${TASKS} --enable_imd"       # IMD: Instruction Masking for DFG (optional)
+TASKS="${TASKS} --enable_mlm"        # Token-level MLM (default enabled)
 # TASKS="${TASKS} --enable_scope"      # Scope prediction (optional)
 
 # Address embedding
@@ -85,7 +88,7 @@ MULTI_GPU="--multi_gpu"
 echo "Configuration:"
 echo "  Model: ${MODEL_NAME}"
 echo "  Output: ${OUTPUT_DIR}"
-echo "  Tasks: IM (instruction masking)"
+echo "  Tasks: IMC (instruction masking for CFG)"
 echo "  Token mask rate: ${TOKEN_MASK_PROB}"
 echo "  Instruction mask rate: ${INSTRUCTION_MASK_PROB}"
 echo "  Batch size: ${BATCH_SIZE}"
@@ -115,7 +118,6 @@ python train_with_instruction_mask.py \
   --layers ${LAYERS} \
   --attn_heads ${ATTN_HEADS} \
   --seq_len ${SEQ_LEN} \
-  --nsp_content_max ${NSP_CONTENT_MAX} \
   --dropout 0.1 \
   --epochs ${EPOCHS} \
   --batch_size ${BATCH_SIZE} \
@@ -125,7 +127,6 @@ python train_with_instruction_mask.py \
   --early_stopping_patience ${EARLY_STOPPING} \
   --token_mask_prob ${TOKEN_MASK_PROB} \
   --instruction_mask_prob ${INSTRUCTION_MASK_PROB} \
-  --nsp_prob ${NSP_PROB} \
   --data_percentage ${TRAIN_PERCENTAGE} \
   --val_percentage ${VAL_PERCENTAGE} \
   --output_dir "${OUTPUT_DIR}" \

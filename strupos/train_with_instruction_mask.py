@@ -2,12 +2,12 @@
 Training script for Address-Aware BERT with Instruction Masking
 
 Trains a BERT model with:
-1. Instruction Masking (IM) - masks entire instructions
-2. Masked Language Modeling (MLM) - masks individual tokens  
-3. Next Sentence Prediction (NSP-CFG and NSP-DFG)
+1. Instruction Masking CFG (IMC) - masks entire instructions in CFG
+2. Instruction Masking DFG (IMD) - masks entire instructions in DFG
+3. Masked Language Modeling (MLM) - masks individual tokens  
 4. Scope Prediction
 
-New task: IM (Instruction Masking)
+New tasks: IMC/IMD (Instruction Masking for CFG/DFG)
 - Masks entire instructions at a configurable rate
 - Model must predict all tokens in the masked instruction
 - Different from MLM which masks individual tokens
@@ -33,22 +33,21 @@ from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
 
 def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=1000, logger=None,
-                enable_im=True, enable_mlm=True, enable_nsp_cfg=False, enable_nsp_dfg=False, enable_scope=False):
+                enable_imc=False, enable_imd=False, enable_mlm=True, enable_scope=False):
     """
-    Train for one epoch with IM, MLM, NSP, and Scope tasks.
+    Train for one epoch with IMC, IMD, MLM, and Scope tasks.
     
     Args:
         model: AddressAwareBERTForPretraining model
-        data_loader: DataLoader for IM+MLM+NSP data
+        data_loader: DataLoader for IMC+IMD+MLM data
         scope_loader: DataLoader for scope prediction data
         optimizer: Optimizer
         device: Device to train on
         log_freq: Log every N batches
         logger: Logger instance
-        enable_im: Enable instruction masking task
+        enable_imc: Enable instruction masking for CFG
+        enable_imd: Enable instruction masking for DFG
         enable_mlm: Enable masked language modeling task
-        enable_nsp_cfg: Enable CFG NSP task
-        enable_nsp_dfg: Enable DFG NSP task
         enable_scope: Enable scope prediction task
     
     Returns:
@@ -56,17 +55,16 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
     """
     model.train()
     
-    total_im_loss = 0
+    total_imc_loss = 0
+    total_imd_loss = 0
     total_mlm_loss = 0
-    total_nsp_cfg_loss = 0
-    total_nsp_dfg_loss = 0
     total_scope_loss = 0
     total_loss = 0
     
     # Loss functions
-    im_criterion = nn.CrossEntropyLoss(ignore_index=-1)  # Ignore non-masked tokens
+    imc_criterion = nn.CrossEntropyLoss(ignore_index=-1)  # Ignore non-masked tokens
+    imd_criterion = nn.CrossEntropyLoss(ignore_index=-1)
     mlm_criterion = nn.CrossEntropyLoss(ignore_index=-1)
-    nsp_criterion = nn.CrossEntropyLoss()
     scope_criterion = nn.NLLLoss()
     
     # Scope iterator
@@ -76,32 +74,59 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
     progress_bar = tqdm(total=len(data_loader), desc="Training", disable=False)
     
     for batch_idx, batch in enumerate(data_loader):
-        # === Process IM (Instruction Masking) ===
-        im_loss = torch.tensor(0.0, device=device)
-        if enable_im:
-            im_batch = batch['im']
+        # === Process IMC (Instruction Masking CFG) ===
+        imc_loss = torch.tensor(0.0, device=device)
+        if enable_imc:
+            imc_batch = batch['imc']
             
-            im_input = im_batch['bert_input'].to(device)
-            im_labels = im_batch['bert_label'].to(device)
-            im_segment = im_batch['segment_label'].to(device)
-            im_binary_pos = im_batch['binary_pos'].to(device)
-            im_function_pos = im_batch['function_pos'].to(device)
-            im_bb_pos = im_batch['bb_pos'].to(device)
+            imc_input = imc_batch['bert_input'].to(device)
+            imc_labels = imc_batch['bert_label'].to(device)
+            imc_segment = imc_batch['segment_label'].to(device)
+            imc_binary_pos = imc_batch['binary_pos'].to(device)
+            imc_function_pos = imc_batch['function_pos'].to(device)
+            imc_bb_pos = imc_batch['bb_pos'].to(device)
             
             if hasattr(model, 'module'):
-                im_output = model.module.forward_im(
-                    im_input, im_segment,
-                    im_binary_pos, im_function_pos, im_bb_pos
+                imc_output = model.module.forward_im(
+                    imc_input, imc_segment,
+                    imc_binary_pos, imc_function_pos, imc_bb_pos
                 )
             else:
-                im_output = model.forward_im(
-                    im_input, im_segment,
-                    im_binary_pos, im_function_pos, im_bb_pos
+                imc_output = model.forward_im(
+                    imc_input, imc_segment,
+                    imc_binary_pos, imc_function_pos, imc_bb_pos
                 )
             
-            im_output = im_output.view(-1, im_output.size(-1))
-            im_labels_flat = im_labels.view(-1)
-            im_loss = im_criterion(im_output, im_labels_flat)
+            imc_output = imc_output.view(-1, imc_output.size(-1))
+            imc_labels_flat = imc_labels.view(-1)
+            imc_loss = imc_criterion(imc_output, imc_labels_flat)
+        
+        # === Process IMD (Instruction Masking DFG) ===
+        imd_loss = torch.tensor(0.0, device=device)
+        if enable_imd and 'imd' in batch:
+            imd_batch = batch['imd']
+            
+            imd_input = imd_batch['bert_input'].to(device)
+            imd_labels = imd_batch['bert_label'].to(device)
+            imd_segment = imd_batch['segment_label'].to(device)
+            imd_binary_pos = imd_batch['binary_pos'].to(device)
+            imd_function_pos = imd_batch['function_pos'].to(device)
+            imd_bb_pos = imd_batch['bb_pos'].to(device)
+            
+            if hasattr(model, 'module'):
+                imd_output = model.module.forward_im(
+                    imd_input, imd_segment,
+                    imd_binary_pos, imd_function_pos, imd_bb_pos
+                )
+            else:
+                imd_output = model.forward_im(
+                    imd_input, imd_segment,
+                    imd_binary_pos, imd_function_pos, imd_bb_pos
+                )
+            
+            imd_output = imd_output.view(-1, imd_output.size(-1))
+            imd_labels_flat = imd_labels.view(-1)
+            imd_loss = imd_criterion(imd_output, imd_labels_flat)
         
         # === Process MLM (Token-level Masking) ===
         mlm_loss = torch.tensor(0.0, device=device)
@@ -125,48 +150,7 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             mlm_labels_flat = mlm_labels.view(-1)
             mlm_loss = mlm_criterion(mlm_output, mlm_labels_flat)
         
-        # === Process NSP-CFG ===
-        nsp_cfg_loss = torch.tensor(0.0, device=device)
-        if enable_nsp_cfg:
-            cfg_nsp_batch = batch['nsp_cfg']
-            
-            cfg_nsp_input = cfg_nsp_batch['bert_input'].to(device)
-            cfg_segment_labels = cfg_nsp_batch['segment_label'].to(device)
-            cfg_nsp_binary_pos = cfg_nsp_batch['binary_pos'].to(device)
-            cfg_nsp_function_pos = cfg_nsp_batch['function_pos'].to(device)
-            cfg_nsp_bb_pos = cfg_nsp_batch['bb_pos'].to(device)
-            cfg_nsp_labels = cfg_nsp_batch['is_next'].to(device)
-            
-            _, cfg_nsp_output = model(
-                cfg_nsp_input, cfg_segment_labels,
-                cfg_nsp_binary_pos, cfg_nsp_function_pos, cfg_nsp_bb_pos,
-                corpus_type='cfg'
-            )
-            
-            nsp_cfg_loss = nsp_criterion(cfg_nsp_output, cfg_nsp_labels.squeeze())
-        
-        # === Process NSP-DFG ===
-        nsp_dfg_loss = torch.tensor(0.0, device=device)
-        if enable_nsp_dfg:
-            dfg_nsp_batch = batch['nsp_dfg']
-            
-            dfg_nsp_input = dfg_nsp_batch['bert_input'].to(device)
-            dfg_segment_labels = dfg_nsp_batch['segment_label'].to(device)
-            dfg_nsp_binary_pos = dfg_nsp_batch['binary_pos'].to(device)
-            dfg_nsp_function_pos = dfg_nsp_batch['function_pos'].to(device)
-            dfg_nsp_bb_pos = dfg_nsp_batch['bb_pos'].to(device)
-            dfg_nsp_labels = dfg_nsp_batch['is_next'].to(device)
-            
-            _, dfg_nsp_output = model(
-                dfg_nsp_input, dfg_segment_labels,
-                dfg_nsp_binary_pos, dfg_nsp_function_pos, dfg_nsp_bb_pos,
-                corpus_type='dfg'
-            )
-            
-            nsp_dfg_loss = nsp_criterion(dfg_nsp_output, dfg_nsp_labels.squeeze())
-        
-        # === Process Scope (if available and enabled) ===
-        scope_loss = torch.tensor(0.0, device=device)
+        # === Process Scope (if available and enabled) ===.tensor(0.0, device=device)
         if enable_scope and scope_iter is not None:
             try:
                 scope_batch = next(scope_iter)
@@ -195,7 +179,7 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             scope_loss = scope_criterion(scope_output, scope_labels)
         
         # Combined loss
-        loss = im_loss + mlm_loss + nsp_cfg_loss + nsp_dfg_loss + scope_loss
+        loss = imc_loss + imd_loss + mlm_loss + scope_loss
         
         # Backward pass
         optimizer.zero_grad()
@@ -204,10 +188,9 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
         optimizer.step()
         
         # Accumulate losses
-        total_im_loss += im_loss.item()
+        total_imc_loss += imc_loss.item()
+        total_imd_loss += imd_loss.item()
         total_mlm_loss += mlm_loss.item()
-        total_nsp_cfg_loss += nsp_cfg_loss.item()
-        total_nsp_dfg_loss += nsp_dfg_loss.item()
         total_scope_loss += scope_loss.item()
         total_loss += loss.item()
         
@@ -216,10 +199,9 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             avg_loss = total_loss / (batch_idx + 1)
             progress_bar.set_postfix({
                 'loss': f'{avg_loss:.4f}',
-                'im': f'{total_im_loss/(batch_idx+1):.4f}' if enable_im else '0',
+                'imc': f'{total_imc_loss/(batch_idx+1):.4f}' if enable_imc else '0',
+                'imd': f'{total_imd_loss/(batch_idx+1):.4f}' if enable_imd else '0',
                 'mlm': f'{total_mlm_loss/(batch_idx+1):.4f}' if enable_mlm else '0',
-                'nsp_cfg': f'{total_nsp_cfg_loss/(batch_idx+1):.4f}' if enable_nsp_cfg else '0',
-                'nsp_dfg': f'{total_nsp_dfg_loss/(batch_idx+1):.4f}' if enable_nsp_dfg else '0',
                 'scope': f'{total_scope_loss/(batch_idx+1):.4f}' if enable_scope else '0',
             })
             progress_bar.update(100 if batch_idx > 0 else 1)
@@ -228,10 +210,9 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
         if (batch_idx + 1) % log_freq == 0 and logger:
             avg_loss = total_loss / (batch_idx + 1)
             logger.info(f"Batch {batch_idx+1}/{len(data_loader)} - "
-                      f"Loss: {avg_loss:.4f} | IM: {total_im_loss/(batch_idx+1):.4f} | "
+                      f"Loss: {avg_loss:.4f} | IMC: {total_imc_loss/(batch_idx+1):.4f} | "
+                      f"IMD: {total_imd_loss/(batch_idx+1):.4f} | "
                       f"MLM: {total_mlm_loss/(batch_idx+1):.4f} | "
-                      f"NSP_CFG: {total_nsp_cfg_loss/(batch_idx+1):.4f} | "
-                      f"NSP_DFG: {total_nsp_dfg_loss/(batch_idx+1):.4f} | "
                       f"SCOPE: {total_scope_loss/(batch_idx+1):.4f}")
     
     # Close progress bar
@@ -240,61 +221,86 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
     n_batches = len(data_loader)
     return {
         'total_loss': total_loss / n_batches,
-        'im_loss': total_im_loss / n_batches,
+        'imc_loss': total_imc_loss / n_batches,
+        'imd_loss': total_imd_loss / n_batches,
         'mlm_loss': total_mlm_loss / n_batches,
-        'nsp_cfg_loss': total_nsp_cfg_loss / n_batches,
-        'nsp_dfg_loss': total_nsp_dfg_loss / n_batches,
         'scope_loss': total_scope_loss / n_batches,
     }
 
 
 def validate_epoch(model, data_loader, scope_loader, device, logger=None,
-                   enable_im=True, enable_mlm=True, enable_nsp_cfg=False, enable_nsp_dfg=False, enable_scope=False):
+                   enable_imc=False, enable_imd=False, enable_mlm=True, enable_scope=False):
     """Validate for one epoch"""
     model.eval()
     
-    total_im_loss = 0
+    total_imc_loss = 0
+    total_imd_loss = 0
     total_mlm_loss = 0
-    total_nsp_cfg_loss = 0
-    total_nsp_dfg_loss = 0
     total_scope_loss = 0
     total_loss = 0
     
-    im_criterion = nn.CrossEntropyLoss(ignore_index=-1)
+    imc_criterion = nn.CrossEntropyLoss(ignore_index=-1)
+    imd_criterion = nn.CrossEntropyLoss(ignore_index=-1)
     mlm_criterion = nn.CrossEntropyLoss(ignore_index=-1)
-    nsp_criterion = nn.CrossEntropyLoss()
     scope_criterion = nn.NLLLoss()
     
     scope_iter = iter(scope_loader) if (enable_scope and scope_loader) else None
     
     with torch.no_grad():
         for batch in tqdm(data_loader, desc="Validation"):
-            # === Process IM ===
-            im_loss = torch.tensor(0.0, device=device)
-            if enable_im:
-                im_batch = batch['im']
+            # === Process IMC ===
+            imc_loss = torch.tensor(0.0, device=device)
+            if enable_imc:
+                imc_batch = batch['imc']
                 
-                im_input = im_batch['bert_input'].to(device)
-                im_labels = im_batch['bert_label'].to(device)
-                im_segment = im_batch['segment_label'].to(device)
-                im_binary_pos = im_batch['binary_pos'].to(device)
-                im_function_pos = im_batch['function_pos'].to(device)
-                im_bb_pos = im_batch['bb_pos'].to(device)
+                imc_input = imc_batch['bert_input'].to(device)
+                imc_labels = imc_batch['bert_label'].to(device)
+                imc_segment = imc_batch['segment_label'].to(device)
+                imc_binary_pos = imc_batch['binary_pos'].to(device)
+                imc_function_pos = imc_batch['function_pos'].to(device)
+                imc_bb_pos = imc_batch['bb_pos'].to(device)
                 
                 if hasattr(model, 'module'):
-                    im_output = model.module.forward_im(
-                        im_input, im_segment,
-                        im_binary_pos, im_function_pos, im_bb_pos
+                    imc_output = model.module.forward_im(
+                        imc_input, imc_segment,
+                        imc_binary_pos, imc_function_pos, imc_bb_pos
                     )
                 else:
-                    im_output = model.forward_im(
-                        im_input, im_segment,
-                        im_binary_pos, im_function_pos, im_bb_pos
+                    imc_output = model.forward_im(
+                        imc_input, imc_segment,
+                        imc_binary_pos, imc_function_pos, imc_bb_pos
                     )
                 
-                im_output = im_output.view(-1, im_output.size(-1))
-                im_labels_flat = im_labels.view(-1)
-                im_loss = im_criterion(im_output, im_labels_flat)
+                imc_output = imc_output.view(-1, imc_output.size(-1))
+                imc_labels_flat = imc_labels.view(-1)
+                imc_loss = imc_criterion(imc_output, imc_labels_flat)
+            
+            # === Process IMD ===
+            imd_loss = torch.tensor(0.0, device=device)
+            if enable_imd and 'imd' in batch:
+                imd_batch = batch['imd']
+                
+                imd_input = imd_batch['bert_input'].to(device)
+                imd_labels = imd_batch['bert_label'].to(device)
+                imd_segment = imd_batch['segment_label'].to(device)
+                imd_binary_pos = imd_batch['binary_pos'].to(device)
+                imd_function_pos = imd_batch['function_pos'].to(device)
+                imd_bb_pos = imd_batch['bb_pos'].to(device)
+                
+                if hasattr(model, 'module'):
+                    imd_output = model.module.forward_im(
+                        imd_input, imd_segment,
+                        imd_binary_pos, imd_function_pos, imd_bb_pos
+                    )
+                else:
+                    imd_output = model.forward_im(
+                        imd_input, imd_segment,
+                        imd_binary_pos, imd_function_pos, imd_bb_pos
+                    )
+                
+                imd_output = imd_output.view(-1, imd_output.size(-1))
+                imd_labels_flat = imd_labels.view(-1)
+                imd_loss = imd_criterion(imd_output, imd_labels_flat)
             
             # === Process MLM ===
             mlm_loss = torch.tensor(0.0, device=device)
@@ -316,42 +322,6 @@ def validate_epoch(model, data_loader, scope_loader, device, logger=None,
                 mlm_output = mlm_output.view(-1, mlm_output.size(-1))
                 mlm_labels_flat = mlm_labels.view(-1)
                 mlm_loss = mlm_criterion(mlm_output, mlm_labels_flat)
-            
-            # NSP-CFG
-            nsp_cfg_loss = torch.tensor(0.0, device=device)
-            if enable_nsp_cfg:
-                cfg_nsp_batch = batch['nsp_cfg']
-                cfg_nsp_input = cfg_nsp_batch['bert_input'].to(device)
-                cfg_segment_labels = cfg_nsp_batch['segment_label'].to(device)
-                cfg_nsp_binary_pos = cfg_nsp_batch['binary_pos'].to(device)
-                cfg_nsp_function_pos = cfg_nsp_batch['function_pos'].to(device)
-                cfg_nsp_bb_pos = cfg_nsp_batch['bb_pos'].to(device)
-                cfg_nsp_labels = cfg_nsp_batch['is_next'].to(device)
-                
-                _, cfg_nsp_output = model(
-                    cfg_nsp_input, cfg_segment_labels,
-                    cfg_nsp_binary_pos, cfg_nsp_function_pos, cfg_nsp_bb_pos,
-                    corpus_type='cfg'
-                )
-                nsp_cfg_loss = nsp_criterion(cfg_nsp_output, cfg_nsp_labels.squeeze())
-            
-            # NSP-DFG
-            nsp_dfg_loss = torch.tensor(0.0, device=device)
-            if enable_nsp_dfg:
-                dfg_nsp_batch = batch['nsp_dfg']
-                dfg_nsp_input = dfg_nsp_batch['bert_input'].to(device)
-                dfg_segment_labels = dfg_nsp_batch['segment_label'].to(device)
-                dfg_nsp_binary_pos = dfg_nsp_batch['binary_pos'].to(device)
-                dfg_nsp_function_pos = dfg_nsp_batch['function_pos'].to(device)
-                dfg_nsp_bb_pos = dfg_nsp_batch['bb_pos'].to(device)
-                dfg_nsp_labels = dfg_nsp_batch['is_next'].to(device)
-                
-                _, dfg_nsp_output = model(
-                    dfg_nsp_input, dfg_segment_labels,
-                    dfg_nsp_binary_pos, dfg_nsp_function_pos, dfg_nsp_bb_pos,
-                    corpus_type='dfg'
-                )
-                nsp_dfg_loss = nsp_criterion(dfg_nsp_output, dfg_nsp_labels.squeeze())
             
             # Scope
             scope_loss = torch.tensor(0.0, device=device)
@@ -382,22 +352,20 @@ def validate_epoch(model, data_loader, scope_loader, device, logger=None,
                 
                 scope_loss = scope_criterion(scope_output, scope_labels)
             
-            loss = im_loss + mlm_loss + nsp_cfg_loss + nsp_dfg_loss + scope_loss
+            loss = imc_loss + imd_loss + mlm_loss + scope_loss
             
-            total_im_loss += im_loss.item()
+            total_imc_loss += imc_loss.item()
+            total_imd_loss += imd_loss.item()
             total_mlm_loss += mlm_loss.item()
-            total_nsp_cfg_loss += nsp_cfg_loss.item()
-            total_nsp_dfg_loss += nsp_dfg_loss.item()
             total_scope_loss += scope_loss.item()
             total_loss += loss.item()
     
     n_batches = len(data_loader)
     return {
         'total_loss': total_loss / n_batches,
-        'im_loss': total_im_loss / n_batches,
+        'imc_loss': total_imc_loss / n_batches,
+        'imd_loss': total_imd_loss / n_batches,
         'mlm_loss': total_mlm_loss / n_batches,
-        'nsp_cfg_loss': total_nsp_cfg_loss / n_batches,
-        'nsp_dfg_loss': total_nsp_dfg_loss / n_batches,
         'scope_loss': total_scope_loss / n_batches,
     }
 
@@ -419,7 +387,6 @@ def main():
     parser.add_argument("--layers", type=int, default=12, help="Number of layers")
     parser.add_argument("--attn_heads", type=int, default=8, help="Number of attention heads")
     parser.add_argument("--seq_len", type=int, default=60, help="Maximum sequence length")
-    parser.add_argument("--nsp_content_max", type=int, default=20, help="Max tokens per NSP segment")
     parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate")
     
     # Training args
@@ -433,19 +400,17 @@ def main():
     # Masking args
     parser.add_argument("--token_mask_prob", type=float, default=0.15, help="Token-level mask probability (MLM)")
     parser.add_argument("--instruction_mask_prob", type=float, default=0.15, help="Instruction-level mask probability (IM)")
-    parser.add_argument("--nsp_prob", type=float, default=0.5, help="NSP negative sampling probability")
     
     # Data sampling
     parser.add_argument("--data_percentage", type=float, default=1.0, help="Percentage of training data to use")
     parser.add_argument("--val_percentage", type=float, default=1.0, help="Percentage of validation data to use")
     
     # Task flags
-    parser.add_argument("--enable_im", action="store_true", default=True, help="Enable Instruction Masking")
-    parser.add_argument("--disable_im", action="store_true", help="Disable Instruction Masking")
+    parser.add_argument("--enable_imc", action="store_true", help="Enable Instruction Masking for CFG")
+    parser.add_argument("--disable_imc", action="store_true", help="Disable Instruction Masking for CFG")
+    parser.add_argument("--enable_imd", action="store_true", help="Enable Instruction Masking for DFG")
     parser.add_argument("--enable_mlm", action="store_true", default=True, help="Enable MLM")
     parser.add_argument("--disable_mlm", action="store_true", help="Disable MLM")
-    parser.add_argument("--enable_nsp_cfg", action="store_true", help="Enable NSP-CFG")
-    parser.add_argument("--enable_nsp_dfg", action="store_true", help="Enable NSP-DFG")
     parser.add_argument("--enable_scope", action="store_true", help="Enable Scope Prediction")
     parser.add_argument("--use_address_embedding", action="store_true", default=True, help="Use address embeddings")
     parser.add_argument("--disable_address_embedding", action="store_true", help="Disable address embeddings")
@@ -464,8 +429,8 @@ def main():
     args = parser.parse_args()
     
     # Handle disable flags
-    if args.disable_im:
-        args.enable_im = False
+    if args.disable_imc:
+        args.enable_imc = False
     if args.disable_mlm:
         args.enable_mlm = False
     if args.disable_address_embedding:
@@ -511,14 +476,13 @@ def main():
         dfg_corpus_path=args.dfg_train,
         vocab=vocab,
         seq_len=args.seq_len,
-        nsp_content_max=args.nsp_content_max,
         on_memory=True,
-        nsp_prob=args.nsp_prob,
         token_mask_prob=args.token_mask_prob,
         instruction_mask_prob=args.instruction_mask_prob,
         data_percentage=args.data_percentage,
         train_split=1.0,
-        is_train=True
+        is_train=True,
+        enable_imd=args.enable_imd
     )
     
     train_loader = DataLoader(
@@ -537,14 +501,13 @@ def main():
             dfg_corpus_path=args.dfg_val,
             vocab=vocab,
             seq_len=args.seq_len,
-            nsp_content_max=args.nsp_content_max,
             on_memory=True,
-            nsp_prob=args.nsp_prob,
             token_mask_prob=args.token_mask_prob,
             instruction_mask_prob=args.instruction_mask_prob,
             data_percentage=args.val_percentage,
             train_split=1.0,
-            is_train=True
+            is_train=True,
+            enable_imd=args.enable_imd
         )
         
         val_loader = DataLoader(
@@ -596,8 +559,6 @@ def main():
     logger.info("Task configuration:")
     logger.info(f"  - IM: {args.enable_im}")
     logger.info(f"  - MLM: {args.enable_mlm}")
-    logger.info(f"  - NSP-CFG: {args.enable_nsp_cfg}")
-    logger.info(f"  - NSP-DFG: {args.enable_nsp_dfg}")
     logger.info(f"  - SCOPE: {args.enable_scope}")
     logger.info(f"  - Address Embedding: {args.use_address_embedding}")
     
@@ -616,8 +577,8 @@ def main():
         vocab_size=len(vocab),
         enable_mlm=args.enable_mlm,
         enable_im=args.enable_im,
-        enable_nsp_cfg=args.enable_nsp_cfg,
-        enable_nsp_dfg=args.enable_nsp_dfg,
+        enable_nsp_cfg=False,
+        enable_nsp_dfg=False,
         enable_scope=args.enable_scope
     )
     
@@ -667,36 +628,32 @@ def main():
         train_metrics = train_epoch(
             model, train_loader, scope_train_loader,
             optimizer, device, args.log_freq, logger,
-            enable_im=args.enable_im,
+            enable_imc=args.enable_imc,
+            enable_imd=args.enable_imd,
             enable_mlm=args.enable_mlm,
-            enable_nsp_cfg=args.enable_nsp_cfg,
-            enable_nsp_dfg=args.enable_nsp_dfg,
             enable_scope=args.enable_scope
         )
         
         logger.info(f"Train Loss: {train_metrics['total_loss']:.4f}")
-        logger.info(f"  - IM: {train_metrics['im_loss']:.4f}")
+        logger.info(f"  - IMC: {train_metrics['imc_loss']:.4f}")
+        logger.info(f"  - IMD: {train_metrics['imd_loss']:.4f}")
         logger.info(f"  - MLM: {train_metrics['mlm_loss']:.4f}")
-        logger.info(f"  - NSP-CFG: {train_metrics['nsp_cfg_loss']:.4f}")
-        logger.info(f"  - NSP-DFG: {train_metrics['nsp_dfg_loss']:.4f}")
         logger.info(f"  - Scope: {train_metrics['scope_loss']:.4f}")
         
         # Validate
         if val_loader:
             val_metrics = validate_epoch(
                 model, val_loader, scope_val_loader, device, logger,
-                enable_im=args.enable_im,
+                enable_imc=args.enable_imc,
+                enable_imd=args.enable_imd,
                 enable_mlm=args.enable_mlm,
-                enable_nsp_cfg=args.enable_nsp_cfg,
-                enable_nsp_dfg=args.enable_nsp_dfg,
                 enable_scope=args.enable_scope
             )
             
             logger.info(f"Val Loss: {val_metrics['total_loss']:.4f}")
-            logger.info(f"  - IM: {val_metrics['im_loss']:.4f}")
+            logger.info(f"  - IMC: {val_metrics['imc_loss']:.4f}")
+            logger.info(f"  - IMD: {val_metrics['imd_loss']:.4f}")
             logger.info(f"  - MLM: {val_metrics['mlm_loss']:.4f}")
-            logger.info(f"  - NSP-CFG: {val_metrics['nsp_cfg_loss']:.4f}")
-            logger.info(f"  - NSP-DFG: {val_metrics['nsp_dfg_loss']:.4f}")
             logger.info(f"  - Scope: {val_metrics['scope_loss']:.4f}")
             
             # Check for improvement
