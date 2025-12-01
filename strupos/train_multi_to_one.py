@@ -495,6 +495,7 @@ def main():
     parser.add_argument("--seq_len", type=int, default=100, help="Maximum sequence length")
     parser.add_argument("--nsp_content_max", type=int, default=20, help="Maximum content length for NSP pairs (CFG/DFG)")
     parser.add_argument("--instruction_level_segment", action="store_true", default=False, help="Use instruction-level segment IDs (each instruction gets unique segment)")
+    parser.add_argument("--max_segments", type=int, default=16, help="Maximum number of segment IDs (for instruction-level segmentation)")
     
     # Task selection args (for ablation studies)
     parser.add_argument("--enable_mlm", action="store_true", default=True, help="Enable Masked Language Modeling")
@@ -722,7 +723,8 @@ def main():
         attn_heads=args.attn_heads,
         dropout=args.dropout,
         max_len=args.seq_len,
-        use_address_embedding=args.use_address_embedding
+        use_address_embedding=args.use_address_embedding,
+        max_segments=args.max_segments
     )
     
     model = AddressAwareBERTForPretraining(
