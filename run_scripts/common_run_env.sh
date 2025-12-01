@@ -120,8 +120,8 @@ run_experiment() {
   fi
   MODEL_NAME="${MODEL_NAME#_}"
 
-  OUTPUT_DIR="/data/kliu14/haapr/output/${MODEL_NAME}"
-  LOG_DIR="/data/kliu14/haapr/log/${MODEL_NAME}"
+  OUTPUT_DIR="/work/kliu14/haapr/output/${MODEL_NAME}"
+  LOG_DIR="/work/kliu14/haapr/log/${MODEL_NAME}"
 
   echo "Configuration:"
   echo "  Model name: ${MODEL_NAME}"
