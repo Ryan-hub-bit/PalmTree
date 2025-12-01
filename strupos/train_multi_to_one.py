@@ -26,7 +26,7 @@ import re
 
 # Import local modules
 from vocab import WordVocab
-from dataloader_multi_to_one import MultiToOneDataset
+from dataloader_multi_to_one import MultiToOneDataset, multi_to_one_collate_fn
 from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
@@ -603,7 +603,8 @@ def main():
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        collate_fn=multi_to_one_collate_fn
     )
     
     # Create validation dataset from separate files
@@ -629,7 +630,8 @@ def main():
             val_dataset,
             batch_size=args.batch_size,
             shuffle=False,
-            num_workers=args.num_workers
+            num_workers=args.num_workers,
+            collate_fn=multi_to_one_collate_fn
         )
     else:
         logger.warning("No validation data provided. Training without validation.")
@@ -699,7 +701,8 @@ def main():
             test_dataset,
             batch_size=args.batch_size,
             shuffle=False,
-            num_workers=args.num_workers
+            num_workers=args.num_workers,
+            collate_fn=multi_to_one_collate_fn
         )
         logger.info(f"Test dataset size: {len(test_dataset)}")
     

@@ -459,3 +459,82 @@ class MultiToOneDataset(Dataset):
             "function_pos": [p[1] for p in positions],
             "bb_pos": [p[2] for p in positions],
         }
+
+def multi_to_one_collate_fn(batch):
+    """
+    Custom collate function to convert nested batch structure to flat structure
+    expected by the training loop.
+    
+    Input: List of dicts with structure:
+        {
+            "mlm": {"bert_input": [...], "bert_label": [...], ...},
+            "nsp_cfg": {"bert_input": [...], "segment_label": [...], "nsp_label": ..., ...},
+            "nsp_dfg": {"bert_input": [...], "segment_label": [...], "nsp_label": ..., ...}
+        }
+    
+    Output: Single dict with structure:
+        {
+            "cfg_mlm_input": tensor,
+            "cfg_mlm_label": tensor,
+            "cfg_mlm_binary_pos": tensor,
+            "cfg_mlm_function_pos": tensor,
+            "cfg_mlm_bb_pos": tensor,
+            "cfg_nsp_input": tensor,
+            "cfg_segment_label": tensor,
+            "cfg_is_next": tensor,
+            "cfg_nsp_binary_pos": tensor,
+            "cfg_nsp_function_pos": tensor,
+            "cfg_nsp_bb_pos": tensor,
+            "dfg_nsp_input": tensor,
+            "dfg_segment_label": tensor,
+            "dfg_is_next": tensor,
+            "dfg_nsp_binary_pos": tensor,
+            "dfg_nsp_function_pos": tensor,
+            "dfg_nsp_bb_pos": tensor,
+        }
+    """
+    # Extract MLM data
+    mlm_data = [item["mlm"] for item in batch]
+    cfg_mlm_input = torch.tensor([d["bert_input"] for d in mlm_data], dtype=torch.long)
+    cfg_mlm_label = torch.tensor([d["bert_label"] for d in mlm_data], dtype=torch.long)
+    cfg_mlm_binary_pos = torch.tensor([d["binary_pos"] for d in mlm_data], dtype=torch.float)
+    cfg_mlm_function_pos = torch.tensor([d["function_pos"] for d in mlm_data], dtype=torch.float)
+    cfg_mlm_bb_pos = torch.tensor([d["bb_pos"] for d in mlm_data], dtype=torch.float)
+    
+    # Extract NSP-CFG data
+    nsp_cfg_data = [item["nsp_cfg"] for item in batch]
+    cfg_nsp_input = torch.tensor([d["bert_input"] for d in nsp_cfg_data], dtype=torch.long)
+    cfg_segment_label = torch.tensor([d["segment_label"] for d in nsp_cfg_data], dtype=torch.long)
+    cfg_is_next = torch.tensor([d["nsp_label"] for d in nsp_cfg_data], dtype=torch.long)
+    cfg_nsp_binary_pos = torch.tensor([d["binary_pos"] for d in nsp_cfg_data], dtype=torch.float)
+    cfg_nsp_function_pos = torch.tensor([d["function_pos"] for d in nsp_cfg_data], dtype=torch.float)
+    cfg_nsp_bb_pos = torch.tensor([d["bb_pos"] for d in nsp_cfg_data], dtype=torch.float)
+    
+    # Extract NSP-DFG data
+    nsp_dfg_data = [item["nsp_dfg"] for item in batch]
+    dfg_nsp_input = torch.tensor([d["bert_input"] for d in nsp_dfg_data], dtype=torch.long)
+    dfg_segment_label = torch.tensor([d["segment_label"] for d in nsp_dfg_data], dtype=torch.long)
+    dfg_is_next = torch.tensor([d["nsp_label"] for d in nsp_dfg_data], dtype=torch.long)
+    dfg_nsp_binary_pos = torch.tensor([d["binary_pos"] for d in nsp_dfg_data], dtype=torch.float)
+    dfg_nsp_function_pos = torch.tensor([d["function_pos"] for d in nsp_dfg_data], dtype=torch.float)
+    dfg_nsp_bb_pos = torch.tensor([d["bb_pos"] for d in nsp_dfg_data], dtype=torch.float)
+    
+    return {
+        "cfg_mlm_input": cfg_mlm_input,
+        "cfg_mlm_label": cfg_mlm_label,
+        "cfg_mlm_binary_pos": cfg_mlm_binary_pos,
+        "cfg_mlm_function_pos": cfg_mlm_function_pos,
+        "cfg_mlm_bb_pos": cfg_mlm_bb_pos,
+        "cfg_nsp_input": cfg_nsp_input,
+        "cfg_segment_label": cfg_segment_label,
+        "cfg_is_next": cfg_is_next,
+        "cfg_nsp_binary_pos": cfg_nsp_binary_pos,
+        "cfg_nsp_function_pos": cfg_nsp_function_pos,
+        "cfg_nsp_bb_pos": cfg_nsp_bb_pos,
+        "dfg_nsp_input": dfg_nsp_input,
+        "dfg_segment_label": dfg_segment_label,
+        "dfg_is_next": dfg_is_next,
+        "dfg_nsp_binary_pos": dfg_nsp_binary_pos,
+        "dfg_nsp_function_pos": dfg_nsp_function_pos,
+        "dfg_nsp_bb_pos": dfg_nsp_bb_pos,
+    }
