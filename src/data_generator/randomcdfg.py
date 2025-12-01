@@ -1,9 +1,9 @@
 import os
 import math
 
-root = "/data/kun/dataset/val_cdfg"
-out_cfg = "/data/kun/dataset/val_cfg.txt"
-out_dfg = "/data/kun/dataset/val_dfg.txt"
+root = "/work/kliu14/txtdataset/val_cdfg"
+out_cfg = "/work/kliu14/txtdataset/val_cfg.txt"
+out_dfg = "/work/kliu14/txtdataset/val_dfg.txt"
 
 def evenly_sample(lines, ratio=0.02):
     n = len(lines)

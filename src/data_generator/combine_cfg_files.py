@@ -77,9 +77,9 @@ def write_lines(lines, output_file):
 
 def main():
     # Directory paths
-    train_dir = "/data/kun/dataset/train_cdfg"
-    val_dir = "/data/kun/dataset/val_cdfg"
-    test_dir = "/data/kun/dataset/test_cdfg"
+    train_dir = "/work/kliu14/txtdataset/train_cdfg"
+    val_dir = "/work/kliu14/txtdataset/val_cdfg"
+    test_dir = "/work/kliu14/txtdataset/test_cdfg"
     
     # Output paths
     output_dir = "/data/kun/dataset"

@@ -60,12 +60,12 @@ VOCAB_FILE="./vocab.pkl"
 
 #   # Check if data files exist
 #   DATA_FILES=(
-#     "/data/kun/dataset/train_cfg.txt"
-#     "/data/kun/dataset/train_dfg.txt"
-#     "/data/kun/dataset/val_cfg.txt"
-#     "/data/kun/dataset/val_dfg.txt"
-#     "/data/kun/dataset/test_cfg.txt"
-#     "/data/kun/dataset/test_dfg.txt"
+#     "/work/kliu14/txtdataset/train_cfg.txt"
+#     "/work/kliu14/txtdataset/train_dfg.txt"
+#     "/work/kliu14/txtdataset/val_cfg.txt"
+#     "/work/kliu14/txtdataset/val_dfg.txt"
+#     "/work/kliu14/txtdataset/test_cfg.txt"
+#     "/work/kliu14/txtdataset/test_dfg.txt"
 #   )
 
 #   MISSING_FILES=0
@@ -106,16 +106,16 @@ echo ""
 
 # Training configuration (command-line arguments)
 # Training configuration (command-line arguments)
-CFG_TRAIN="/data/kun/dataset/train_cfg.txt"
-DFG_TRAIN="/data/kun/dataset/train_dfg.txt"
-CFG_VAL="/data/kun/dataset/val_cfg.txt"
-DFG_VAL="/data/kun/dataset/val_dfg.txt"
-CFG_TEST="/data/kun/dataset/test_cfg.txt"
-DFG_TEST="/data/kun/dataset/test_dfg.txt"
-SCOPE_TRAIN="/data/kun/dataset/scope_train.txt"
-SCOPE_VAL="/data/kun/dataset/scope_val.txt"
-SCOPE_TEST="/data/kun/dataset/scope_test.txt"
-VOCAB_PATH="/data/kun/dataset/vocab.pkl"
+CFG_TRAIN="/work/kliu14/txtdataset/train_cfg.txt"
+DFG_TRAIN="/work/kliu14/txtdataset/train_dfg.txt"
+CFG_VAL="/work/kliu14/txtdataset/val_cfg.txt"
+DFG_VAL="/work/kliu14/txtdataset/val_dfg.txt"
+CFG_TEST="/work/kliu14/txtdataset/test_cfg.txt"
+DFG_TEST="/work/kliu14/txtdataset/test_dfg.txt"
+SCOPE_TRAIN="/work/kliu14/txtdataset/scope_train.txt"
+SCOPE_VAL="/work/kliu14/txtdataset/scope_val.txt"
+SCOPE_TEST="/work/kliu14/txtdataset/scope_test.txt"
+VOCAB_PATH="/work/kliu14/txtdataset/vocab.pkl"
 
 # ==================== Task Selection (Ablation Study) ====================
 # Enable/disable each pretraining task

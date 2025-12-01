@@ -60,12 +60,12 @@ else
 
   # Check if data files exist
   DATA_FILES=(
-    "/data/kun/dataset/train_cfg.txt"
-    "/data/kun/dataset/train_dfg.txt"
-    "/data/kun/dataset/val_cfg.txt"
-    "/data/kun/dataset/val_dfg.txt"
-    "/data/kun/dataset/test_cfg.txt"
-    "/data/kun/dataset/test_dfg.txt"
+    "/work/kliu14/txtdataset/train_cfg.txt"
+    "/work/kliu14/txtdataset/train_dfg.txt"
+    "/work/kliu14/txtdataset/val_cfg.txt"
+    "/work/kliu14/txtdataset/val_dfg.txt"
+    "/work/kliu14/txtdataset/test_cfg.txt"
+    "/work/kliu14/txtdataset/test_dfg.txt"
   )
 
   MISSING_FILES=0
@@ -106,12 +106,12 @@ echo ""
 
 # Training configuration (command-line arguments)
 # Training configuration (command-line arguments)
-CFG_TRAIN="/data/kun/dataset/train_cfg.txt"
-DFG_TRAIN="/data/kun/dataset/train_dfg.txt"
-CFG_VAL="/data/kun/dataset/val_cfg.txt"
-DFG_VAL="/data/kun/dataset/val_dfg.txt"
-CFG_TEST="/data/kun/dataset/test_cfg.txt"
-DFG_TEST="/data/kun/dataset/test_dfg.txt"
+CFG_TRAIN="/work/kliu14/txtdataset/train_cfg.txt"
+DFG_TRAIN="/work/kliu14/txtdataset/train_dfg.txt"
+CFG_VAL="/work/kliu14/txtdataset/val_cfg.txt"
+DFG_VAL="/work/kliu14/txtdataset/val_dfg.txt"
+CFG_TEST="/work/kliu14/txtdataset/test_cfg.txt"
+DFG_TEST="/work/kliu14/txtdataset/test_dfg.txt"
 # SCOPE_TRAIN="./scope_train.txt"
 # SCOPE_VAL="./scope_val.txt"
 # SCOPE_TEST="./scope_test.txt"
@@ -125,6 +125,45 @@ ENABLE_NSP_DFG=false        # Next Sentence Prediction for DFG
 ENABLE_SCOPE=false          # Scope Prediction (3-class)
 USE_ADDRESS_EMBEDDING=false # Use 3-level address-aware embeddings
 INSTRUCTION_LEVEL_SEGMENT=false # Use instruction-level segment IDs (each instruction gets unique segment)
+
+# Optional mode argument to quickly pick common configs:
+#   MLM_NSP_CFG                -> MLM + NSP-CFG
+#   MLM_NSP_CFG_ADDRESS        -> MLM + NSP-CFG + Address
+#   MLM_NSP_CFG_ADDRESS_INSTR  -> MLM + NSP-CFG + Address + Instruction-level segments
+# If no argument is provided, the script uses the boolean flags defined above.
+MODE="${1:-}"
+if [ -n "$MODE" ]; then
+  echo "Selected mode: $MODE"
+  case "$MODE" in
+    MLM_NSP_CFG)
+      ENABLE_MLM=true
+      ENABLE_NSP_CFG=true
+      ENABLE_NSP_DFG=false
+      ENABLE_SCOPE=false
+      USE_ADDRESS_EMBEDDING=false
+      INSTRUCTION_LEVEL_SEGMENT=false
+      ;;
+    MLM_NSP_CFG_ADDRESS)
+      ENABLE_MLM=true
+      ENABLE_NSP_CFG=true
+      ENABLE_NSP_DFG=false
+      ENABLE_SCOPE=false
+      USE_ADDRESS_EMBEDDING=true
+      INSTRUCTION_LEVEL_SEGMENT=false
+      ;;
+    MLM_NSP_CFG_ADDRESS_INSTR)
+      ENABLE_MLM=true
+      ENABLE_NSP_CFG=true
+      ENABLE_NSP_DFG=false
+      ENABLE_SCOPE=false
+      USE_ADDRESS_EMBEDDING=true
+      INSTRUCTION_LEVEL_SEGMENT=true
+      ;;
+    *)
+      echo "Warning: unknown mode '$MODE' — continuing with default flags" >&2
+      ;;
+  esac
+fi
 
 # Build task flags for command line
 TASK_FLAGS=""
