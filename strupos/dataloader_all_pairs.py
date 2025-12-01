@@ -110,14 +110,14 @@ class AllConsecutivePairsDataset(Dataset):
     
     def _create_all_consecutive_pairs(self, line, line_idx):
         """
-        Create ALL consecutive pairs from a line.
+        Create ONE random consecutive pair from a line (instead of all pairs).
         
         Args:
             line: Tab-separated instructions
             line_idx: Index of this line in cfg_lines
         
         Returns:
-            List of (line_idx, inst1, inst2, label) tuples
+            List of (line_idx, inst1, inst2, label) tuples (with only 1 pair)
         """
         instructions = line.split('\t')
         pairs = []
@@ -125,29 +125,30 @@ class AllConsecutivePairsDataset(Dataset):
         if len(instructions) < 2:
             return pairs
         
-        # Create ALL consecutive pairs: (0,1), (1,2), (2,3), ..., (n-2, n-1)
-        for i in range(len(instructions) - 1):
-            inst1 = instructions[i]
-            inst2_original = instructions[i + 1]
-            
-            # Decide if positive or negative
-            if random.random() < self.nsp_prob:
-                # NEGATIVE: Replace inst2 with random instruction (ensure it's different)
-                inst2 = inst2_original
-                max_attempts = 10
-                attempts = 0
-                while inst2 == inst2_original and attempts < max_attempts:
-                    random_line = random.choice(self.cfg_lines)
-                    random_instructions = random_line.split('\t')
-                    inst2 = random.choice(random_instructions)
-                    attempts += 1
-                label = 0
-            else:
-                # POSITIVE: Keep consecutive
-                inst2 = inst2_original
-                label = 1
-            
-            pairs.append((line_idx, inst1, inst2, label))
+        # Create ONE random consecutive pair instead of all pairs
+        # Randomly select a position i, then create pair (i, i+1)
+        i = random.randint(0, len(instructions) - 2)
+        inst1 = instructions[i]
+        inst2_original = instructions[i + 1]
+        
+        # Decide if positive or negative
+        if random.random() < self.nsp_prob:
+            # NEGATIVE: Replace inst2 with random instruction (ensure it's different)
+            inst2 = inst2_original
+            max_attempts = 10
+            attempts = 0
+            while inst2 == inst2_original and attempts < max_attempts:
+                random_line = random.choice(self.cfg_lines)
+                random_instructions = random_line.split('\t')
+                inst2 = random.choice(random_instructions)
+                attempts += 1
+            label = 0
+        else:
+            # POSITIVE: Keep consecutive
+            inst2 = inst2_original
+            label = 1
+        
+        pairs.append((line_idx, inst1, inst2, label))
         
         return pairs
     
