@@ -1,18 +1,18 @@
 """
-All Consecutive Pairs DataLoader for Address-Aware BERT
+Random Consecutive Pair DataLoader for Address-Aware BERT
 
-Creates ALL consecutive pairs from each CFG line for NSP training.
+Creates ONE RANDOM consecutive pair from each CFG line for NSP training.
 
 For a line with 8 instructions:
 - MLM: Uses all 8 instructions (one sample per line)
-- NSP-CFG: Creates ALL 7 pairs: (1,2), (2,3), (3,4), (4,5), (5,6), (6,7), (7,8)
+- NSP-CFG: Creates ONE random pair from consecutive instructions, e.g., (3,4) or (5,6)
 - NSP-DFG: Uses DFG as-is (already in pair format)
 
 This means each CFG line produces:
 - 1 MLM sample
-- 7 NSP samples
+- 1 NSP sample (randomly selected from all consecutive pairs)
 
-Total samples = len(cfg_lines) * 7 for NSP
+Total samples = len(cfg_lines) for both MLM and NSP
 """
 
 import torch
@@ -22,13 +22,13 @@ import random
 from tqdm import tqdm
 
 
-class AllConsecutivePairsDataset(Dataset):
+class RandomConsecutivePairDataset(Dataset):
     """
-    Dataset that creates ALL consecutive instruction pairs for NSP.
+    Dataset that creates ONE RANDOM consecutive instruction pair for NSP per line.
     
     Strategy:
     - MLM: Iterate through CFG lines (one MLM sample per line)
-    - NSP-CFG: Create ALL consecutive pairs from each line (7 pairs per 8-inst line)
+    - NSP-CFG: Create ONE random consecutive pair from each line (1 pair per line)
     - NSP-DFG: Use DFG lines as-is (already in pair format)
     """
     
@@ -86,12 +86,13 @@ class AllConsecutivePairsDataset(Dataset):
                 self.cfg_lines = self.cfg_lines[cfg_train_size:]
                 self.dfg_lines = self.dfg_lines[dfg_train_size:]
         
-        # Create ALL consecutive NSP pairs from CFG
-        print("Creating ALL consecutive NSP pairs from CFG...")
+        # Create ONE RANDOM consecutive NSP pair per CFG line
+        print("Creating ONE RANDOM consecutive NSP pair per CFG line...")
         self.cfg_nsp_pairs = []
         for line_idx, line in enumerate(tqdm(self.cfg_lines, desc="CFG NSP")):
-            pairs = self._create_all_consecutive_pairs(line, line_idx)
-            self.cfg_nsp_pairs.extend(pairs)
+            pair = self._create_random_consecutive_pair(line, line_idx)
+            if pair is not None:
+                self.cfg_nsp_pairs.append(pair)
         
         print(f"Dataset size:")
         print(f"  CFG lines (for MLM): {len(self.cfg_lines)}")
@@ -108,26 +109,25 @@ class AllConsecutivePairsDataset(Dataset):
                     lines.append(line)
         return lines
     
-    def _create_all_consecutive_pairs(self, line, line_idx):
+    def _create_random_consecutive_pair(self, line, line_idx):
         """
-        Create ONE random consecutive pair from a line (instead of all pairs).
+        Create ONE RANDOM consecutive pair from a line.
         
         Args:
             line: Tab-separated instructions
             line_idx: Index of this line in cfg_lines
         
         Returns:
-            List of (line_idx, inst1, inst2, label) tuples (with only 1 pair)
+            (line_idx, inst1, inst2, label) tuple or None if not enough instructions
         """
         instructions = line.split('\t')
-        pairs = []
         
         if len(instructions) < 2:
-            return pairs
+            return None
         
-        # Create ONE random consecutive pair instead of all pairs
-        # Randomly select a position i, then create pair (i, i+1)
+        # Randomly pick a starting position for the pair
         i = random.randint(0, len(instructions) - 2)
+        
         inst1 = instructions[i]
         inst2_original = instructions[i + 1]
         
@@ -148,7 +148,48 @@ class AllConsecutivePairsDataset(Dataset):
             inst2 = inst2_original
             label = 1
         
-        pairs.append((line_idx, inst1, inst2, label))
+        return (line_idx, inst1, inst2, label)
+    
+    def _create_all_consecutive_pairs(self, line, line_idx):
+        """
+        Create ALL consecutive pairs from a line.
+        
+        Args:
+            line: Tab-separated instructions
+            line_idx: Index of this line in cfg_lines
+        
+        Returns:
+            List of (line_idx, inst1, inst2, label) tuples
+        """
+        instructions = line.split('\t')
+        pairs = []
+        
+        if len(instructions) < 2:
+            return pairs
+        
+        # Create ALL consecutive pairs: (0,1), (1,2), (2,3), ..., (n-2, n-1)
+        for i in range(len(instructions) - 1):
+            inst1 = instructions[i]
+            inst2_original = instructions[i + 1]
+            
+            # Decide if positive or negative
+            if random.random() < self.nsp_prob:
+                # NEGATIVE: Replace inst2 with random instruction (ensure it's different)
+                inst2 = inst2_original
+                max_attempts = 10
+                attempts = 0
+                while inst2 == inst2_original and attempts < max_attempts:
+                    random_line = random.choice(self.cfg_lines)
+                    random_instructions = random_line.split('\t')
+                    inst2 = random.choice(random_instructions)
+                    attempts += 1
+                label = 0
+            else:
+                # POSITIVE: Keep consecutive
+                inst2 = inst2_original
+                label = 1
+            
+            pairs.append((line_idx, inst1, inst2, label))
         
         return pairs
     
@@ -231,7 +272,7 @@ class AllConsecutivePairsDataset(Dataset):
         return all_tokens, all_positions
     
     def __len__(self):
-        """Length = number of NSP pairs (so we train on ALL pairs)"""
+        """Length = number of NSP pairs (one random pair per CFG line)"""
         return len(self.cfg_nsp_pairs)
     
     def __getitem__(self, index):
