@@ -135,8 +135,8 @@ VOCAB_PATH="./vocab.pkl"
 ENABLE_MLM=true             # Masked Language Modeling (CFG only)
 ENABLE_NSP_CFG=true        # Next Sentence Prediction for CFG
 ENABLE_NSP_DFG=false        # Next Sentence Prediction for DFG
-ENABLE_SCOPE=true          # Scope Prediction (2-class)
-USE_ADDRESS_EMBEDDING=true # Use 3-level address-aware embeddings
+ENABLE_SCOPE=false          # Scope Prediction (2-class)
+USE_ADDRESS_EMBEDDING=false # Use 3-level address-aware embeddings
 # Build task flags for command line
 TASK_FLAGS=""
 if [ "$ENABLE_MLM" = true ]; then
@@ -181,8 +181,8 @@ if [ -z "$MODEL_NAME" ]; then
   MODEL_NAME="baseline"
 fi
 
-OUTPUT_DIR="../output/${MODEL_NAME}"
-LOG_DIR="../log/${MODEL_NAME}"
+OUTPUT_DIR="../output/${MODEL_NAME}_test"
+LOG_DIR="../log/${MODEL_NAME}_test"
 
 # Model architecture
 HIDDEN=768
@@ -194,7 +194,7 @@ DROPOUT=0.1
 
 # Training hyperparameters
 EPOCHS=10
-BATCH_SIZE=148 # Further reduced to avoid OOM (was 256, original 1024)
+BATCH_SIZE=256 # Further reduced to avoid OOM (was 256, original 1024)
 LR=1e-4
 WARMUP_STEPS=10000
 NUM_WORKERS=4
@@ -203,8 +203,8 @@ EARLY_STOPPING_PATIENCE=3
 # Data processing
 MASK_PROB=0.15
 NSP_PROB=0.5
-TRAIN_PERCENTAGE=0.2 # Training data percentage (0.01 = 1%)
-VAL_PERCENTAGE=0.2   # Validation data percentage (0.01 = 1%)
+TRAIN_PERCENTAGE=1 # Training data percentage (0.01 = 1%)
+VAL_PERCENTAGE=1   # Validation data percentage (0.01 = 1%)
 
 # Device
 CUDA="--cuda"

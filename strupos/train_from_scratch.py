@@ -25,7 +25,7 @@ import re
 
 # Import local modules
 from vocab import WordVocab
-from dataloader_all_pairs import AllConsecutivePairsDataset
+from dataloader_all_pairs import RandomConsecutivePairDataset
 from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
@@ -267,10 +267,17 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             scope_labels = scope_batch['scope_label'].to(device)
             
             # Scope forward pass
-            scope_output = model.forward_scope(
-                scope_token_ids, scope_segment_labels,
-                scope_binary_pos, scope_function_pos, scope_bb_pos
-            )
+            # If model is wrapped in DataParallel, call the underlying module's method
+            if hasattr(model, 'module'):
+                scope_output = model.module.forward_scope(
+                    scope_token_ids, scope_segment_labels,
+                    scope_binary_pos, scope_function_pos, scope_bb_pos
+                )
+            else:
+                scope_output = model.forward_scope(
+                    scope_token_ids, scope_segment_labels,
+                    scope_binary_pos, scope_function_pos, scope_bb_pos
+                )
             
             
             # print("=== SCOPE DEBUG ===")
@@ -609,10 +616,10 @@ def main():
     # Create datasets
     logger.info("Creating training dataset...")
     
-    # Use AllConsecutivePairsDataset by default (trains on ALL consecutive pairs)
-    logger.info("Using ALL CONSECUTIVE PAIRS NSP strategy (1-2, 2-3, ..., 7-8)")
+    # Use RandomConsecutivePairDataset (trains on ONE random consecutive pair per line)
+    logger.info("Using RANDOM CONSECUTIVE PAIR NSP strategy (one random pair per line)")
     
-    train_dataset = AllConsecutivePairsDataset(
+    train_dataset = RandomConsecutivePairDataset(
         cfg_corpus_path=args.cfg_train,
         dfg_corpus_path=args.dfg_train,
         vocab=vocab,
@@ -637,7 +644,7 @@ def main():
     val_loader = None
     if args.cfg_val and args.dfg_val:
         logger.info("Creating validation dataset from separate files...")
-        val_dataset = AllConsecutivePairsDataset(
+        val_dataset = RandomConsecutivePairDataset(
             cfg_corpus_path=args.cfg_val,
             dfg_corpus_path=args.dfg_val,
             vocab=vocab,
@@ -706,7 +713,7 @@ def main():
     test_loader = None
     if args.cfg_test and args.dfg_test:
         logger.info("Creating test dataset...")
-        test_dataset = AllConsecutivePairsDataset(
+        test_dataset = RandomConsecutivePairDataset(
             cfg_corpus_path=args.cfg_test,
             dfg_corpus_path=args.dfg_test,
             vocab=vocab,

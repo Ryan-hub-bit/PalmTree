@@ -72,13 +72,13 @@ EARLY_STOPPING_PATIENCE=3
 # Data processing
 MASK_PROB=0.15
 NSP_PROB=0.5
-TRAIN_PERCENTAGE=0.2
-VAL_PERCENTAGE=0.2
+TRAIN_PERCENTAGE=1
+VAL_PERCENTAGE=1
 
 # Device
 CUDA="--cuda"
 # MULTI_GPU="--multi_gpu"
-MULTI_GPU=""
+MULTI_GPU="--multi_gpu"
 
 # Check if vocab exists
 if [ ! -f "$VOCAB_PATH" ]; then
@@ -217,14 +217,14 @@ echo ""
 
 # Run all experiments in order
 # run_experiment 1 "MLM + Address" true false false false true
-run_experiment 2 "MLM + Scope" true false false true false
-run_experiment 3 "MLM + Scope + Address" true false false true true
-run_experiment 4 "MLM + NSP-CFG" true true false false false
-run_experiment 5 "MLM + NSP-CFG + Address" true true false false true
+run_experiment 2 "MLM + Scope + Address" true false false true true
+run_experiment 3 "MLM + Scope" true false false true false
+# run_experiment 4 "MLM + NSP-CFG" true true false false false
+# run_experiment 5 "MLM + NSP-CFG + Address" true true false false true
 # run_experiment 6 "MLM + NSP-DFG" true false true false false
 # run_experiment 7 "MLM + NSP-DFG + Address" true false true false true
-run_experiment 8 "MLM + NSP-CFG + Scope" true true false true false
-run_experiment 9 "MLM + NSP-CFG + Scope + Address" true true false true true
+# run_experiment 8 "MLM + NSP-CFG + Scope" true true false true false
+# run_experiment 9 "MLM + NSP-CFG + Scope + Address" true true false true true
 
 # Record end time and calculate duration
 END_TIME=$(date +%s)

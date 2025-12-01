@@ -1,5 +1,8 @@
 #!/bin/bash
 
+
+# Use only GPU 1
+export CUDA_VISIBLE_DEVICES=1
 # Run consecutive pairs training
 # This script will:
 # 1. Check if vocab.txt exists
@@ -24,35 +27,8 @@ VOCAB_FILE="./vocab.pkl"
 
 if [ -f "$VOCAB_FILE" ]; then
   echo -e "${GREEN}✓ Vocabulary file found: $VOCAB_FILE${NC}"
-  # Get vocab size from pickle file using Python (with error handling)
-  VOCAB_SIZE=$(python3 -c "
-import sys
-sys.path.insert(0, '.')
-try:
-    from vocab import WordVocab
-    vocab = WordVocab.load_vocab('$VOCAB_FILE')
-    print(len(vocab))
-except Exception as e:
-    print('0')
-    sys.exit(1)
-" 2>/dev/null)
-  
-  if [ "$VOCAB_SIZE" = "0" ] || [ -z "$VOCAB_SIZE" ]; then
-    echo -e "${YELLOW}⚠ Vocabulary file exists but cannot be loaded (old format)${NC}"
-    echo "  Deleting old vocabulary and creating new one..."
-    rm -f "$VOCAB_FILE"
-    python3 create_vocab.py
-    if [ $? -eq 0 ]; then
-      echo -e "${GREEN}✓ Vocabulary created successfully${NC}"
-      VOCAB_SIZE=$(python3 -c "import sys; sys.path.insert(0, '.'); from vocab import WordVocab; vocab = WordVocab.load_vocab('$VOCAB_FILE'); print(len(vocab))")
-      echo "  Vocabulary size: $VOCAB_SIZE tokens"
-    else
-      echo -e "${RED}✗ Failed to create vocabulary${NC}"
-      exit 1
-    fi
-  else
-    echo "  Vocabulary size: $VOCAB_SIZE tokens"
-  fi
+  VOCAB_SIZE=$(wc -l <"$VOCAB_FILE")
+  echo "  Vocabulary size: $VOCAB_SIZE tokens"
 else
   echo -e "${YELLOW}⚠ Vocabulary file not found: $VOCAB_FILE${NC}"
   echo "  Creating vocabulary from train/val/test data..."
@@ -85,12 +61,11 @@ else
 
   echo ""
   echo "Creating vocabulary..."
-  python3 create_vocab.py
+  python create_vocab.py
 
   if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Vocabulary created successfully${NC}"
-    # Get vocab size from pickle file using Python with local import
-    VOCAB_SIZE=$(python3 -c "import sys; sys.path.insert(0, '.'); from vocab import WordVocab; vocab = WordVocab.load_vocab('$VOCAB_FILE'); print(len(vocab))")
+    VOCAB_SIZE=$(wc -l <"$VOCAB_FILE")
     echo "  Vocabulary size: $VOCAB_SIZE tokens"
   else
     echo -e "${RED}✗ Failed to create vocabulary${NC}"
@@ -100,7 +75,7 @@ fi
 
 echo ""
 echo "========================================"
-echo "Starting Training (Multi-to-One NSP)"
+echo "Starting Training"
 echo "========================================"
 echo ""
 
@@ -120,12 +95,10 @@ VOCAB_PATH="./vocab.pkl"
 # ==================== Task Selection (Ablation Study) ====================
 # Enable/disable each pretraining task
 ENABLE_MLM=true             # Masked Language Modeling (CFG only)
-ENABLE_NSP_CFG=true        # Next Sentence Prediction for CFG
+ENABLE_NSP_CFG=false        # Next Sentence Prediction for CFG
 ENABLE_NSP_DFG=false        # Next Sentence Prediction for DFG
 ENABLE_SCOPE=false          # Scope Prediction (3-class)
 USE_ADDRESS_EMBEDDING=false # Use 3-level address-aware embeddings
-INSTRUCTION_LEVEL_SEGMENT=false # Use instruction-level segment IDs (each instruction gets unique segment)
-
 # Build task flags for command line
 TASK_FLAGS=""
 if [ "$ENABLE_MLM" = true ]; then
@@ -145,9 +118,6 @@ fi
 if [ "$USE_ADDRESS_EMBEDDING" = true ]; then
   TASK_FLAGS="${TASK_FLAGS} --use_address_embedding"
 fi
-if [ "$INSTRUCTION_LEVEL_SEGMENT" = true ]; then
-  TASK_FLAGS="${TASK_FLAGS} --instruction_level_segment"
-fi
 
 # Auto-generate model name based on enabled tasks
 MODEL_NAME=""
@@ -166,9 +136,6 @@ fi
 if [ "$USE_ADDRESS_EMBEDDING" = true ]; then
   MODEL_NAME="${MODEL_NAME}_address"
 fi
-if [ "$INSTRUCTION_LEVEL_SEGMENT" = true ]; then
-  MODEL_NAME="${MODEL_NAME}_ins"
-fi
 
 # Remove leading underscore and set default if empty
 MODEL_NAME="${MODEL_NAME#_}"
@@ -176,8 +143,8 @@ if [ -z "$MODEL_NAME" ]; then
   MODEL_NAME="baseline"
 fi
 
-OUTPUT_DIR="../output/${MODEL_NAME}_multi_to_one"
-LOG_DIR="../log/${MODEL_NAME}_multi_to_one"
+OUTPUT_DIR="../output/${MODEL_NAME}"
+LOG_DIR="../log/${MODEL_NAME}"
 
 # Model architecture
 HIDDEN=768
@@ -211,11 +178,10 @@ echo "  Model name: ${MODEL_NAME}"
 echo "  Output dir: ${OUTPUT_DIR}"
 echo "  Tasks enabled:"
 echo "    - MLM: ${ENABLE_MLM}"
-echo "    - NSP-CFG: ${ENABLE_NSP_CFG} (multi-to-one)"
+echo "    - NSP-CFG: ${ENABLE_NSP_CFG}"
 echo "    - NSP-DFG: ${ENABLE_NSP_DFG}"
 echo "    - SCOPE: ${ENABLE_SCOPE}"
 echo "    - Address Embedding: ${USE_ADDRESS_EMBEDDING}"
-echo "    - Instruction-Level Segments: ${INSTRUCTION_LEVEL_SEGMENT}"
 echo "  Model architecture:"
 echo "    - Seq length: ${SEQ_LEN}"
 echo "    - NSP pair max: ${NSP_CONTENT_MAX}"
@@ -237,14 +203,12 @@ echo ""
 mkdir -p "${OUTPUT_DIR}"
 mkdir -p "${LOG_DIR}"
 
-# Run training with command-line arguments (Multi-to-One NSP)
-python train_multi_to_one.py \
+# Run training with command-line arguments
+python train_from_scratch.py \
   --cfg_train "${CFG_TRAIN}" \
   --dfg_train "${DFG_TRAIN}" \
   --cfg_val "${CFG_VAL}" \
   --dfg_val "${DFG_VAL}" \
-  --cfg_test "${CFG_TEST}" \
-  --dfg_test "${DFG_TEST}" \
   --scope_train "${SCOPE_TRAIN}" \
   --scope_val "${SCOPE_VAL}" \
   --vocab "${VOCAB_PATH}" \
@@ -266,7 +230,6 @@ python train_multi_to_one.py \
   --val_percentage ${VAL_PERCENTAGE} \
   --output_dir "${OUTPUT_DIR}" \
   --log_dir "${LOG_DIR}" \
-  --resume \
   ${TASK_FLAGS} \
   ${CUDA} ${MULTI_GPU} \
   2>&1 | tee train_strupos.log
