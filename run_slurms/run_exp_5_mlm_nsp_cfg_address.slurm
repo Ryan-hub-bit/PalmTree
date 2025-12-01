@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --job-name=exp5_mlm_addr
+#SBATCH --job-name=exp5_mlm_nsp_addr
 #SBATCH --output=/work/kliu14/haapr/log/%x_%j.out
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=4
-#SBATCH --time=00:20:00
+#SBATCH --time=3-00:00:00
 #SBATCH --partition=gpu2
 #SBATCH --account=loni_progsyn01
 

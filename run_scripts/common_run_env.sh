@@ -3,8 +3,8 @@
 # Defines colors, dataset paths, model hyperparams and the run_experiment function.
 
 # Determine repo root (parent of this run_scripts directory)
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null && pwd)"
 
+REPO_ROOT="/home/kliu14/PalmTree/strupos"
 set -e
 
 # Colors for output
@@ -24,7 +24,7 @@ CFG_TEST="/work/kliu14/txtdataset/test_cfg.txt"
 DFG_TEST="/work/kliu14/txtdataset/test_dfg.txt"
 SCOPE_TRAIN="/work/kliu14/txtdataset/train_scope.txt"
 SCOPE_VAL="/work/kliu14/txtdataset/val_scope.txt"
-VOCAB_PATH="${REPO_ROOT}/strupos/vocab.pkl"
+VOCAB_PATH="${REPO_ROOT}/vocab.pkl"
 
 # Model architecture
 HIDDEN=768
@@ -56,7 +56,7 @@ MULTI_GPU=""
 # Check if vocab exists (create if missing)
 if [ ! -f "${VOCAB_PATH}" ]; then
   echo -e "${YELLOW}⚠ Vocabulary file not found. Creating it first...${NC}"
-  python "${REPO_ROOT}/strupos/create_vocab.py"
+  python "${REPO_ROOT}/create_vocab.py"
   if [ $? -ne 0 ]; then
     echo -e "${RED}✗ Failed to create vocabulary${NC}"
     exit 1
