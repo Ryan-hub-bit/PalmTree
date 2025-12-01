@@ -172,12 +172,13 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
     nsp_criterion = nn.CrossEntropyLoss()
     scope_criterion = nn.CrossEntropyLoss()
     
-    progress = tqdm(data_loader, desc="Training", file=sys.stdout)
+    # Disable automatic tqdm updates - we'll control them manually
+    progress = tqdm(total=len(data_loader), desc="Training", file=sys.stdout)
     
     # Create scope iterator
     scope_iter = iter(scope_loader) if scope_loader is not None else None
     
-    for i, batch in enumerate(progress):
+    for i, batch in enumerate(data_loader):
         # === Process CFG (MLM + NSP) ===
         # MLM uses cfg_mlm_* keys
         cfg_mlm_input = batch['cfg_mlm_input'].to(device)
@@ -293,6 +294,7 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
                 'nsp_dfg': f'{avg_nsp_dfg:.4f}',
                 'scope': f'{avg_scope:.4f}'
             })
+            progress.update(log_freq if i > 0 else 1)  # Update by log_freq except first iteration
         
         # Log to file periodically
         if i % log_freq == 0 and logger:
@@ -300,6 +302,8 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
                       f"Loss: {avg_loss:.4f} | MLM: {avg_mlm:.4f} | "
                       f"NSP_CFG: {avg_nsp_cfg:.4f} | NSP_DFG: {avg_nsp_dfg:.4f} | "
                       f"SCOPE: {avg_scope:.4f}")
+    
+    progress.close()
     
     return {
         'total_loss': total_loss / len(data_loader),
