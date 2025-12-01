@@ -284,14 +284,15 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
         avg_nsp_dfg = nsp_dfg_loss_total / (i + 1)
         avg_scope = scope_loss_total / (i + 1)
         
-        # Update progress bar every iteration
-        progress.set_postfix({
-            'loss': f'{avg_loss:.4f}',
-            'mlm': f'{avg_mlm:.4f}',
-            'nsp_cfg': f'{avg_nsp_cfg:.4f}',
-            'nsp_dfg': f'{avg_nsp_dfg:.4f}',
-            'scope': f'{avg_scope:.4f}'
-        })
+        # Update progress bar every log_freq iterations
+        if i % log_freq == 0:
+            progress.set_postfix({
+                'loss': f'{avg_loss:.4f}',
+                'mlm': f'{avg_mlm:.4f}',
+                'nsp_cfg': f'{avg_nsp_cfg:.4f}',
+                'nsp_dfg': f'{avg_nsp_dfg:.4f}',
+                'scope': f'{avg_scope:.4f}'
+            })
         
         # Log to file periodically
         if i % log_freq == 0 and logger:
