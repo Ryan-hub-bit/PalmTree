@@ -425,7 +425,7 @@ class MultiToOneDataset(Dataset):
         segment_labels.extend([1] * len(tokens1))
         
         # Add SEP
-        token_ids.append(self.vocab.sep_index)
+        token_ids.append(self.vocab.eos_index)
         positions.append((0.0, 0.0, 0.0))
         segment_labels.append(1)
         
@@ -436,7 +436,7 @@ class MultiToOneDataset(Dataset):
         segment_labels.extend([2] * len(tokens2))
         
         # Add final SEP
-        token_ids.append(self.vocab.sep_index)
+        token_ids.append(self.vocab.eos_index)
         positions.append((0.0, 0.0, 0.0))
         segment_labels.append(2)
         

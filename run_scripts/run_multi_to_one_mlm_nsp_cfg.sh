@@ -48,8 +48,8 @@ if [ "${INSTRUCTION_LEVEL_SEGMENT}" = true ]; then MODEL_NAME="${MODEL_NAME}_ins
 MODEL_NAME="${MODEL_NAME#_}"
 if [ -z "${MODEL_NAME}" ]; then MODEL_NAME="baseline"; fi
 
-OUTPUT_DIR="/data/kliu14/haapr/output/${MODEL_NAME}_multi_to_one"
-LOG_DIR="/data/kliu14/haapr/log/${MODEL_NAME}_multi_to_one"
+OUTPUT_DIR="/work/kliu14/haapr/output/${MODEL_NAME}_multi_to_one"
+LOG_DIR="/work/kliu14/haapr/log/${MODEL_NAME}_multi_to_one"
 
 mkdir -p "${OUTPUT_DIR}" "${LOG_DIR}"
 
