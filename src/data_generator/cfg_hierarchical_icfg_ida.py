@@ -269,14 +269,9 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                     tgt = None
 
                 # Filter out immediate values:
-                # - Values below binary base are likely immediate constants
+                # - Values below binary base (min_addr) are immediates
+                # - Very small values (< 0x1000) are likely immediates even if >= min_addr
                 # - Very large values that are likely bit masks (e.g., 0xfffffffffffffff0)
-                # is_immediate = False
-                # if tgt is not None:
-                #     if tgt < min_addr:  # below binary base
-                #         is_immediate = True
-                #     elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
-                #         is_immediate = True
                 
                 if tgt is not None and tgt >= min_addr:
                     if tgt in addr_positions:
@@ -364,9 +359,8 @@ def clean_ida_disasm(ea):
         elif op_type == idc.o_displ:
             # Mark displacement values with special token so they won't be wrapped with address()
             if op_value != idaapi.BADADDR and op_value != 0:
-                if not op.startswith('0x') and not op.startswith('['):
-                    op = f"disp_{hex(op_value)}"
-                # Keep the original format if it's already formatted
+                # Always mark displacements, even if IDA formatted them as hex
+                op = f"disp_{hex(op_value)}"
         # For operands that reference code/data addresses (but NOT displacements)
         elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
             if op_value != idaapi.BADADDR and op_value != 0:

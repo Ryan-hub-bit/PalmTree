@@ -20,9 +20,16 @@ echo ""
 
 # Experiment 1: IMC + MLM + Address
 EXPERIMENT="imc_mlm_address"
-TASKS="--enable_imc --enable_mlm"
-ADDRESS_FLAG=""
+# Task flags - Enable what you want to train
+TASKS=""
+TASKS="${TASKS} --enable_imc"        # IMC: Instruction Masking for CFG
+# TASKS="${TASKS} --enable_imd"       # IMD: Instruction Masking for DFG (optional)
+TASKS="${TASKS} --enable_mlm"        # Token-level MLM (default enabled)
+# TASKS="${TASKS} --enable_scope"      # Scope prediction (optional)
 
+# Address embedding
+ADDRESS_FLAG=""  # Use address embeddings
+# ADDRESS_FLAG="--disable_address_embedding"  # Disable address embedding
 # Experiment 2: IMC + IMD + MLM + Address
 # EXPERIMENT="imc_imd_mlm_address"
 # TASKS="--enable_imc --enable_imd --enable_mlm"
@@ -57,8 +64,8 @@ TOKEN_MASK_PROB=0.15      # Standard MLM masking rate
 INSTRUCTION_MASK_PROB=0.15  # Instruction-level masking rate
 
 # Data parameters
-TRAIN_PERCENTAGE=0.00001  # Use 20% of training data
-VAL_PERCENTAGE=0.00001    # Use 20% of validation data
+TRAIN_PERCENTAGE=1  # Use 20% of training data
+VAL_PERCENTAGE=1    # Use 20% of validation data
 
 # Data paths
 VOCAB_PATH="./vocab.pkl"
@@ -68,17 +75,6 @@ CFG_VAL="/data/kun/dataset/val_cfg.txt"
 DFG_VAL="/data/kun/dataset/val_dfg.txt"
 SCOPE_TRAIN="/data/kun/dataset/train_scope.txt"
 SCOPE_VAL="/data/kun/dataset/val_scope.txt"
-
-# Task flags - Enable what you want to train
-TASKS=""
-TASKS="${TASKS} --enable_imc"        # IMC: Instruction Masking for CFG
-# TASKS="${TASKS} --enable_imd"       # IMD: Instruction Masking for DFG (optional)
-TASKS="${TASKS} --enable_mlm"        # Token-level MLM (default enabled)
-# TASKS="${TASKS} --enable_scope"      # Scope prediction (optional)
-
-# Address embedding
-ADDRESS_FLAG=""  # Use address embeddings
-# ADDRESS_FLAG="--disable_address_embedding"  # Disable address embeddings
 
 # Multi-GPU
 CUDA="--cuda"

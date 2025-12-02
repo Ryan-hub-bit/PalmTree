@@ -8,6 +8,7 @@
       "program": "${workspaceFolder}/strupos/train_from_scratch.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/strupos",
+      "python": "/home/kun/anaconda3/envs/palmtree/bin/python",
       "args": [
         "--cfg_train", "/data/kun/dataset/train_cfg.txt",
         "--dfg_train", "/data/kun/dataset/train_dfg.txt",
@@ -52,6 +53,7 @@
       "program": "${workspaceFolder}/strupos/train_from_scratch.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/strupos",
+      "python": "/home/kun/anaconda3/envs/palmtree/bin/python",
       "args": [
         "--cfg_train", "/data/kun/dataset/train_cfg.txt",
         "--dfg_train", "/data/kun/dataset/train_dfg.txt",
@@ -99,6 +101,7 @@
       "program": "${workspaceFolder}/strupos/train_from_scratch.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/strupos",
+      "python": "/home/kun/anaconda3/envs/palmtree/bin/python",
       "args": [
         "--cfg_train", "/data/kun/dataset/train_cfg.txt",
         "--dfg_train", "/data/kun/dataset/train_dfg.txt",
@@ -144,6 +147,7 @@
       "program": "${workspaceFolder}/strupos/train_with_instruction_mask.py",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/strupos",
+      "python": "/home/kun/anaconda3/envs/palmtree/bin/python",
       "args": [
         "--cfg_train", "/data/kun/dataset/train_cfg.txt",
         "--dfg_train", "/data/kun/dataset/train_dfg.txt",

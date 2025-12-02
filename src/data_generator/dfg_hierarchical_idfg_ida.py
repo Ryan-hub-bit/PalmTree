@@ -66,16 +66,19 @@ def clean_ida_disasm(ea):
     Mark immediate values with 'imm' token.
     Mark displacement operands (o_displ) with 'disp_0xXX' prefix to prevent address() wrapping.
     """
+    # Get mnemonic
     mnem = idc.print_insn_mnem(ea)
     if not mnem:
         return None
     
+    # Get operands - up to 6 operands max
     operands = []
     for i in range(6):
         op = idc.print_operand(ea, i)
         if not op:
             break
         
+        # Get operand type and value
         op_type = idc.get_operand_type(ea, i)
         op_value = idc.get_operand_value(ea, i)
         
@@ -83,30 +86,34 @@ def clean_ida_disasm(ea):
         if op_type == idc.o_imm:
             # It's an immediate - mark it
             op = "imm"
-        # Handle keywords and symbol replacement
+        # Check if operand contains keywords or symbols that need address replacement
+        # Handle "offset symbol_name" -> "offset 0xADDR"
         elif 'offset' in op and op_value != idaapi.BADADDR and op_value != 0:
             op = f"offset {hex(op_value)}"
+        # Handle "short symbol_name" -> "short 0xADDR"
         elif 'short' in op and op_value != idaapi.BADADDR and op_value != 0:
             op = f"short {hex(op_value)}"
+        # Handle "large symbol_name" -> "large 0xADDR"
         elif 'large' in op and op_value != idaapi.BADADDR and op_value != 0:
             op = f"large {hex(op_value)}"
+        # Handle segment prefix "cs:symbol" -> just "0xADDR" (remove cs:, ds:, etc.)
         elif any(seg in op for seg in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']) and op_value != idaapi.BADADDR and op_value != 0:
             op = hex(op_value)
         # Handle displacement operands (like [rax + 0x20]) - mark for special treatment
         elif op_type == idc.o_displ:
             # Mark displacement values with special token so they won't be wrapped with address()
             if op_value != idaapi.BADADDR and op_value != 0:
-                if not op.startswith('0x') and not op.startswith('['):
-                    op = f"disp_{hex(op_value)}"
-                # Keep the original format if it's already formatted
+                # Always mark displacements, even if IDA formatted them as hex
+                op = f"disp_{hex(op_value)}"
         # For operands that reference code/data addresses (but NOT displacements)
         elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
             if op_value != idaapi.BADADDR and op_value != 0:
+                # Check if it's a symbol name (not already a hex address)
                 if not op.startswith('0x') and not op.startswith('['):
                     op = hex(op_value)
-        
         operands.append(op)
     
+    # Build clean disassembly
     if operands:
         return f"{mnem} {', '.join(operands)}"
     else:
@@ -306,16 +313,11 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                     tgt = None
 
                 # Filter out immediate values:
-                # - Values below binary base are likely immediate constants
+                # - Values below binary base (min_addr) are immediates
+                # - Very small values (< 0x1000) are likely immediates even if >= min_addr
                 # - Very large values that are likely bit masks (e.g., 0xfffffffffffffff0)
-                # is_immediate = False
-                # if tgt is not None:
-                #     if tgt < min_addr:  # below binary base
-                #         is_immediate = True
-                #     elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
-                #         is_immediate = True
-
-                if tgt is not None:
+                
+                if tgt is not None and tgt >= min_addr and tgt >= 0x1000:
                     if tgt in addr_positions:
                         # Code address: use hierarchical positions (func, bb, inst)
                         entry = addr_positions[tgt]
@@ -323,6 +325,9 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                         formatted_ops.append(f"address({mk_hex}:{pos})")
                     else:
                         # Data address (not in text section): use section-based hierarchical positions
+                        # Position 1: Section's position in binary
+                        # Position 2: Address position inside section
+                        # Position 3: BB position = 0
                         pos = format_data_address_positions(tgt)
                         formatted_ops.append(f"address({mk_hex}:{pos})")
                 else:
