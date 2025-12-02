@@ -3,7 +3,8 @@
 #SBATCH --output=/work/kliu14/haapr/log/%x_%j.out
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=3-00:00:00
+#SBATCH --mem=64G                 
+#SBATCH --time=03:30:00
 #SBATCH --partition=gpu2
 #SBATCH --account=loni_progsyn01
 
