@@ -39,10 +39,10 @@ OUTPUT_DIR="../output/${MODEL_NAME}"
 LOG_DIR="../log/${MODEL_NAME}"
 
 # Model parameters
-HIDDEN=128
+HIDDEN=768
 LAYERS=12
-ATTN_HEADS=8
-SEQ_LEN=60
+ATTN_HEADS=12
+SEQ_LEN=75
 
 # Training parameters
 BATCH_SIZE=256
@@ -57,8 +57,8 @@ TOKEN_MASK_PROB=0.15      # Standard MLM masking rate
 INSTRUCTION_MASK_PROB=0.15  # Instruction-level masking rate
 
 # Data parameters
-TRAIN_PERCENTAGE=1  # Use 20% of training data
-VAL_PERCENTAGE=1    # Use 20% of validation data
+TRAIN_PERCENTAGE=0.00001  # Use 20% of training data
+VAL_PERCENTAGE=0.00001    # Use 20% of validation data
 
 # Data paths
 VOCAB_PATH="./vocab.pkl"

@@ -64,12 +64,14 @@ class InstructionMaskingDataset(Dataset):
         self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         
-        # Load CFG data
-        print(f"Loading CFG corpus from {cfg_corpus_path}")
-        self.cfg_lines = self._load_corpus(cfg_corpus_path)
-        print(f"Loaded {len(self.cfg_lines)} CFG lines")
+        # Load CFG data if path provided
+        self.cfg_lines = []
+        if cfg_corpus_path:
+            print(f"Loading CFG corpus from {cfg_corpus_path}")
+            self.cfg_lines = self._load_corpus(cfg_corpus_path)
+            print(f"Loaded {len(self.cfg_lines)} CFG lines")
         
-        # Load DFG data if enabled
+        # Load DFG data if enabled and path provided
         self.dfg_lines = []
         if self.enable_imd and dfg_corpus_path:
             print(f"Loading DFG corpus from {dfg_corpus_path}")
@@ -189,7 +191,9 @@ class InstructionMaskingDataset(Dataset):
                 if prob < 0.8:
                     masked_tokens.append(self.mask_idx)
                 elif prob < 0.9:
-                    masked_tokens.append(random.randint(5, len(self.vocab) - 1))
+                    # Random token - ensure it's within valid vocab range
+                    random_token_id = random.randint(5, len(self.vocab.itos) - 1)
+                    masked_tokens.append(random_token_id)
                 else:
                     masked_tokens.append(token_id)
                 labels.append(token_id)
@@ -202,66 +206,87 @@ class InstructionMaskingDataset(Dataset):
     def _process_line_for_instruction_masking(self, line):
         """
         Process a full line and apply instruction-level masking.
+        Format: [SOS] inst1 [EOS] inst2 [EOS] inst3 [EOS] ...
+        Segment labels: [SOS] gets segment 1, inst1 tokens get 1, [EOS] gets 1,
+                        inst2 tokens get 2, [EOS] gets 2, etc.
+        
+        Strategy: Calculate number of instructions to mask based on instruction_mask_prob,
+        then randomly select which instructions to mask.
         
         Returns:
             bert_input: Token IDs with instruction-level masking
             bert_label: Labels for masked instructions (-1 for unmasked)
-            segment_label: Segment IDs
+            segment_label: Instruction ID (1 for inst1, 2 for inst2, ...)
             binary_pos, function_pos, bb_pos: Position embeddings
-            instruction_mask: 1 for masked instructions, 0 otherwise
         """
-        instructions = line.split('\t')
+        instructions = [inst.strip() for inst in line.split('\t') if inst.strip()]
+        
+        # Calculate how many instructions to mask
+        num_instructions = len(instructions)
+        if num_instructions == 0:
+            # Empty line, return minimal valid output
+            return self._create_empty_sample()
+        
+        num_to_mask = max(1, int(num_instructions * self.instruction_mask_prob))
+        # Ensure we don't mask all instructions (if more than 1)
+        if num_instructions > 1:
+            num_to_mask = min(num_to_mask, num_instructions - 1)
+        
+        # Randomly select which instructions to mask
+        instructions_to_mask = set(random.sample(range(num_instructions), num_to_mask))
         
         all_tokens = []
         all_positions = []
         all_labels = []
-        instruction_boundaries = []  # Track where each instruction starts/ends
-        instruction_mask_labels = []  # 1 if instruction is masked, 0 otherwise
+        all_segments = []
         
-        current_pos = 0
-        for inst_text in instructions:
-            inst_text = inst_text.strip()
-            if not inst_text:
-                continue
-            
+        # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
+        all_tokens.append(self.sos_idx)
+        all_positions.append((0.0, 0.0, 0.0))
+        all_labels.append(-1)
+        all_segments.append(1)
+        
+        for inst_idx, inst_text in enumerate(instructions):
             tokens, positions = self._parse_instruction(inst_text)
             
-            # Decide if this instruction should be masked
-            if random.random() < self.instruction_mask_prob:
+            # Mask this instruction if it was selected
+            if inst_idx in instructions_to_mask:
                 # Mask entire instruction
                 masked_tokens, positions, labels = self._mask_instruction(tokens, positions)
-                instruction_mask_labels.append(1)
             else:
                 # No instruction-level masking (but still convert to IDs)
                 masked_tokens = [self.vocab.stoi.get(t, self.unk_idx) for t in tokens]
                 labels = [-1] * len(tokens)  # Not masked at instruction level
-                instruction_mask_labels.append(0)
             
-            instruction_boundaries.append((current_pos, current_pos + len(tokens)))
-            current_pos += len(tokens)
+            # Segment label = instruction number (1-indexed)
+            inst_segment = inst_idx + 1
             
             all_tokens.extend(masked_tokens)
             all_positions.extend(positions)
             all_labels.extend(labels)
-        
-        # Add [SOS] and [EOS]
-        all_tokens = [self.sos_idx] + all_tokens + [self.eos_idx]
-        all_labels = [-1] + all_labels + [-1]
-        all_positions = [(0.0, 0.0, 0.0)] + all_positions + [(0.0, 0.0, 0.0)]
+            all_segments.extend([inst_segment] * len(masked_tokens))
+            
+            # Add [EOS] after each instruction (same segment as the instruction)
+            all_tokens.append(self.eos_idx)
+            all_positions.append((0.0, 0.0, 0.0))
+            all_labels.append(-1)
+            all_segments.append(inst_segment)
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
             all_tokens = all_tokens[:self.seq_len]
             all_labels = all_labels[:self.seq_len]
             all_positions = all_positions[:self.seq_len]
+            all_segments = all_segments[:self.seq_len]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens += [self.pad_idx] * padding_len
             all_labels += [-1] * padding_len
             all_positions += [(0.0, 0.0, 0.0)] * padding_len
+            all_segments += [0] * padding_len  # Padding gets segment 0
         
-        # Create segment labels (all 0 for single sequence)
-        segment_label = [0] * self.seq_len
+        # Use segment labels as instruction IDs
+        segment_label = all_segments
         
         # Split positions
         binary_pos = [p[0] for p in all_positions]
@@ -280,12 +305,14 @@ class InstructionMaskingDataset(Dataset):
     def _process_line_for_token_masking(self, line):
         """
         Process a full line and apply token-level MLM masking.
-        This is standard BERT-style MLM where individual tokens are randomly masked.
+        Format: [SOS] inst1 [EOS] inst2 [EOS] inst3 [EOS] ...
+        Segment labels: [SOS] gets segment 1, inst1 tokens get 1, [EOS] gets 1, 
+                        inst2 tokens get 2, [EOS] gets 2, etc.
         
         Returns:
             bert_input: Token IDs with token-level masking
             bert_label: Labels for masked tokens (-1 for unmasked)
-            segment_label: Segment IDs
+            segment_label: Instruction ID (1 for inst1, 2 for inst2, ...)
             binary_pos, function_pos, bb_pos: Position embeddings
         """
         instructions = line.split('\t')
@@ -293,8 +320,15 @@ class InstructionMaskingDataset(Dataset):
         all_tokens = []
         all_positions = []
         all_labels = []
+        all_segments = []
         
-        for inst_text in instructions:
+        # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
+        all_tokens.append(self.sos_idx)
+        all_positions.append((0.0, 0.0, 0.0))
+        all_labels.append(-1)
+        all_segments.append(1)
+        
+        for inst_idx, inst_text in enumerate(instructions):
             inst_text = inst_text.strip()
             if not inst_text:
                 continue
@@ -303,29 +337,35 @@ class InstructionMaskingDataset(Dataset):
             
             # Apply token-level masking
             masked_tokens, labels = self._mask_tokens(tokens, positions)
+            # Segment label = instruction number (1-indexed)
+            inst_segment = inst_idx + 1
             
             all_tokens.extend(masked_tokens)
             all_positions.extend(positions)
             all_labels.extend(labels)
-        
-        # Add [SOS] and [EOS]
-        all_tokens = [self.sos_idx] + all_tokens + [self.eos_idx]
-        all_labels = [-1] + all_labels + [-1]
-        all_positions = [(0.0, 0.0, 0.0)] + all_positions + [(0.0, 0.0, 0.0)]
+            all_segments.extend([inst_segment] * len(masked_tokens))
+            
+            # Add [EOS] after each instruction (same segment as the instruction)
+            all_tokens.append(self.eos_idx)
+            all_positions.append((0.0, 0.0, 0.0))
+            all_labels.append(-1)
+            all_segments.append(inst_segment)
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
             all_tokens = all_tokens[:self.seq_len]
             all_labels = all_labels[:self.seq_len]
             all_positions = all_positions[:self.seq_len]
+            all_segments = all_segments[:self.seq_len]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens += [self.pad_idx] * padding_len
             all_labels += [-1] * padding_len
             all_positions += [(0.0, 0.0, 0.0)] * padding_len
+            all_segments += [0] * padding_len  # Padding gets segment 0
         
-        # Create segment labels (all 0 for single sequence)
-        segment_label = [0] * self.seq_len
+        # Use segment labels as instruction IDs
+        segment_label = all_segments
         
         # Split positions
         binary_pos = [p[0] for p in all_positions]

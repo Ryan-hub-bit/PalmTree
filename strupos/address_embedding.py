@@ -189,8 +189,9 @@ class AddressAwareBERTEmbedding(nn.Module):
         else:
             self.address_position = None
         
-        # 4. Segment embedding (for NSP)
-        self.segment_embedding = nn.Embedding(2, embed_size)
+        # 4. Segment embedding (supports both NSP and instruction-level segments)
+        # Increased from 2 to 16 to support instruction IDs (1-8) plus padding (0)
+        self.segment_embedding = nn.Embedding(16, embed_size, padding_idx=0)
         
         self.dropout = nn.Dropout(p=dropout)
         self.layer_norm = nn.LayerNorm(embed_size)

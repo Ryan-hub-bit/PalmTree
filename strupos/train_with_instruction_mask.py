@@ -79,9 +79,35 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
         if enable_imc:
             imc_batch = batch['imc']
             
-            imc_input = imc_batch['bert_input'].to(device)
+            # Validate token IDs BEFORE moving to GPU
+            imc_input_cpu = imc_batch['bert_input']
+            imc_segment_cpu = imc_batch['segment_label']
+            vocab_size = model.module.bert.embedding.token_embedding.num_embeddings if hasattr(model, 'module') else model.bert.embedding.token_embedding.num_embeddings
+            segment_vocab_size = model.module.bert.embedding.segment_embedding.num_embeddings if hasattr(model, 'module') else model.bert.embedding.segment_embedding.num_embeddings
+            
+            # Check token IDs
+            invalid_mask = (imc_input_cpu < 0) | (imc_input_cpu >= vocab_size)
+            if invalid_mask.any():
+                invalid_ids = imc_input_cpu[invalid_mask].unique()
+                logger.error(f"Invalid token IDs found in IMC input: {invalid_ids.tolist()}")
+                logger.error(f"Vocab size: {vocab_size}, Min ID: {imc_input_cpu.min()}, Max ID: {imc_input_cpu.max()}")
+                # Print first few samples with invalid IDs
+                for i in range(min(3, imc_input_cpu.size(0))):
+                    if invalid_mask[i].any():
+                        logger.error(f"Sample {i} invalid tokens: {imc_input_cpu[i][invalid_mask[i]].tolist()}")
+                raise ValueError(f"Token IDs out of bounds: {invalid_ids.tolist()}")
+            
+            # Check segment IDs
+            invalid_seg_mask = (imc_segment_cpu < 0) | (imc_segment_cpu >= segment_vocab_size)
+            if invalid_seg_mask.any():
+                invalid_seg_ids = imc_segment_cpu[invalid_seg_mask].unique()
+                logger.error(f"Invalid segment IDs found in IMC input: {invalid_seg_ids.tolist()}")
+                logger.error(f"Segment vocab size: {segment_vocab_size}, Min ID: {imc_segment_cpu.min()}, Max ID: {imc_segment_cpu.max()}")
+                raise ValueError(f"Segment IDs out of bounds: {invalid_seg_ids.tolist()}")
+            
+            imc_input = imc_input_cpu.to(device)
             imc_labels = imc_batch['bert_label'].to(device)
-            imc_segment = imc_batch['segment_label'].to(device)
+            imc_segment = imc_segment_cpu.to(device)
             imc_binary_pos = imc_batch['binary_pos'].to(device)
             imc_function_pos = imc_batch['function_pos'].to(device)
             imc_bb_pos = imc_batch['bb_pos'].to(device)
@@ -150,7 +176,8 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             mlm_labels_flat = mlm_labels.view(-1)
             mlm_loss = mlm_criterion(mlm_output, mlm_labels_flat)
         
-        # === Process Scope (if available and enabled) ===.tensor(0.0, device=device)
+        # === Process Scope (if available and enabled) ===
+        scope_loss = torch.tensor(0.0, device=device)
         if enable_scope and scope_iter is not None:
             try:
                 scope_batch = next(scope_iter)
@@ -471,9 +498,15 @@ def main():
     
     # Create datasets
     logger.info("Creating training dataset with instruction masking...")
+    
+    # Only load data if at least one task is enabled
+    if not (args.enable_imc or args.enable_imd or args.enable_mlm):
+        logger.error("At least one task must be enabled (IMC, IMD, or MLM)")
+        return
+    
     train_dataset = InstructionMaskingDataset(
-        cfg_corpus_path=args.cfg_train,
-        dfg_corpus_path=args.dfg_train,
+        cfg_corpus_path=args.cfg_train if args.enable_imc or args.enable_mlm else None,
+        dfg_corpus_path=args.dfg_train if args.enable_imd else None,
         vocab=vocab,
         seq_len=args.seq_len,
         on_memory=True,
@@ -497,8 +530,8 @@ def main():
     if args.cfg_val and args.dfg_val:
         logger.info("Creating validation dataset...")
         val_dataset = InstructionMaskingDataset(
-            cfg_corpus_path=args.cfg_val,
-            dfg_corpus_path=args.dfg_val,
+            cfg_corpus_path=args.cfg_val if args.enable_imc or args.enable_mlm else None,
+            dfg_corpus_path=args.dfg_val if args.enable_imd else None,
             vocab=vocab,
             seq_len=args.seq_len,
             on_memory=True,
@@ -523,7 +556,7 @@ def main():
     if args.enable_scope and args.scope_train:
         logger.info(f"Creating scope training dataset from {args.scope_train}...")
         scope_train_dataset = ScopeDataset(
-            corpus_path=args.scope_train,
+            scope_corpus_path=args.scope_train,
             vocab=vocab,
             seq_len=args.seq_len,
             encoding="utf-8",
@@ -540,7 +573,7 @@ def main():
         if args.scope_val:
             logger.info(f"Creating scope validation dataset from {args.scope_val}...")
             scope_val_dataset = ScopeDataset(
-                corpus_path=args.scope_val,
+                scope_corpus_path=args.scope_val,
                 vocab=vocab,
                 seq_len=args.seq_len,
                 encoding="utf-8",
@@ -557,7 +590,8 @@ def main():
     # Create model
     logger.info("Creating model (training from scratch)...")
     logger.info("Task configuration:")
-    logger.info(f"  - IM: {args.enable_im}")
+    logger.info(f"  - IMC: {args.enable_imc}")
+    logger.info(f"  - IMD: {args.enable_imd}")
     logger.info(f"  - MLM: {args.enable_mlm}")
     logger.info(f"  - SCOPE: {args.enable_scope}")
     logger.info(f"  - Address Embedding: {args.use_address_embedding}")
@@ -576,7 +610,8 @@ def main():
         bert,
         vocab_size=len(vocab),
         enable_mlm=args.enable_mlm,
-        enable_im=args.enable_im,
+        enable_imc=args.enable_imc,
+        enable_imd=args.enable_imd,
         enable_nsp_cfg=False,
         enable_nsp_dfg=False,
         enable_scope=args.enable_scope

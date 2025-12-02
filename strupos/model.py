@@ -85,11 +85,12 @@ class AddressAwareBERT(nn.Module):
 
 class AddressAwareBERTForPretraining(nn.Module):
     """
-    Address-aware BERT with MLM, IM, dual NSP, and scope prediction heads for pretraining.
+    Address-aware BERT with MLM, IMC, IMD, dual NSP, and scope prediction heads for pretraining.
     
     Following PalmTree's approach with added Instruction Masking:
     - MLM head (for token-level CFG masking)
-    - IM head (for instruction-level masking - predicts entire masked instructions)
+    - IMC head (for instruction-level CFG masking - predicts entire masked instructions)
+    - IMD head (for instruction-level DFG masking - predicts entire masked instructions)
     - NSP_CFG head (for CFG order coherence)
     - NSP_DFG head (for DFG trace coherence)
     - SCOPE head (for scope prediction - 3-class classification)
@@ -98,13 +99,14 @@ class AddressAwareBERTForPretraining(nn.Module):
     """
     
     def __init__(self, bert_model, vocab_size, 
-                 enable_mlm=True, enable_im=False, enable_nsp_cfg=True, enable_nsp_dfg=True, enable_scope=True):
+                 enable_mlm=True, enable_imc=False, enable_imd=False, enable_nsp_cfg=True, enable_nsp_dfg=True, enable_scope=True):
         """
         Args:
             bert_model: AddressAwareBERT model
             vocab_size: Vocabulary size
             enable_mlm: Enable Masked Language Modeling task (token-level)
-            enable_im: Enable Instruction Masking task (instruction-level)
+            enable_imc: Enable Instruction Masking CFG task (instruction-level for CFG)
+            enable_imd: Enable Instruction Masking DFG task (instruction-level for DFG)
             enable_nsp_cfg: Enable CFG Next Sentence Prediction task
             enable_nsp_dfg: Enable DFG Next Sentence Prediction task
             enable_scope: Enable Scope Prediction task
@@ -117,7 +119,8 @@ class AddressAwareBERTForPretraining(nn.Module):
         
         # Task flags
         self.enable_mlm = enable_mlm
-        self.enable_im = enable_im
+        self.enable_imc = enable_imc
+        self.enable_imd = enable_imd
         self.enable_nsp_cfg = enable_nsp_cfg
         self.enable_nsp_dfg = enable_nsp_dfg
         self.enable_scope = enable_scope
@@ -128,11 +131,17 @@ class AddressAwareBERTForPretraining(nn.Module):
         else:
             self.MLM = None
         
-        # Instruction Masking head (instruction-level masking)
-        if self.enable_im:
-            self.IM = MaskedLanguageModel(self.hidden, vocab_size)
+        # Instruction Masking CFG head (instruction-level masking for CFG)
+        if self.enable_imc:
+            self.IMC = MaskedLanguageModel(self.hidden, vocab_size)
         else:
-            self.IM = None
+            self.IMC = None
+        
+        # Instruction Masking DFG head (instruction-level masking for DFG)
+        if self.enable_imd:
+            self.IMD = MaskedLanguageModel(self.hidden, vocab_size)
+        else:
+            self.IMD = None
         
         # CFG Next Sentence Prediction head (order coherence)
         if self.enable_nsp_cfg:
@@ -188,7 +197,7 @@ class AddressAwareBERTForPretraining(nn.Module):
         
         return mlm_output, nsp_output
     
-    def forward_im(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos):
+    def forward_im(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg'):
         """
         Forward pass for instruction masking.
         
@@ -198,18 +207,20 @@ class AddressAwareBERTForPretraining(nn.Module):
             binary_pos: [batch_size, seq_len]
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
+            corpus_type: 'cfg' or 'dfg' - determines which IM head to use
             
         Returns:
             im_output: [batch_size, seq_len, vocab_size] - predictions for instruction-masked tokens
         """
-        if not self.enable_im:
-            return None
-        
         # Get BERT output
         sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
         
-        # IM prediction for all tokens
-        im_output = self.IM(sequence_output)
+        # Use appropriate IM head based on corpus type
+        im_output = None
+        if corpus_type == 'cfg' and self.enable_imc:
+            im_output = self.IMC(sequence_output)
+        elif corpus_type == 'dfg' and self.enable_imd:
+            im_output = self.IMD(sequence_output)
         
         return im_output
     
