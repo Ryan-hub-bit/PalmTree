@@ -163,7 +163,7 @@ class AddressAwareBERTEmbedding(nn.Module):
     4. Segment embedding (for NSP task)
     """
     
-    def __init__(self, vocab_size, embed_size, dropout=0.1, max_len=512, use_address_embedding=True, max_segments=16):
+    def __init__(self, vocab_size, embed_size, dropout=0.1, max_len=512, use_address_embedding=True):
         """
         Args:
             vocab_size: Size of vocabulary
@@ -171,7 +171,6 @@ class AddressAwareBERTEmbedding(nn.Module):
             dropout: Dropout rate
             max_len: Maximum sequence length
             use_address_embedding: Whether to use address-aware positional embeddings
-            max_segments: Maximum number of segment IDs (default 16 to support instruction-level segmentation)
         """
         super().__init__()
         
@@ -190,8 +189,9 @@ class AddressAwareBERTEmbedding(nn.Module):
         else:
             self.address_position = None
         
-        # 4. Segment embedding (for NSP) - increased from 2 to max_segments to support instruction-level segmentation
-        self.segment_embedding = nn.Embedding(max_segments, embed_size)
+        # 4. Segment embedding (supports both NSP and instruction-level segments)
+        # Increased from 2 to 16 to support instruction IDs (1-8) plus padding (0)
+        self.segment_embedding = nn.Embedding(16, embed_size, padding_idx=0)
         
         self.dropout = nn.Dropout(p=dropout)
         self.layer_norm = nn.LayerNorm(embed_size)

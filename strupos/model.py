@@ -23,7 +23,7 @@ class AddressAwareBERT(nn.Module):
     Trained from scratch (no pre-trained PalmTree weights).
     """
     
-    def __init__(self, vocab_size, hidden=768, n_layers=12, attn_heads=12, dropout=0.1, max_len=512, use_address_embedding=True, max_segments=16):
+    def __init__(self, vocab_size, hidden=768, n_layers=12, attn_heads=12, dropout=0.1, max_len=512, use_address_embedding=True):
         """
         Args:
             vocab_size: Size of the vocabulary
@@ -33,7 +33,6 @@ class AddressAwareBERT(nn.Module):
             dropout: Dropout rate
             max_len: Maximum sequence length
             use_address_embedding: Whether to use address-aware positional embeddings
-            max_segments: Maximum number of segment IDs (for instruction-level segmentation)
         """
         super().__init__()
         
@@ -48,8 +47,7 @@ class AddressAwareBERT(nn.Module):
             embed_size=hidden,
             dropout=dropout,
             max_len=max_len,
-            use_address_embedding=use_address_embedding,
-            max_segments=max_segments
+            use_address_embedding=use_address_embedding
         )
         
         # Transformer blocks - trained from scratch
@@ -87,10 +85,12 @@ class AddressAwareBERT(nn.Module):
 
 class AddressAwareBERTForPretraining(nn.Module):
     """
-    Address-aware BERT with MLM, dual NSP, and scope prediction heads for pretraining.
+    Address-aware BERT with MLM, IMC, IMD, dual NSP, and scope prediction heads for pretraining.
     
-    Following PalmTree's approach:
-    - MLM head (for CFG only)
+    Following PalmTree's approach with added Instruction Masking:
+    - MLM head (for token-level CFG masking)
+    - IMC head (for instruction-level CFG masking - predicts entire masked instructions)
+    - IMD head (for instruction-level DFG masking - predicts entire masked instructions)
     - NSP_CFG head (for CFG order coherence)
     - NSP_DFG head (for DFG trace coherence)
     - SCOPE head (for scope prediction - 3-class classification)
@@ -99,12 +99,14 @@ class AddressAwareBERTForPretraining(nn.Module):
     """
     
     def __init__(self, bert_model, vocab_size, 
-                 enable_mlm=True, enable_nsp_cfg=True, enable_nsp_dfg=True, enable_scope=True):
+                 enable_mlm=True, enable_imc=False, enable_imd=False, enable_nsp_cfg=True, enable_nsp_dfg=True, enable_scope=True):
         """
         Args:
             bert_model: AddressAwareBERT model
             vocab_size: Vocabulary size
-            enable_mlm: Enable Masked Language Modeling task
+            enable_mlm: Enable Masked Language Modeling task (token-level)
+            enable_imc: Enable Instruction Masking CFG task (instruction-level for CFG)
+            enable_imd: Enable Instruction Masking DFG task (instruction-level for DFG)
             enable_nsp_cfg: Enable CFG Next Sentence Prediction task
             enable_nsp_dfg: Enable DFG Next Sentence Prediction task
             enable_scope: Enable Scope Prediction task
@@ -117,15 +119,29 @@ class AddressAwareBERTForPretraining(nn.Module):
         
         # Task flags
         self.enable_mlm = enable_mlm
+        self.enable_imc = enable_imc
+        self.enable_imd = enable_imd
         self.enable_nsp_cfg = enable_nsp_cfg
         self.enable_nsp_dfg = enable_nsp_dfg
         self.enable_scope = enable_scope
         
-        # Masked Language Model head (for CFG only)
+        # Masked Language Model head (token-level for CFG)
         if self.enable_mlm:
             self.MLM = MaskedLanguageModel(self.hidden, vocab_size)
         else:
             self.MLM = None
+        
+        # Instruction Masking CFG head (instruction-level masking for CFG)
+        if self.enable_imc:
+            self.IMC = MaskedLanguageModel(self.hidden, vocab_size)
+        else:
+            self.IMC = None
+        
+        # Instruction Masking DFG head (instruction-level masking for DFG)
+        if self.enable_imd:
+            self.IMD = MaskedLanguageModel(self.hidden, vocab_size)
+        else:
+            self.IMD = None
         
         # CFG Next Sentence Prediction head (order coherence)
         if self.enable_nsp_cfg:
@@ -180,6 +196,33 @@ class AddressAwareBERTForPretraining(nn.Module):
             nsp_output = self.DUP(sequence_output)  # DUP uses [CLS] token internally
         
         return mlm_output, nsp_output
+    
+    def forward_im(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg'):
+        """
+        Forward pass for instruction masking.
+        
+        Args:
+            token_ids: [batch_size, seq_len]
+            segment_labels: [batch_size, seq_len]
+            binary_pos: [batch_size, seq_len]
+            function_pos: [batch_size, seq_len]
+            bb_pos: [batch_size, seq_len]
+            corpus_type: 'cfg' or 'dfg' - determines which IM head to use
+            
+        Returns:
+            im_output: [batch_size, seq_len, vocab_size] - predictions for instruction-masked tokens
+        """
+        # Get BERT output
+        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
+        
+        # Use appropriate IM head based on corpus type
+        im_output = None
+        if corpus_type == 'cfg' and self.enable_imc:
+            im_output = self.IMC(sequence_output)
+        elif corpus_type == 'dfg' and self.enable_imd:
+            im_output = self.IMD(sequence_output)
+        
+        return im_output
     
     def forward_scope(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos):
         """
