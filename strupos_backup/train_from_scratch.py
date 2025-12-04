@@ -40,7 +40,7 @@ def set_seed(seed):
 
 # Import local modules
 from vocab import WordVocab
-from dataloader_all_pairs import RandomConsecutivePairDataset
+from strupos_backup.dataloader_all_pairs import RandomConsecutivePairDataset
 from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
