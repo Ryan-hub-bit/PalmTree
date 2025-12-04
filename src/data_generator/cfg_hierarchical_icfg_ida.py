@@ -61,7 +61,7 @@ def normalize_and_mask(ins_raw: str, symbol_map: dict, string_map: dict):
 
 def random_walk(g: nx.DiGraph, length: int, max_sequences: int = 5000):
     """
-    Perform random walks on the inter-procedural CFG (OPTIMIZED).
+    Perform random walks on the inter-procedural CFG.
     
     Args:
         g: The global ICFG (includes call/return edges)
@@ -71,17 +71,9 @@ def random_walk(g: nx.DiGraph, length: int, max_sequences: int = 5000):
     sequences = []
     nodes_with_data = [n for n in g if 'text' in g.nodes[n] and 'mask' in g.nodes[n]]
     
-    print(f"[INFO] Starting random walks from {len(nodes_with_data)} valid nodes...")
-    
-    # Cache successors to avoid repeated lookups
-    successors_cache = {node: list(g.successors(node)) for node in nodes_with_data}
-    
-    for idx, start_node in enumerate(nodes_with_data):
+    for start_node in nodes_with_data:
         if len(sequences) >= max_sequences:
             break
-        
-        if idx % 5000 == 0:
-            print(f"[INFO] Random walk progress: {idx}/{len(nodes_with_data)}, {len(sequences)} sequences generated")
             
         s = []
         steps = 0
@@ -89,11 +81,7 @@ def random_walk(g: nx.DiGraph, length: int, max_sequences: int = 5000):
         cur = start_node
         
         while steps < length:
-            # Use cached successors
-            if cur not in successors_cache:
-                successors_cache[cur] = list(g.successors(cur))
-            succ = successors_cache[cur]
-            
+            succ = list(g.successors(cur))
             if not succ:
                 break
             
@@ -146,49 +134,41 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
         """
         Format hierarchical positions for data/non-code addresses.
         
-        Only apply section normalization for data-like sections (.data, .rodata, .bss*):
-          Position 1: section's position in binary = (section_start - min_addr) / (max_addr - min_addr)
-          Position 2: address position inside section = (addr - section_start) / (section_end - section_start)
-          Position 3: 0.0 (no BB context for data)
-        
-        For other sections or no section at all:
-          return sentinel "2.00000000:0.00000000:0.00000000"
+        Position 1: Section's position in binary = (section_start - min_addr) / (max_addr - min_addr)
+        Position 2: Address position inside section = (addr - section_start) / (section_end - section_start)
+        Position 3: BB position = 0.0 (no BB context for data)
         """
         section_info = get_section_for_addr(addr)
         
-        # No section at all → external/garbage/special
-        if section_info is None:
-            return "2.00000000:0.00000000:0.00000000"
-        
-        sec_start, sec_end, sec_name = section_info
-        sname = sec_name.lower()
-        
-        # Only treat true data-like segments as meaningful
-        is_data_like = (
-            ".data" in sname or
-            ".rodata" in sname or
-            ".bss" in sname
-        )
-        
-        if not is_data_like:
-            # PLT/GOT/import/debug/etc. → special category
-            return "2.00000000:0.00000000:0.00000000"
-        
-        # ---- Real data section: compute normalized positions ----
-        if max_addr > min_addr:
-            sec_in_binary = (sec_start - min_addr) / float(max_addr - min_addr)
-            sec_in_binary = max(0.0, min(1.0, sec_in_binary))
+        if section_info is not None:
+            sec_start, sec_end, sec_name = section_info
+            
+            # Position 1: Section's position in binary
+            if max_addr > min_addr:
+                sec_in_binary = (sec_start - min_addr) / float(max_addr - min_addr)
+                sec_in_binary = max(0.0, min(1.0, sec_in_binary))
+            else:
+                sec_in_binary = 0.0
+            
+            # Position 2: Address position inside section
+            if sec_end > sec_start:
+                addr_in_section = (addr - sec_start) / float(sec_end - sec_start)
+                addr_in_section = max(0.0, min(1.0, addr_in_section))
+            else:
+                addr_in_section = 0.0
+            
+            # Position 3: BB position (always 0 for data addresses)
+            bb_pos = 0.0
+            
+            return f"{sec_in_binary:.8f}:{addr_in_section:.8f}:{bb_pos:.8f}"
         else:
-            sec_in_binary = 0.0
-        
-        if sec_end > sec_start:
-            addr_in_section = (addr - sec_start) / float(sec_end - sec_start)
-            addr_in_section = max(0.0, min(1.0, addr_in_section))
-        else:
-            addr_in_section = 0.0
-        
-        bb_pos = 0.0
-        return f"{sec_in_binary:.8f}:{addr_in_section:.8f}:{bb_pos:.8f}"
+            # Address not in any section, fallback to binary-level position only
+            if max_addr > min_addr:
+                bin_norm = (addr - min_addr) / float(max_addr - min_addr)
+                bin_norm = max(0.0, min(1.0, bin_norm))
+            else:
+                bin_norm = 0.0
+            return f"{bin_norm:.8f}:0.00000000:0.00000000"
 
     def format_hierarchical_positions(entry):
         """
@@ -242,25 +222,10 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
         for i, tok in enumerate(operands):
             mk = operand_masks[i] if i < len(operand_masks) else "0"
             mk_hex = None
-            
-            # Check if this is a displacement token (marked with "disp_" prefix)
-            if isinstance(tok, str) and tok.startswith('disp_0x'):
-                # # This is a displacement operand - keep the hex value without address() wrapper
-                # hex_part = tok[5:]  # Remove "disp_" prefix
-                hex_part = "disp"  # Remove "disp_" prefix
-                formatted_ops.append(hex_part)
-                continue
-            
-            # Check mask first (from normalize_and_mask)
             if isinstance(mk, str) and mk.startswith('0x'):
                 mk_hex = mk
-            # Check token for 0x prefix
             elif isinstance(tok, str) and tok.startswith('0x') and bool(HEX_RE.fullmatch(tok)):
                 mk_hex = tok
-            # Check token for Intel hex suffix (e.g., 1234ABCDh)
-            elif isinstance(tok, str) and re.match(r'^[0-9A-Fa-f]+h$', tok, re.IGNORECASE):
-                # Convert Intel hex to 0x format
-                mk_hex = '0x' + tok[:-1]
 
             if mk_hex is not None:
                 try:
@@ -269,11 +234,16 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                     tgt = None
 
                 # Filter out immediate values:
-                # - Values below binary base (min_addr) are immediates
-                # - Very small values (< 0x1000) are likely immediates even if >= min_addr
+                # - Values below binary base are likely immediate constants
                 # - Very large values that are likely bit masks (e.g., 0xfffffffffffffff0)
-                
-                if tgt is not None and tgt >= min_addr:
+                is_immediate = False
+                if tgt is not None:
+                    if tgt < min_addr:  # below binary base
+                        is_immediate = True
+                    elif tgt > 0xffffffffffff0000:  # large bit patterns/masks
+                        is_immediate = True
+
+                if tgt is not None and tgt >= min_addr and not is_immediate:
                     if tgt in addr_positions:
                         # Code address: use hierarchical positions (func, bb, inst)
                         entry = addr_positions[tgt]
@@ -287,16 +257,17 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                         pos = format_data_address_positions(tgt)
                         formatted_ops.append(f"address({mk_hex}:{pos})")
                 else:
-                    # It's an immediate value
-                    formatted_ops.append("imm")
+                    formatted_ops.append(mk_hex)
             else:
+                # drop symbol/string
+                if tok in ("symbol", "string"):
+                    continue
+                # Convert var_XX to var(0xXX)
                 if tok.startswith("var_"):
-                    formatted_ops.append("var")
-                elif tok.startswith("arg_"):
-                    formatted_ops.append("arg")
-                else: 
+                    var_offset = tok[4:]  # Get the part after 'var_'
+                    formatted_ops.append(f"var(0x{var_offset})")
+                else:
                     formatted_ops.append(tok)
-
 
         if addr in addr_positions:
             addr_hdr = f"{hex(addr)}:{format_hierarchical_positions(addr_positions[addr])}"
@@ -319,8 +290,6 @@ def clean_ida_disasm(ea):
     """
     Get clean disassembly preserving IDA keywords (offset, short, etc.)
     but replacing symbol names with hex addresses.
-    Mark immediate values with 'imm' token.
-    Mark displacement operands (o_displ) with 'disp_0xXX' prefix to prevent address() wrapping.
     """
     # Get mnemonic
     mnem = idc.print_insn_mnem(ea)
@@ -338,13 +307,9 @@ def clean_ida_disasm(ea):
         op_type = idc.get_operand_type(ea, i)
         op_value = idc.get_operand_value(ea, i)
         
-        # Check if it's an immediate value
-        if op_type == idc.o_imm:
-            # It's an immediate - mark it
-            op = "imm"
         # Check if operand contains keywords or symbols that need address replacement
         # Handle "offset symbol_name" -> "offset 0xADDR"
-        elif 'offset' in op and op_value != idaapi.BADADDR and op_value != 0:
+        if 'offset' in op and op_value != idaapi.BADADDR and op_value != 0:
             op = f"offset {hex(op_value)}"
         # Handle "short symbol_name" -> "short 0xADDR"
         elif 'short' in op and op_value != idaapi.BADADDR and op_value != 0:
@@ -355,18 +320,13 @@ def clean_ida_disasm(ea):
         # Handle segment prefix "cs:symbol" -> just "0xADDR" (remove cs:, ds:, etc.)
         elif any(seg in op for seg in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']) and op_value != idaapi.BADADDR and op_value != 0:
             op = hex(op_value)
-        # Handle displacement operands (like [rax + 0x20]) - mark for special treatment
-        elif op_type == idc.o_displ:
-            # Mark displacement values with special token so they won't be wrapped with address()
-            if op_value != idaapi.BADADDR and op_value != 0:
-                # Always mark displacements, even if IDA formatted them as hex
-                op = f"disp_{hex(op_value)}"
-        # For operands that reference code/data addresses (but NOT displacements)
-        elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
+        # For operands that reference code/data addresses
+        elif op_type in [idc.o_near, idc.o_mem, idc.o_far, idc.o_displ]:
             if op_value != idaapi.BADADDR and op_value != 0:
                 # Check if it's a symbol name (not already a hex address)
                 if not op.startswith('0x') and not op.startswith('['):
                     op = hex(op_value)
+        
         operands.append(op)
     
     # Build clean disassembly
@@ -375,20 +335,23 @@ def clean_ida_disasm(ea):
     else:
         return mnem
 
-def get_basic_blocks_ida(func_ea, flowchart=None):
+def get_basic_blocks_ida(func_ea):
     """
     Get basic blocks for a function in IDA Pro.
     Returns list of (bb_start, bb_end) tuples.
-    If flowchart is provided, reuse it instead of creating a new one.
     """
     func = ida_funcs.get_func(func_ea)
     if not func:
         return []
     
-    if flowchart is None:
-        flowchart = idaapi.FlowChart(func)
+    flowchart = idaapi.FlowChart(func)
+    blocks = []
     
-    blocks = [(block.start_ea, block.end_ea) for block in flowchart]
+    for block in flowchart:
+        bb_start = block.start_ea
+        bb_end = block.end_ea
+        blocks.append((bb_start, bb_end))
+    
     return blocks
 
 
@@ -440,44 +403,14 @@ def process_file_ida(fpath: str, out_dir: str):
         bb_info = {}    # func_name -> [(bb_start, bb_end), ...]
 
         print("[INFO] Building inter-procedural CFG with direct call/return edges...")
-        
-        # Calculate min/max addresses FIRST (from segments)
-        print("[INFO] Calculating binary address range from segments...")
-        sections = []
-        for n in range(ida_segment.get_segm_qty()):
-            seg = ida_segment.getnseg(n)
-            if seg:
-                start = seg.start_ea
-                end = seg.end_ea
-                name = ida_segment.get_segm_name(seg)
-                sections.append((start, end, name))
-                print(f"[INFO]   Segment: {name} [{hex(start)} - {hex(end)}]")
-        
-        # Get min/max from all segments
-        if sections:
-            min_addr = min(s[0] for s in sections)
-            max_addr = max(s[1] for s in sections)
-        else:
-            min_addr = 0
-            max_addr = 0
-        
-        print(f"[INFO] Binary address range: {hex(min_addr)} - {hex(max_addr)}")
-        
     except Exception as e:
         print(f"[ERROR] Graph initialization failed: {e}")
         import traceback
         traceback.print_exc()
         return
     
-    # First pass: Collect function and BB information (OPTIMIZED)
-    print("[INFO] First pass: Collecting function and BB information...")
-    all_functions = list(idautils.Functions())
-    print(f"[INFO] Found {len(all_functions)} functions")
-    
-    for idx, func_ea in enumerate(all_functions):
-        if idx % 100 == 0:
-            print(f"[INFO] Progress: {idx}/{len(all_functions)} functions")
-        
+    # First pass: Collect function and BB information
+    for func_ea in idautils.Functions():
         func = ida_funcs.get_func(func_ea)
         if not func:
             continue
@@ -487,27 +420,25 @@ def process_file_ida(fpath: str, out_dir: str):
         func_name = ida_funcs.get_func_name(func_ea)
         func_entry_map[func_start] = func_ea
         
-        # Create flowchart once and reuse
-        flowchart = idaapi.FlowChart(func)
-        func_bbs = get_basic_blocks_ida(func_ea, flowchart)
-        
+        # Collect basic blocks for this function
+        func_bbs = get_basic_blocks_ida(func_ea)
         for bb_start, bb_end in func_bbs:
             bb_range_map[bb_start] = (bb_start, bb_end)
         
-        func_info.append((func_name, func_start, func_end, func_bbs, flowchart))
-        bb_info[func_name] = func_bbs
+        func_info.append((func_name, func_start, func_end, func_bbs))
+        bb_info[func_name] = sorted(func_bbs, key=lambda x: x[0])
     
-    # Second pass: Build nodes and intra-procedural edges (OPTIMIZED)
-    print("[INFO] Second pass: Building nodes and edges...")
-    
-    for idx, (func_name, func_start, func_end, func_bbs, flowchart) in enumerate(func_info):
-        if idx % 100 == 0:
-            print(f"[INFO] Progress: {idx}/{len(func_info)} functions, {bin_counter} instructions")
+    # Second pass: Build nodes and intra-procedural edges
+    for func_ea in idautils.Functions():
+        func = ida_funcs.get_func(func_ea)
+        if not func:
+            continue
         
-        # Build BB successor map for faster edge lookup
-        bb_successors = {}
-        for block in flowchart:
-            bb_successors[block.start_ea] = [succ.start_ea for succ in block.succs()]
+        func_start = func.start_ea
+        func_end = func.end_ea
+        func_name = ida_funcs.get_func_name(func_ea)
+        
+        flowchart = idaapi.FlowChart(func)
         
         for block in flowchart:
             bb_start = block.start_ea
@@ -515,109 +446,101 @@ def process_file_ida(fpath: str, out_dir: str):
             
             curr = bb_start
             predecessor = None
-            bb_instructions = []
             
-            # Collect all instructions in BB first
+            # Iterate through instructions in this basic block
             while curr < bb_end:
-                bb_instructions.append(curr)
-                curr = idc.next_head(curr, bb_end)
-                if curr == idaapi.BADADDR or curr >= bb_end:
-                    break
-            
-            # Process instructions
-            for inst_addr in bb_instructions:
-                # Get clean disassembly
-                disasm_raw = clean_ida_disasm(inst_addr)
+                # Get clean disassembly using IDA API to resolve all symbols to addresses
+                disasm_raw = clean_ida_disasm(curr)
                 if not disasm_raw:
-                    continue
+                    break
                 
-                # Normalize and mask the disassembly
+                # Normalize
                 norm_text, mask_line = normalize_and_mask(disasm_raw, symbol_map, string_map)
-                G.add_node(inst_addr, text=norm_text, mask=mask_line)
+                G.add_node(curr, text=norm_text, mask=mask_line)
                 
-                # Store position info
-                addr_positions[inst_addr] = (bin_counter, inst_addr, func_name, bb_start, func_start, func_end)
+                # Store: (bin_counter, addr, func_name, bb_start, func_start, func_end)
+                addr_positions[curr] = (bin_counter, curr, func_name, bb_start, func_start, func_end)
                 bin_counter += 1
                 
                 # Sequential edge within BB
                 if predecessor is not None:
-                    G.add_edge(predecessor, inst_addr)
+                    G.add_edge(predecessor, curr)
                 
                 # Check if this is a DIRECT call instruction
-                mnem = idc.print_insn_mnem(inst_addr)
+                mnem = idc.print_insn_mnem(curr)
                 if mnem and mnem.lower() == 'call':
+                    # Check if it's a direct call
                     hex_match = re.search(r'0x[0-9a-fA-F]+', disasm_raw)
                     if hex_match:
-                        inst_len = idc.get_item_size(inst_addr)
-                        next_addr = inst_addr + inst_len
-                        call_sites.append((inst_addr, disasm_raw, next_addr))
+                        inst_len = idc.get_item_size(curr)
+                        next_addr = curr + inst_len  # Return address
+                        call_sites.append((curr, disasm_raw, next_addr))
                 
-                predecessor = inst_addr
+                predecessor = curr
+                curr = idc.next_head(curr, bb_end)
+                if curr == idaapi.BADADDR or curr >= bb_end:
+                    break
             
-            # Add edges to successor BBs (using cached successor map)
-            if predecessor is not None and bb_start in bb_successors:
-                for succ_bb_start in bb_successors[bb_start]:
-                    if succ_bb_start != idaapi.BADADDR:
-                        G.add_edge(predecessor, succ_bb_start)
+            # Add edges to jump targets (intra-procedural)
+            for succ_block in flowchart:
+                if block.id in [pred.id for pred in flowchart if succ_block.id in [s.id for s in idaapi.FlowChart(func)]]:
+                    # This is a successor block
+                    if predecessor is not None and succ_block.start_ea != idaapi.BADADDR:
+                        G.add_edge(predecessor, succ_block.start_ea)
 
     total_bin = bin_counter
     
-    # Third pass: Add inter-procedural DIRECT call and return edges (OPTIMIZED)
-    print(f"[INFO] Third pass: Processing {len(call_sites)} call sites...")
-    
-    # Pre-compute all return instructions for each function
-    func_returns = {}  # func_start -> [return_addresses]
-    for func_name, func_start, func_end, func_bbs, flowchart in func_info:
-        returns = []
-        for block in flowchart:
-            # Find the last instruction in this block
-            curr = block.start_ea
-            last_inst_addr = None
-            while curr < block.end_ea:
-                last_inst_addr = curr
-                curr = idc.next_head(curr, block.end_ea)
-                if curr == idaapi.BADADDR or curr >= block.end_ea:
-                    break
-            
-            if last_inst_addr is not None:
-                mnem = idc.print_insn_mnem(last_inst_addr)
-                if mnem and mnem.lower().startswith('ret'):
-                    returns.append(last_inst_addr)
-        
-        func_returns[func_start] = returns
-    
-    print(f"[INFO] Found return instructions in {len(func_returns)} functions")
-    
+    # Third pass: Add inter-procedural DIRECT call and return edges
+    print(f"[INFO] Processing {len(call_sites)} potential call sites...")
     call_edges_added = 0
     return_edges_added = 0
     
-    for idx, (call_addr, call_disasm, next_addr) in enumerate(call_sites):
-        if idx % 1000 == 0:
-            print(f"[INFO] Call sites progress: {idx}/{len(call_sites)}")
-        
+    for call_addr, call_disasm, next_addr in call_sites:
         try:
-            # Extract hex address from call instruction
+            # Parse the call target from the disassembly
+            call_target = None
+            
+            # Extract hex address from call instruction (direct calls only)
             hex_match = re.search(r'0x[0-9a-fA-F]+', call_disasm)
-            if not hex_match:
-                continue
+            if hex_match:
+                try:
+                    call_target = int(hex_match.group(), 16)
+                except ValueError:
+                    pass
             
-            try:
-                call_target = int(hex_match.group(), 16)
-            except ValueError:
-                continue
-            
-            if call_target in func_entry_map:
-                # Add call edge
+            if call_target is not None and call_target in func_entry_map:
+                # Direct call to a known function
+                # Add edge: call_instruction → function_entry
                 G.add_edge(call_addr, call_target)
                 call_edges_added += 1
                 
-                # Add return edges using cached return instructions
-                if call_target in func_returns and next_addr in addr_positions:
-                    for ret_addr in func_returns[call_target]:
-                        G.add_edge(ret_addr, next_addr)
-                        return_edges_added += 1
+                # Find all return instructions in the called function
+                called_func_ea = func_entry_map[call_target]
+                called_func = ida_funcs.get_func(called_func_ea)
+                
+                if called_func:
+                    flowchart = idaapi.FlowChart(called_func)
+                    for block in flowchart:
+                        # Find the last instruction in this block
+                        curr = block.start_ea
+                        last_inst_addr = None
+                        while curr < block.end_ea:
+                            last_inst_addr = curr
+                            curr = idc.next_head(curr, block.end_ea)
+                            if curr == idaapi.BADADDR or curr >= block.end_ea:
+                                break
+                        
+                        if last_inst_addr is not None:
+                            # Check if it's a return instruction
+                            mnem = idc.print_insn_mnem(last_inst_addr)
+                            if mnem and mnem.lower().startswith('ret'):
+                                # Add edge: return_instruction → return_address
+                                if next_addr in addr_positions:
+                                    G.add_edge(last_inst_addr, next_addr)
+                                    return_edges_added += 1
         
-        except Exception:
+        except Exception as e:
+            # Skip indirect calls or calls we can't resolve
             continue
     
     print(f"[INFO] Added {call_edges_added} DIRECT call edges and {return_edges_added} return edges")

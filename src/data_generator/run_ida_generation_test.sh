@@ -135,23 +135,24 @@ for binary in "$BIN_FOLDER"/*; do
   # ==========================================
   # Step 2: Generate DFG (if not exists)
   # ==========================================
+  # DFG generation commented out for now
   dfg_time=0
-  if [ "$dfg_exists" = false ]; then
-    log "[INFO] Generating DFG for $basename..."
-    dfg_start=$(date +%s)
-    "$IDA_PATH/idat" -A -S"$DFG_SCRIPT" "$binary" >/dev/null 2>&1
-    dfg_end=$(date +%s)
-    dfg_time=$((dfg_end - dfg_start))
-
-    if [ $? -eq 0 ]; then
-      log "[SUCCESS] DFG generation completed in ${dfg_time}s"
-    else
-      log "[WARNING] DFG generation may have issues (${dfg_time}s)"
-    fi
-
-    # Clean up IDA database files after DFG
-    cleanup_ida_files "$binary"
-  fi
+  # if [ "$dfg_exists" = false ]; then
+  #   log "[INFO] Generating DFG for $basename..."
+  #   dfg_start=$(date +%s)
+  #   "$IDA_PATH/idat" -A -S"$DFG_SCRIPT" "$binary" >/dev/null 2>&1
+  #   dfg_end=$(date +%s)
+  #   dfg_time=$((dfg_end - dfg_start))
+  #
+  #   if [ $? -eq 0 ]; then
+  #     log "[SUCCESS] DFG generation completed in ${dfg_time}s"
+  #   else
+  #     log "[WARNING] DFG generation may have issues (${dfg_time}s)"
+  #   fi
+  #
+  #   # Clean up IDA database files after DFG
+  #   cleanup_ida_files "$binary"
+  # fi
 
   # Verify output files were created
   cfg_file="$OUTPUT_DIR/${basename}_cfg_${SEG_LEN}_inline.txt"

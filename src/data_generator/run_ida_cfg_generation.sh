@@ -6,7 +6,7 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/cfg_hierarchical_icfg_ida.py"
 
 # Default parameters
 SEG_LEN=${1:-8}
-BIN_FOLDER=${2:-"/home/kun/testbinary"}
+BIN_FOLDER=${2:-"/home/kun/onebinary"}
 OUTPUT_DIR=${3:-"/home/kun/Document/PalmTree/src/data_generator/testres2"}
 
 export OUTPUT_DIR

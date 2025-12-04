@@ -49,7 +49,7 @@ LOG_DIR="../log/${MODEL_NAME}"
 HIDDEN=768
 LAYERS=12
 ATTN_HEADS=12
-SEQ_LEN=75
+SEQ_LEN=60
 
 # Training parameters
 BATCH_SIZE=256
@@ -61,7 +61,7 @@ EARLY_STOPPING=3
 
 # Masking parameters
 TOKEN_MASK_PROB=0.15      # Standard MLM masking rate
-INSTRUCTION_MASK_PROB=0.15  # Instruction-level masking rate
+INSTRUCTION_MASK_PROB=0.125  # Instruction-level masking rate
 
 # Data parameters
 TRAIN_PERCENTAGE=1  # Use 20% of training data
