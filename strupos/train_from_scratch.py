@@ -22,6 +22,21 @@ import json
 import logging
 from datetime import datetime
 import re
+import random
+import numpy as np
+
+
+def set_seed(seed):
+    """Set random seed for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        # For full reproducibility (may impact performance)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 # Import local modules
 from vocab import WordVocab
@@ -566,11 +581,18 @@ def main():
     parser.add_argument("--cuda", action="store_true", help="Use CUDA")
     parser.add_argument("--multi_gpu", action="store_true", help="Use multiple GPUs")
     
+    # Reproducibility
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    
     args = parser.parse_args()
     
     # Handle disable_mlm flag
     if args.disable_mlm:
         args.enable_mlm = False
+    
+    # Set random seed for reproducibility
+    set_seed(args.seed)
+    print(f"Random seed set to: {args.seed}")
     
     # Setup device
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")

@@ -29,6 +29,7 @@ lr = 1e-4
 warmup_steps = 10000
 num_workers = 4
 early_stopping_patience = 5
+seed = 42  # Random seed for reproducibility
 
 # ==================== Data Processing (Reference) ====================
 mask_prob = 0.15
