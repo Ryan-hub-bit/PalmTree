@@ -63,6 +63,8 @@ class InstructionMaskingDataset(Dataset):
         # Regex patterns for parsing inline format
         self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+        # Pattern to match var(0xXX) tokens
+        self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
         
         # Load CFG data if path provided
         self.cfg_lines = []
@@ -119,14 +121,15 @@ class InstructionMaskingDataset(Dataset):
         return lines
     
     def _parse_instruction(self, inst_text):
-        """Parse a single instruction and extract tokens + positions"""
+        """Parse a single instruction and extract tokens + positions + var offsets"""
         tokens = []
         positions = []
+        var_offsets = []  # Store var offset for each token (0 for non-var tokens)
         
         # Match opcode with address
         match = self.addr_pattern.match(inst_text)
         if not match:
-            return [inst_text], [(0.0, 0.0, 0.0)]
+            return [inst_text], [(0.0, 0.0, 0.0)], [0]
         
         opcode = match.group(1)
         binary_pos = float(match.group(3))
@@ -135,52 +138,70 @@ class InstructionMaskingDataset(Dataset):
         
         tokens.append(opcode)
         positions.append((binary_pos, function_pos, bb_pos))
+        var_offsets.append(0)  # Opcode is not a var
         
         # Parse operands
         operands_text = inst_text[match.end():].strip()
         if operands_text:
             for operand in operands_text.split():
                 nested_match = self.nested_addr_pattern.match(operand)
+                var_match = self.var_pattern.match(operand)
+                
                 if nested_match:
                     nested_binary_pos = float(nested_match.group(2))
                     nested_function_pos = float(nested_match.group(3))
                     nested_bb_pos = float(nested_match.group(4))
                     tokens.append('address')
                     positions.append((nested_binary_pos, nested_function_pos, nested_bb_pos))
+                    var_offsets.append(0)  # address is not a var
+                elif var_match:
+                    # Extract var offset from var(0xXX)
+                    var_hex = var_match.group(1)
+                    var_offset_value = int(var_hex, 16)
+                    tokens.append('var')  # Token is just 'var'
+                    positions.append((0.0, 0.0, 0.0))
+                    var_offsets.append(var_offset_value)  # Store the offset
                 else:
                     tokens.append(operand)
                     positions.append((0.0, 0.0, 0.0))
+                    var_offsets.append(0)  # Not a var
         
-        return tokens, positions
+        return tokens, positions, var_offsets
     
-    def _mask_instruction(self, tokens, positions):
+    def _mask_instruction(self, tokens, positions, var_offsets):
         """
         Mask entire instruction (all tokens become [MASK]).
         
         Returns:
             masked_tokens: All tokens replaced with [MASK]
             positions: Original positions preserved
+            var_offsets: Zeroed out to prevent data leakage (var is masked)
             original_tokens: Ground truth labels
         """
         masked_tokens = [self.mask_idx] * len(tokens)
         original_tokens = [self.vocab.stoi.get(t, self.unk_idx) for t in tokens]
+        # Zero out var_offsets to prevent data leakage - if model sees non-zero offset,
+        # it would trivially know the token is 'var'
+        masked_var_offsets = [0] * len(tokens)
         
-        return masked_tokens, positions, original_tokens
+        return masked_tokens, positions, masked_var_offsets, original_tokens
     
-    def _mask_tokens(self, tokens, positions):
+    def _mask_tokens(self, tokens, positions, var_offsets):
         """
         Apply standard MLM token-level masking.
         
         Returns:
             masked_tokens: Tokens with some randomly masked
-            positions: Original positions
+            masked_var_offsets: Var offsets zeroed for masked tokens (prevent data leakage)
             labels: -1 for unmasked, original token ID for masked
         """
         masked_tokens = []
+        masked_var_offsets = []
         labels = []
         
-        for token, pos in zip(tokens, positions):
+        for i, (token, pos) in enumerate(zip(tokens, positions)):
             token_id = self.vocab.stoi.get(token, self.unk_idx)
+            var_offset = var_offsets[i] if i < len(var_offsets) else 0
             
             # Randomly mask this token
             if random.random() < self.token_mask_prob:
@@ -197,11 +218,15 @@ class InstructionMaskingDataset(Dataset):
                 else:
                     masked_tokens.append(token_id)
                 labels.append(token_id)
+                # Zero out var_offset for masked tokens to prevent data leakage
+                masked_var_offsets.append(0)
             else:
                 masked_tokens.append(token_id)
                 labels.append(-1)  # Not masked
+                # Keep var_offset for non-masked tokens
+                masked_var_offsets.append(var_offset)
         
-        return masked_tokens, labels
+        return masked_tokens, masked_var_offsets, labels
     
     def _process_line_for_instruction_masking(self, line):
         """
@@ -218,6 +243,7 @@ class InstructionMaskingDataset(Dataset):
             bert_label: Labels for masked instructions (-1 for unmasked)
             segment_label: Instruction ID (1 for inst1, 2 for inst2, ...)
             binary_pos, function_pos, bb_pos: Position embeddings
+            var_offsets: Var offset values (0 for non-var tokens)
         """
         instructions = [inst.strip() for inst in line.split('\t') if inst.strip()]
         
@@ -239,20 +265,22 @@ class InstructionMaskingDataset(Dataset):
         all_positions = []
         all_labels = []
         all_segments = []
+        all_var_offsets = []
         
         # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
         all_tokens.append(self.sos_idx)
         all_positions.append((0.0, 0.0, 0.0))
         all_labels.append(-1)
         all_segments.append(1)
+        all_var_offsets.append(0)  # SOS has no var offset
         
         for inst_idx, inst_text in enumerate(instructions):
-            tokens, positions = self._parse_instruction(inst_text)
+            tokens, positions, var_offsets = self._parse_instruction(inst_text)
             
             # Mask this instruction if it was selected
             if inst_idx in instructions_to_mask:
                 # Mask entire instruction
-                masked_tokens, positions, labels = self._mask_instruction(tokens, positions)
+                masked_tokens, positions, var_offsets, labels = self._mask_instruction(tokens, positions, var_offsets)
             else:
                 # No instruction-level masking (but still convert to IDs)
                 masked_tokens = [self.vocab.stoi.get(t, self.unk_idx) for t in tokens]
@@ -265,12 +293,14 @@ class InstructionMaskingDataset(Dataset):
             all_positions.extend(positions)
             all_labels.extend(labels)
             all_segments.extend([inst_segment] * len(masked_tokens))
+            all_var_offsets.extend(var_offsets)
             
             # Add [EOS] after each instruction (same segment as the instruction)
             all_tokens.append(self.eos_idx)
             all_positions.append((0.0, 0.0, 0.0))
             all_labels.append(-1)
             all_segments.append(inst_segment)
+            all_var_offsets.append(0)  # EOS has no var offset
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
@@ -278,12 +308,14 @@ class InstructionMaskingDataset(Dataset):
             all_labels = all_labels[:self.seq_len]
             all_positions = all_positions[:self.seq_len]
             all_segments = all_segments[:self.seq_len]
+            all_var_offsets = all_var_offsets[:self.seq_len]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens += [self.pad_idx] * padding_len
             all_labels += [-1] * padding_len
             all_positions += [(0.0, 0.0, 0.0)] * padding_len
             all_segments += [0] * padding_len  # Padding gets segment 0
+            all_var_offsets += [0] * padding_len  # Padding has no var offset
         
         # Use segment labels as instruction IDs
         segment_label = all_segments
@@ -300,6 +332,7 @@ class InstructionMaskingDataset(Dataset):
             'binary_pos': torch.FloatTensor(binary_pos),
             'function_pos': torch.FloatTensor(function_pos),
             'bb_pos': torch.FloatTensor(bb_pos),
+            'var_offsets': torch.LongTensor(all_var_offsets),
         }
     
     def _process_line_for_token_masking(self, line):
@@ -314,6 +347,7 @@ class InstructionMaskingDataset(Dataset):
             bert_label: Labels for masked tokens (-1 for unmasked)
             segment_label: Instruction ID (1 for inst1, 2 for inst2, ...)
             binary_pos, function_pos, bb_pos: Position embeddings
+            var_offsets: Var offset values (0 for non-var tokens)
         """
         instructions = line.split('\t')
         
@@ -321,22 +355,24 @@ class InstructionMaskingDataset(Dataset):
         all_positions = []
         all_labels = []
         all_segments = []
+        all_var_offsets = []
         
         # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
         all_tokens.append(self.sos_idx)
         all_positions.append((0.0, 0.0, 0.0))
         all_labels.append(-1)
         all_segments.append(1)
+        all_var_offsets.append(0)  # SOS has no var offset
         
         for inst_idx, inst_text in enumerate(instructions):
             inst_text = inst_text.strip()
             if not inst_text:
                 continue
             
-            tokens, positions = self._parse_instruction(inst_text)
+            tokens, positions, var_offsets = self._parse_instruction(inst_text)
             
             # Apply token-level masking
-            masked_tokens, labels = self._mask_tokens(tokens, positions)
+            masked_tokens, var_offsets, labels = self._mask_tokens(tokens, positions, var_offsets)
             # Segment label = instruction number (1-indexed)
             inst_segment = inst_idx + 1
             
@@ -344,12 +380,14 @@ class InstructionMaskingDataset(Dataset):
             all_positions.extend(positions)
             all_labels.extend(labels)
             all_segments.extend([inst_segment] * len(masked_tokens))
+            all_var_offsets.extend(var_offsets)
             
             # Add [EOS] after each instruction (same segment as the instruction)
             all_tokens.append(self.eos_idx)
             all_positions.append((0.0, 0.0, 0.0))
             all_labels.append(-1)
             all_segments.append(inst_segment)
+            all_var_offsets.append(0)  # EOS has no var offset
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
@@ -357,12 +395,14 @@ class InstructionMaskingDataset(Dataset):
             all_labels = all_labels[:self.seq_len]
             all_positions = all_positions[:self.seq_len]
             all_segments = all_segments[:self.seq_len]
+            all_var_offsets = all_var_offsets[:self.seq_len]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens += [self.pad_idx] * padding_len
             all_labels += [-1] * padding_len
             all_positions += [(0.0, 0.0, 0.0)] * padding_len
             all_segments += [0] * padding_len  # Padding gets segment 0
+            all_var_offsets += [0] * padding_len  # Padding has no var offset
         
         # Use segment labels as instruction IDs
         segment_label = all_segments
@@ -379,6 +419,7 @@ class InstructionMaskingDataset(Dataset):
             'binary_pos': torch.FloatTensor(binary_pos),
             'function_pos': torch.FloatTensor(function_pos),
             'bb_pos': torch.FloatTensor(bb_pos),
+            'var_offsets': torch.LongTensor(all_var_offsets),
         }
     
     def __len__(self):
