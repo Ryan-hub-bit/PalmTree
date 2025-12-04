@@ -13,7 +13,7 @@
 #     openssl_O3/          <- contains: openssl, libcrypto.so.3, libssl.so.3, etc.
 #
 # Output structure:
-#   /data/kun/funcsim_dataset/
+#   /data/kun/funcsim_match/
 #     openssl/             <- output directory
 #       openssl.json
 #       libcrypto.so.3.json
@@ -31,6 +31,7 @@ IDA_PATH="/home/kun/ida-pro-9.0/idat"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IDA_SCRIPT="${SCRIPT_DIR}/generate_funcsim_ida.py"
 DATASET_PATH="${1:-/data/kun/funcsim_dataset}"
+OUTPUT_BASE="/data/kun/funcsim_match"
 
 # Optimization levels to process
 OPT_LEVELS=("O0" "O1" "O2" "O3")
@@ -64,8 +65,8 @@ for PROJECT_NAME in $PROJECTS; do
     echo "[INFO] Processing project: ${PROJECT_NAME}"
     echo "================================================"
     
-    # Create output directory: /data/kun/funcsim_dataset/{project}/
-    OUTPUT_DIR="${DATASET_PATH}/${PROJECT_NAME}"
+    # Create output directory: /data/kun/funcsim_match/{project}/
+    OUTPUT_DIR="${OUTPUT_BASE}/${PROJECT_NAME}"
     mkdir -p "${OUTPUT_DIR}"
     
     # Find all binary files that exist in ALL optimization levels
@@ -131,10 +132,30 @@ for PROJECT_NAME in $PROJECTS; do
         echo "[INFO] Output file: ${OUTPUT_FILE}"
         echo "------------------------------------------------"
         
-        # Remove existing output file to start fresh
+        # Check if JSON file already exists and is valid (non-empty and valid JSON)
         if [ -f "${OUTPUT_FILE}" ]; then
-            echo "[INFO] Removing existing output file"
-            rm "${OUTPUT_FILE}"
+            # Check if file is non-empty and contains valid JSON with functions
+            if python3 -c "
+import json
+import sys
+try:
+    with open('${OUTPUT_FILE}', 'r') as f:
+        data = json.load(f)
+    if isinstance(data, dict) and len(data) > 0:
+        # Check if at least one function has all 4 opt levels
+        for func_data in data.values():
+            if all(opt in func_data for opt in ['O0', 'O1', 'O2', 'O3']):
+                sys.exit(0)  # Valid
+    sys.exit(1)  # Invalid
+except:
+    sys.exit(1)
+" 2>/dev/null; then
+                echo "[SKIP] Valid JSON already exists with $(python3 -c "import json; print(len(json.load(open('${OUTPUT_FILE}'))))" 2>/dev/null) functions"
+                continue
+            else
+                echo "[INFO] Existing JSON is invalid or empty, regenerating..."
+                rm "${OUTPUT_FILE}"
+            fi
         fi
         
         # Process each optimization level
@@ -165,7 +186,7 @@ for PROJECT_NAME in $PROJECTS; do
         
         # Post-process: Remove functions that don't appear in all 4 optimization levels
         if [ -f "${OUTPUT_FILE}" ]; then
-            echo "[INFO] Post-processing: Filtering functions..."
+            echo "[INFO] Post-processing: Filtering functions that doesn't have all four Op levels..."
             
             python3 << PYEOF
 import json
@@ -213,7 +234,7 @@ echo "================================================"
 echo ""
 echo "=== Post-processing ==="
 for PROJECT_NAME in $PROJECTS; do
-    OUTPUT_DIR="${DATASET_PATH}/${PROJECT_NAME}"
+    OUTPUT_DIR="${OUTPUT_BASE}/${PROJECT_NAME}"
     if [ -d "${OUTPUT_DIR}" ]; then
         echo "[INFO] Post-processing ${PROJECT_NAME}..."
         python3 "${SCRIPT_DIR}/postprocess_funcsim.py" "${OUTPUT_DIR}"
@@ -224,7 +245,7 @@ done
 echo ""
 echo "=== Final Output Summary ==="
 for PROJECT_NAME in $PROJECTS; do
-    OUTPUT_DIR="${DATASET_PATH}/${PROJECT_NAME}"
+    OUTPUT_DIR="${OUTPUT_BASE}/${PROJECT_NAME}"
     if [ -d "${OUTPUT_DIR}" ]; then
         echo ""
         echo "Project: ${PROJECT_NAME}/"
