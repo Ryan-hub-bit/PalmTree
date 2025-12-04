@@ -337,8 +337,8 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                 if tok.startswith("var_"):
                     var_offset = tok[4:]  # Get the part after 'var_'
                     formatted_ops.append(f"var(0x{var_offset})")
-                elif tok.startswith("arg_"):
-                    formatted_ops.append("arg")
+                # elif tok.startswith("arg_"):
+                #     formatted_ops.append("arg")
                 else:
                     formatted_ops.append(tok)
 
