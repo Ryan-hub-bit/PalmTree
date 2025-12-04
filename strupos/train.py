@@ -41,7 +41,7 @@ def set_seed(seed):
 
 # Import local modules
 from vocab import WordVocab
-from strupos.dataloader import InstructionMaskingDataset
+from dataloader import InstructionMaskingDataset
 from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
