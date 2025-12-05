@@ -155,6 +155,42 @@ def main():
     val_sample_ratio = expected_val_lines / val_total if val_total > 0 else 0
     test_sample_ratio = expected_test_lines / test_total if test_total > 0 else 0
     
+    # Check if we have enough data in val/test directories
+    actual_val_lines = min(expected_val_lines, val_total)
+    actual_test_lines = min(expected_test_lines, test_total)
+    
+    # If val or test doesn't have enough lines, we need to adjust train to maintain ratio
+    if val_sample_ratio > 1.0 or test_sample_ratio > 1.0:
+        print(f"\n[WARNING] Not enough data in val/test directories!")
+        print(f"  - Val needed: {expected_val_lines:,}, available: {val_total:,}")
+        print(f"  - Test needed: {expected_test_lines:,}, available: {test_total:,}")
+        
+        # Use all available val/test data, then calculate train to match ratio
+        actual_val_lines = val_total
+        actual_test_lines = test_total
+        
+        # Recalculate train lines to maintain 0.8:0.1:0.1 ratio
+        # train / 0.8 = val / 0.1 => train = val * 8
+        # train / 0.8 = test / 0.1 => train = test * 8
+        # Use the smaller constraint
+        train_from_val = int(actual_val_lines * TARGET_TRAIN_RATIO / TARGET_VAL_RATIO)
+        train_from_test = int(actual_test_lines * TARGET_TRAIN_RATIO / TARGET_TEST_RATIO)
+        expected_train_lines = min(train_from_val, train_from_test)
+        
+        # Recalculate val/test to match exactly
+        expected_val_lines = int(expected_train_lines * TARGET_VAL_RATIO / TARGET_TRAIN_RATIO)
+        expected_test_lines = int(expected_train_lines * TARGET_TEST_RATIO / TARGET_TRAIN_RATIO)
+        
+        # Update sample ratios
+        TRAIN_SAMPLE_RATIO = expected_train_lines / train_total
+        val_sample_ratio = expected_val_lines / val_total if val_total > 0 else 0
+        test_sample_ratio = expected_test_lines / test_total if test_total > 0 else 0
+        
+        print(f"\n[INFO] Adjusted to maintain 0.8:0.1:0.1 ratio:")
+        print(f"  - Train: {expected_train_lines:,} lines ({TRAIN_SAMPLE_RATIO:.2%} sampling)")
+        print(f"  - Val: {expected_val_lines:,} lines ({val_sample_ratio:.2%} sampling)")
+        print(f"  - Test: {expected_test_lines:,} lines ({test_sample_ratio:.2%} sampling)")
+    
     # Ensure ratios don't exceed 1.0
     val_sample_ratio = min(val_sample_ratio, 1.0)
     test_sample_ratio = min(test_sample_ratio, 1.0)

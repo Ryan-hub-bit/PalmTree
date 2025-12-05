@@ -107,20 +107,20 @@ process_cdfg_dir() {
 }
 
 # Generate training data
-# if [ -f "${TRAIN_OUTPUT}" ]; then
-#     echo "⚠️  ${TRAIN_OUTPUT} already exists, skipping..."
-#     echo ""
-# else
-#     process_cdfg_dir "${TRAIN_CDFG}" "${TRAIN_OUTPUT}" ${TRAIN_SAMPLES_PER_BIN} "TRAIN"
-# fi
+if [ -f "${TRAIN_OUTPUT}" ]; then
+    echo "⚠️  ${TRAIN_OUTPUT} already exists, skipping..."
+    echo ""
+else
+    process_cdfg_dir "${TRAIN_CDFG}" "${TRAIN_OUTPUT}" ${TRAIN_SAMPLES_PER_BIN} "TRAIN"
+fi
 
 # # Generate validation data
-# if [ -f "${VAL_OUTPUT}" ]; then
-#     echo "⚠️  ${VAL_OUTPUT} already exists, skipping..."
-#     echo ""
-# else
-#     process_cdfg_dir "${VAL_CDFG}" "${VAL_OUTPUT}" ${VAL_SAMPLES_PER_BIN} "VAL"
-# fi
+if [ -f "${VAL_OUTPUT}" ]; then
+    echo "⚠️  ${VAL_OUTPUT} already exists, skipping..."
+    echo ""
+else
+    process_cdfg_dir "${VAL_CDFG}" "${VAL_OUTPUT}" ${VAL_SAMPLES_PER_BIN} "VAL"
+fi
 
 # Generate test data
 if [ -f "${TEST_OUTPUT}" ]; then
