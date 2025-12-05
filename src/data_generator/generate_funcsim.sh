@@ -132,30 +132,10 @@ for PROJECT_NAME in $PROJECTS; do
         echo "[INFO] Output file: ${OUTPUT_FILE}"
         echo "------------------------------------------------"
         
-        # Check if JSON file already exists and is valid (non-empty and valid JSON)
-        if [ -f "${OUTPUT_FILE}" ]; then
-            # Check if file is non-empty and contains valid JSON with functions
-            if python3 -c "
-import json
-import sys
-try:
-    with open('${OUTPUT_FILE}', 'r') as f:
-        data = json.load(f)
-    if isinstance(data, dict) and len(data) > 0:
-        # Check if at least one function has all 4 opt levels
-        for func_data in data.values():
-            if all(opt in func_data for opt in ['O0', 'O1', 'O2', 'O3']):
-                sys.exit(0)  # Valid
-    sys.exit(1)  # Invalid
-except:
-    sys.exit(1)
-" 2>/dev/null; then
-                echo "[SKIP] Valid JSON already exists with $(python3 -c "import json; print(len(json.load(open('${OUTPUT_FILE}'))))" 2>/dev/null) functions"
-                continue
-            else
-                echo "[INFO] Existing JSON is invalid or empty, regenerating..."
-                rm "${OUTPUT_FILE}"
-            fi
+        # Check if JSON file already exists and is non-empty
+        if [ -f "${OUTPUT_FILE}" ] && [ -s "${OUTPUT_FILE}" ]; then
+            echo "[SKIP] JSON already exists: ${OUTPUT_FILE}"
+            continue
         fi
         
         # Process each optimization level
