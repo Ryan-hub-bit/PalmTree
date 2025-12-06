@@ -78,6 +78,16 @@ def clean_ida_disasm(ea):
         if not op:
             break
         
+        # Clean up IDA's duplicate offsets in var format: [rsp+60h+var_60] -> [rsp+var_60]
+        # This handles the common case where IDA shows both hex offset and var_ symbol
+        if 'var_' in op:
+            op = re.sub(r'\+?\s*0x[0-9A-Fa-f]+\s*\+\s*(?=var_)', '+', op)
+            op = re.sub(r'\+?\s*[0-9A-Fa-f]+h\s*\+\s*(?=var_)', '+', op, flags=re.IGNORECASE)
+            # Clean up potential artifacts: ++ -> +, [+ -> [, +] -> ]
+            op = re.sub(r'\+\s*\+', '+', op)
+            op = re.sub(r'\[\s*\+', '[', op)
+            op = re.sub(r'\+\s*\]', ']', op)
+        
         # Get operand type and value
         op_type = idc.get_operand_type(ea, i)
         op_value = idc.get_operand_value(ea, i)
@@ -99,15 +109,15 @@ def clean_ida_disasm(ea):
         # Handle segment prefix "cs:symbol" -> just "0xADDR" (remove cs:, ds:, etc.)
         elif any(seg in op for seg in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']) and op_value != idaapi.BADADDR and op_value != 0:
             op = hex(op_value)
-        # Handle displacement operands (like [rax + 0x20]) - mark for special treatment
-        elif op_type == idc.o_displ:
-            # Mark displacement values with special token so they won't be wrapped with address()
-            if op_value != idaapi.BADADDR and op_value != 0:
-                # Always mark displacements, even if IDA formatted them as hex
+        # Handle displacement operands without var (regular offsets)
+        elif op_type in [idc.o_phrase, idc.o_displ]:
+            # If it's not a var (already cleaned above), mark it as displacement
+            if 'var_' not in op and op_value != idaapi.BADADDR and op_value != 0:
                 op = f"disp_{hex(op_value)}"
         # For operands that reference code/data addresses (but NOT displacements)
         elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
-            if op_value != idaapi.BADADDR and op_value != 0:
+            # var_ already cleaned above, just check if it needs address replacement
+            if 'var_' not in op and op_value != idaapi.BADADDR and op_value != 0:
                 # Check if it's a symbol name (not already a hex address)
                 if not op.startswith('0x') and not op.startswith('['):
                     op = hex(op_value)
@@ -314,10 +324,15 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
 
                 # Filter out immediate values:
                 # - Values below binary base (min_addr) are immediates
-                # - Very small values (< 0x1000) are likely immediates even if >= min_addr
-                # - Very large values that are likely bit masks (e.g., 0xfffffffffffffff0)
+                # - Use max(min_addr, 0x1000) to handle cases where min_addr=0 (PIE, embedded)
+                # Note: o_imm operands are already filtered in clean_ida_disasm()
+                #       This is just an extra safety layer for edge cases
+                #       Stack offsets are handled by o_displ/o_phrase -> disp_ in clean_ida_disasm
                 
-                if tgt is not None and tgt >= min_addr and tgt >= 0x1000:
+                # Check if this is a real address (within binary range)
+                # Use 0x1000 as minimum threshold to filter out small constants even when min_addr=0
+                addr_threshold = max(min_addr, 0x1000)
+                if tgt is not None and tgt >= addr_threshold:
                     if tgt in addr_positions:
                         # Code address: use hierarchical positions (func, bb, inst)
                         entry = addr_positions[tgt]

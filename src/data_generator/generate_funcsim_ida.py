@@ -177,8 +177,8 @@ class FunctionProcessor:
                     # If inside brackets [...], treat as displacement/offset, not address
                     if inside_brackets > 0:
                         formatted_tokens.append("disp")
-                    # If outside brackets and >= min_addr, treat as address
-                    elif addr_val >= self.min_addr:
+                    # Use max(min_addr, 0x1000) to handle cases where min_addr=0 (PIE, embedded)
+                    elif addr_val >= max(self.min_addr, 0x1000):
                         if addr_val in self.addr_positions:
                             entry = self.addr_positions[addr_val]
                             _, _, _, target_bb, target_func_start, target_func_end = entry
@@ -203,7 +203,8 @@ class FunctionProcessor:
                     # Inside brackets = displacement
                     if inside_brackets > 0:
                         formatted_tokens.append("disp")
-                    elif hex_val >= self.min_addr:
+                    # Use max(min_addr, 0x1000) to handle cases where min_addr=0 (PIE, embedded)
+                    elif hex_val >= max(self.min_addr, 0x1000):
                         hex_str = hex(hex_val)
                         if hex_val in self.addr_positions:
                             entry = self.addr_positions[hex_val]
@@ -252,8 +253,9 @@ class FunctionProcessor:
         """
         Get clean disassembly from IDA.
         - Immediate values -> 'imm'
-        - Displacement operands (o_displ) -> mark with 'DISP_' prefix
+        - Displacement operands (o_displ/o_phrase) -> mark with 'DISP_' prefix
         - Near/far/mem addresses -> hex value
+        - Clean up duplicate offsets in var format: [rsp+60h+var_60] -> [rsp+var_60]
         """
         mnem = idc.print_insn_mnem(ea)
         if not mnem:
@@ -265,23 +267,38 @@ class FunctionProcessor:
             if not op:
                 break
             
+            # Clean up IDA's duplicate offsets in var format: [rsp+60h+var_60] -> [rsp+var_60]
+            # This handles the common case where IDA shows both hex offset and var_ symbol
+            if 'var_' in op:
+                op = re.sub(r'\+?\s*0x[0-9A-Fa-f]+\s*\+\s*(?=var_)', '+', op)
+                op = re.sub(r'\+?\s*[0-9A-Fa-f]+h\s*\+\s*(?=var_)', '+', op, flags=re.IGNORECASE)
+                # Clean up potential artifacts: ++ -> +, [+ -> [, +] -> ]
+                op = re.sub(r'\+\s*\+', '+', op)
+                op = re.sub(r'\[\s*\+', '[', op)
+                op = re.sub(r'\+\s*\]', ']', op)
+            
             op_type = idc.get_operand_type(ea, i)
             op_value = idc.get_operand_value(ea, i)
             
             # Handle immediate values
             if op_type == idc.o_imm:
                 operands.append("imm")
-            # Handle displacement operands (like [rax + 0x20]) - mark with DISP_ prefix
-            elif op_type == idc.o_displ:
-                # Mark the displacement value so it won't be treated as address
-                if op_value != idaapi.BADADDR and op_value != 0:
+            # Handle displacement operands (o_phrase and o_displ) without var (regular offsets)
+            elif op_type in [idc.o_phrase, idc.o_displ]:
+                # If it's not a var (already cleaned above), mark it as displacement
+                if 'var_' not in op and op_value != idaapi.BADADDR and op_value != 0:
                     operands.append(f"DISP_{hex(op_value)}")
                 else:
                     operands.append(op)
             # Handle near/far/mem addresses - convert symbols to hex
             elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
-                if op_value != idaapi.BADADDR and op_value != 0:
-                    operands.append(hex(op_value))
+                # var_ already cleaned above, just check if it needs address replacement
+                if 'var_' not in op and op_value != idaapi.BADADDR and op_value != 0:
+                    # Check if it's a symbol name (not already a hex address)
+                    if not op.startswith('0x') and not op.startswith('['):
+                        operands.append(hex(op_value))
+                    else:
+                        operands.append(op)
                 else:
                     operands.append(op)
             else:
