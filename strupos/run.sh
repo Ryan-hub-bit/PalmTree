@@ -15,30 +15,91 @@ echo "Instruction Masking Training"
 echo "========================================"
 echo ""
 
-# Experiment selection
-# Uncomment ONE of the following experiments:
+# =============================================================================
+# Experiment Selection
+# =============================================================================
+# Uncomment ONE of the following experiment blocks:
+# Experiment name is auto-generated from TASKS + ADDRESS + VAR settings
 
-# Experiment 1: IMC + MLM + Address
-EXPERIMENT="imc_mlm_address"
-# Task flags - Enable what you want to train
-TASKS=""
-TASKS="${TASKS} --enable_imc"        # IMC: Instruction Masking for CFG
-# TASKS="${TASKS} --enable_imd"       # IMD: Instruction Masking for DFG (optional)
-TASKS="${TASKS} --enable_mlm"        # Token-level MLM (default enabled)
-# TASKS="${TASKS} --enable_scope"      # Scope prediction (optional)
+# -----------------------------------------------------------------------------
+# Experiment 1: IMC + MLM + Address + Var (Full features)
+# -> Auto-generates: imc_mlm_addr_var
+# -----------------------------------------------------------------------------
+TASKS="--enable_imc --enable_mlm"
+USE_ADDRESS_EMBEDDING=true
+USE_VAR_EMBEDDING=true
 
-# Address embedding
-ADDRESS_FLAG=""  # Use address embeddings
-# ADDRESS_FLAG="--disable_address_embedding"  # Disable address embedding
-# Experiment 2: IMC + IMD + MLM + Address
-# EXPERIMENT="imc_imd_mlm_address"
+# -----------------------------------------------------------------------------
+# Experiment 2: IMC + MLM + Address (No Var embedding)
+# -> Auto-generates: imc_mlm_addr
+# -----------------------------------------------------------------------------
+# TASKS="--enable_imc --enable_mlm"
+# USE_ADDRESS_EMBEDDING=true
+# USE_VAR_EMBEDDING=false
+
+# -----------------------------------------------------------------------------
+# Experiment 3: IMC + MLM + Var (No Address embedding)
+# -> Auto-generates: imc_mlm_var
+# -----------------------------------------------------------------------------
+# TASKS="--enable_imc --enable_mlm"
+# USE_ADDRESS_EMBEDDING=false
+# USE_VAR_EMBEDDING=true
+
+# -----------------------------------------------------------------------------
+# Experiment 4: IMC + MLM (Baseline - No Address, No Var)
+# -> Auto-generates: imc_mlm
+# -----------------------------------------------------------------------------
+# TASKS="--enable_imc --enable_mlm"
+# USE_ADDRESS_EMBEDDING=false
+# USE_VAR_EMBEDDING=false
+
+# -----------------------------------------------------------------------------
+# Experiment 5: IMC + IMD + MLM + Address + Var (Full with DFG)
+# -> Auto-generates: imc_imd_mlm_addr_var
+# -----------------------------------------------------------------------------
 # TASKS="--enable_imc --enable_imd --enable_mlm"
-# ADDRESS_FLAG=""
+# USE_ADDRESS_EMBEDDING=true
+# USE_VAR_EMBEDDING=true
 
-# Experiment 3: IMC + MLM + Address + Scope
-# EXPERIMENT="imc_mlm_address_scope"
+# -----------------------------------------------------------------------------
+# Experiment 6: IMC + MLM + Scope + Address + Var (Full with Scope)
+# -> Auto-generates: imc_mlm_scope_addr_var
+# -----------------------------------------------------------------------------
 # TASKS="--enable_imc --enable_mlm --enable_scope"
-# ADDRESS_FLAG=""
+# USE_ADDRESS_EMBEDDING=true
+# USE_VAR_EMBEDDING=true
+
+# =============================================================================
+# Convert flags to command line arguments
+# =============================================================================
+if [ "$USE_ADDRESS_EMBEDDING" = true ]; then
+  ADDRESS_FLAG=""
+  ADDR_SUFFIX="_addr"
+else
+  ADDRESS_FLAG="--disable_address_embedding"
+  ADDR_SUFFIX=""
+fi
+
+if [ "$USE_VAR_EMBEDDING" = true ]; then
+  VAR_FLAG=""
+  VAR_SUFFIX="_var"
+else
+  VAR_FLAG="--disable_var_embedding"
+  VAR_SUFFIX=""
+fi
+
+# Auto-generate experiment name from TASKS and embeddings
+# Extract task names from TASKS string
+TASK_NAME=""
+if [[ "$TASKS" == *"--enable_imc"* ]]; then TASK_NAME="${TASK_NAME}_imc"; fi
+if [[ "$TASKS" == *"--enable_imd"* ]]; then TASK_NAME="${TASK_NAME}_imd"; fi
+if [[ "$TASKS" == *"--enable_mlm"* ]]; then TASK_NAME="${TASK_NAME}_mlm"; fi
+if [[ "$TASKS" == *"--enable_scope"* ]]; then TASK_NAME="${TASK_NAME}_scope"; fi
+# Remove leading underscore
+TASK_NAME="${TASK_NAME#_}"
+
+# Generate full experiment name
+EXPERIMENT="${TASK_NAME}${ADDR_SUFFIX}${VAR_SUFFIX}"
 
 # Configuration
 MODEL_NAME="${EXPERIMENT}"
@@ -75,6 +136,9 @@ CFG_VAL="/data/kun/dataset/val_cfg.txt"
 DFG_VAL="/data/kun/dataset/val_dfg.txt"
 SCOPE_TRAIN="/data/kun/dataset/train_scope.txt"
 SCOPE_VAL="/data/kun/dataset/val_scope.txt"
+# Test data (only used for vocab generation, not training)
+CFG_TEST="/data/kun/dataset/test_cfg.txt"
+DFG_TEST="/data/kun/dataset/test_dfg.txt"
 
 # Multi-GPU
 CUDA="--cuda"
@@ -99,16 +163,19 @@ mkdir -p ${OUTPUT_DIR}
 mkdir -p ${LOG_DIR}
 
 # Run training
+# Note: vocab.pkl will be automatically created if it doesn't exist
 echo "Starting training..."
 echo ""
 
-python train_with_instruction_mask.py \
+python train.py \
   --cfg_train "${CFG_TRAIN}" \
   --dfg_train "${DFG_TRAIN}" \
   --cfg_val "${CFG_VAL}" \
   --dfg_val "${DFG_VAL}" \
   --scope_train "${SCOPE_TRAIN}" \
   --scope_val "${SCOPE_VAL}" \
+  --cfg_test "${CFG_TEST}" \
+  --dfg_test "${DFG_TEST}" \
   --vocab "${VOCAB_PATH}" \
   --hidden ${HIDDEN} \
   --layers ${LAYERS} \
@@ -130,6 +197,7 @@ python train_with_instruction_mask.py \
   --resume \
   ${TASKS} \
   ${ADDRESS_FLAG} \
+  ${VAR_FLAG} \
   ${CUDA} ${MULTI_GPU}
 
 if [ $? -eq 0 ]; then

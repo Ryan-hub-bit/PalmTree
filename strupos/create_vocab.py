@@ -19,11 +19,14 @@ def preprocess_line(line):
     Examples:
         mov(0x401000:0.5:0.3:0.2) eax ebx -> mov eax ebx
         address(0x123:0.5:0.3:0.2) -> address
+        var(0x10028) -> var
     
     Returns cleaned tokens as a list.
     """
-    # Remove all patterns like (0xADDR:pos1:pos2:pos3)
+    # Remove all patterns like (0xADDR:pos1:pos2:pos3) - address positions
     cleaned = re.sub(r'\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)', '', line)
+    # Remove all patterns like (0xADDR) - var offsets, e.g., var(0x10028) -> var
+    cleaned = re.sub(r'\(0x[0-9a-fA-F]+\)', '', cleaned)
     # Split by whitespace and tab, filter out empty strings
     tokens = [tok for tok in cleaned.replace('\t', ' ').split() if tok]
     return tokens
@@ -42,6 +45,71 @@ class PreprocessedFile:
             yield preprocess_line(line)
 
 
+def create_vocab(data_files, vocab_path, max_size=13000, min_freq=2, logger=None):
+    """
+    Create vocabulary from data files if it doesn't exist.
+    
+    Args:
+        data_files: List of data file paths to build vocabulary from
+        vocab_path: Path to save vocabulary
+        max_size: Maximum vocabulary size
+        min_freq: Minimum token frequency
+        logger: Optional logger instance
+    
+    Returns:
+        WordVocab instance
+    """
+    # Check if vocab already exists
+    if os.path.exists(vocab_path):
+        if logger:
+            logger.info(f"Loading existing vocabulary from {vocab_path}")
+        else:
+            print(f"Loading existing vocabulary from {vocab_path}")
+        return WordVocab.load_vocab(vocab_path)
+    
+    # Vocab doesn't exist, create it
+    if logger:
+        logger.info(f"Vocabulary file not found: {vocab_path}")
+        logger.info("Creating vocabulary from data files...")
+    else:
+        print(f"Vocabulary file not found: {vocab_path}")
+        print("Creating vocabulary from data files...")
+    
+    # Filter existing files
+    files_to_use = [f for f in data_files if f and os.path.exists(f)]
+    
+    if not files_to_use:
+        raise FileNotFoundError("No data files found to build vocabulary!")
+    
+    for fpath in files_to_use:
+        if logger:
+            logger.info(f"  Using: {fpath}")
+        else:
+            print(f"  Using: {fpath}")
+    
+    # Open all files and build vocabulary
+    file_handles = [open(f, 'r', encoding='utf-8') for f in files_to_use]
+    preprocessed = [PreprocessedFile(fh) for fh in file_handles]
+    
+    vocab = WordVocab(preprocessed, max_size=max_size, min_freq=min_freq)
+    
+    # Close file handles
+    for fh in file_handles:
+        fh.close()
+    
+    # Save vocabulary
+    vocab.save_vocab(vocab_path)
+    
+    if logger:
+        logger.info(f"Vocabulary created with {len(vocab)} tokens")
+        logger.info(f"Vocabulary saved to: {vocab_path}")
+    else:
+        print(f"Vocabulary created with {len(vocab)} tokens")
+        print(f"Vocabulary saved to: {vocab_path}")
+    
+    return vocab
+
+
 if __name__ == "__main__":
     # Data files from /data/kun/dataset/
     train_cfg_dataset = "/data/kun/dataset/train_cfg.txt"
@@ -56,7 +124,7 @@ if __name__ == "__main__":
     print("=" * 60)
     print("Creating Vocabulary from Train + Val + Test Data")
     print("=" * 60)
-    print(f"Using WordVocab with max_size=13000, min_freq=1")
+    print(f"Using WordVocab with max_size=13000, min_freq=2")
     print(f"Output: {vocab_path} (pickle format)")
     print()
     
