@@ -16,7 +16,7 @@ source ~/.bashrc
 conda activate /work/kliu14/conda/haapr
 
 # Ensure we are in the repo root
-cd /home/kliu14/PalmTree/strupos
+cd /home/kliu14/PalmTree/
 
 # Run the script
 bash run_im_scripts/run_mlm_imc_scope_address_var.sh

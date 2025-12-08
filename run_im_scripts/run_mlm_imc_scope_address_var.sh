@@ -21,53 +21,9 @@ echo ""
 # Uncomment ONE of the following experiment blocks:
 # Experiment name is auto-generated from TASKS + ADDRESS + VAR settings
 
-# -----------------------------------------------------------------------------
-# Experiment 1: IMC + MLM + Address + Var (Full features)
-# -> Auto-generates: imc_mlm_addr_var
-# -----------------------------------------------------------------------------
 TASKS="--enable_imc --enable_mlm --enable_scope"
 USE_ADDRESS_EMBEDDING=true
 USE_VAR_EMBEDDING=true
-
-# -----------------------------------------------------------------------------
-# Experiment 2: IMC + MLM + Address (No Var embedding)
-# -> Auto-generates: imc_mlm_addr
-# -----------------------------------------------------------------------------
-# TASKS="--enable_imc --enable_mlm"
-# USE_ADDRESS_EMBEDDING=true
-# USE_VAR_EMBEDDING=false
-
-# -----------------------------------------------------------------------------
-# Experiment 3: IMC + MLM + Var (No Address embedding)
-# -> Auto-generates: imc_mlm_var
-# -----------------------------------------------------------------------------
-# TASKS="--enable_imc --enable_mlm"
-# USE_ADDRESS_EMBEDDING=false
-# USE_VAR_EMBEDDING=true
-
-# -----------------------------------------------------------------------------
-# Experiment 4: IMC + MLM (Baseline - No Address, No Var)
-# -> Auto-generates: imc_mlm
-# -----------------------------------------------------------------------------
-# TASKS="--enable_imc --enable_mlm"
-# USE_ADDRESS_EMBEDDING=false
-# USE_VAR_EMBEDDING=false
-
-# -----------------------------------------------------------------------------
-# Experiment 5: IMC + IMD + MLM + Address + Var (Full with DFG)
-# -> Auto-generates: imc_imd_mlm_addr_var
-# -----------------------------------------------------------------------------
-# TASKS="--enable_imc --enable_imd --enable_mlm"
-# USE_ADDRESS_EMBEDDING=true
-# USE_VAR_EMBEDDING=true
-
-# -----------------------------------------------------------------------------
-# Experiment 6: IMC + MLM + Scope + Address + Var (Full with Scope)
-# -> Auto-generates: imc_mlm_scope_addr_var
-# -----------------------------------------------------------------------------
-# TASKS="--enable_imc --enable_mlm --enable_scope"
-# USE_ADDRESS_EMBEDDING=true
-# USE_VAR_EMBEDDING=true
 
 # =============================================================================
 # Convert flags to command line arguments
@@ -167,7 +123,7 @@ mkdir -p ${LOG_DIR}
 echo "Starting training..."
 echo ""
 
-python train.py \
+python ./strupos/train.py \
   --cfg_train "${CFG_TRAIN}" \
   --dfg_train "${DFG_TRAIN}" \
   --cfg_val "${CFG_VAL}" \
