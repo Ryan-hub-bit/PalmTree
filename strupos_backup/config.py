@@ -7,12 +7,12 @@ Actual training uses command-line arguments in run_*.sh scripts.
 
 # ==================== Data Paths (Reference) ====================
 # These paths are used in shell scripts, not loaded directly
-cfg_train = "/data/kun/dataset/train_cfg.txt"
-dfg_train = "/data/kun/dataset/train_dfg.txt"
-cfg_val = "/data/kun/dataset/val_cfg.txt"
-dfg_val = "/data/kun/dataset/val_dfg.txt"
-cfg_test = "/data/kun/dataset/test_cfg.txt"
-dfg_test = "/data/kun/dataset/test_dfg.txt"
+cfg_train = "/work/kliu14/txtdataset/train_cfg.txt"
+dfg_train = "/work/kliu14/txtdataset/train_dfg.txt"
+cfg_val = "/work/kliu14/txtdataset/val_cfg.txt"
+dfg_val = "/work/kliu14/txtdataset/val_dfg.txt"
+cfg_test = "/work/kliu14/txtdataset/test_cfg.txt"
+dfg_test = "/work/kliu14/txtdataset/test_dfg.txt"
 vocab_path = "./vocab.txt"
 
 # ==================== Model Architecture (Reference) ====================
@@ -29,7 +29,6 @@ lr = 1e-4
 warmup_steps = 10000
 num_workers = 4
 early_stopping_patience = 5
-seed = 42  # Random seed for reproducibility
 
 # ==================== Data Processing (Reference) ====================
 mask_prob = 0.15

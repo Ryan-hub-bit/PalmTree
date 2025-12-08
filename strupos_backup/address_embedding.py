@@ -152,69 +152,6 @@ class AddressPositionalEmbedding(nn.Module):
         return embedding
 
 
-class VarPositionalEmbedding(nn.Module):
-    """
-    Positional embedding for var(0xXX) tokens based on their offset values.
-    
-    Uses sinusoidal encoding on the variable offset (e.g., 0x10 -> 16).
-    Only var tokens get the encoding, all other tokens get zeros.
-    """
-    
-    def __init__(self, d_model, max_offset=4096):
-        """
-        Args:
-            d_model: Embedding dimension
-            max_offset: Maximum expected variable offset (for normalization)
-        """
-        super().__init__()
-        self.d_model = d_model
-        self.max_offset = max_offset
-        
-        # Precompute div_term for sinusoidal encoding
-        div_term = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float32) 
-                            * -(math.log(10000.0) / d_model))
-        self.register_buffer('div_term', div_term)
-    
-    def forward(self, var_offsets):
-        """
-        Forward pass.
-        
-        Args:
-            var_offsets: [batch_size, seq_len] variable offsets (0 for non-var tokens)
-                         e.g., for var(0x10), offset = 16; for non-var, offset = 0
-            
-        Returns:
-            encoding: [batch_size, seq_len, d_model] sinusoidal encoding for var offsets
-                      (zeros for non-var tokens)
-        """
-        batch_size, seq_len = var_offsets.shape
-        device = var_offsets.device
-        
-        # Create output tensor initialized to zeros
-        encoding = torch.zeros(batch_size, seq_len, self.d_model, device=device)
-        
-        # Create mask for var tokens (offset > 0)
-        var_mask = (var_offsets > 0).unsqueeze(-1)  # [batch, seq, 1]
-        
-        # Scale offsets for sinusoidal encoding
-        # Use the offset value directly (not normalized) for position encoding
-        offsets_scaled = var_offsets.float().unsqueeze(-1)  # [batch, seq, 1]
-        
-        # Apply sin to even indices
-        encoding[:, :, 0::2] = torch.sin(offsets_scaled * self.div_term)
-        
-        # Apply cos to odd indices
-        if self.d_model % 2 == 0:
-            encoding[:, :, 1::2] = torch.cos(offsets_scaled * self.div_term)
-        else:
-            encoding[:, :, 1::2] = torch.cos(offsets_scaled * self.div_term[:-1])
-        
-        # Zero out non-var tokens
-        encoding = encoding * var_mask.float()
-        
-        return encoding
-
-
 class AddressAwareBERTEmbedding(nn.Module):
     """
     Address-aware BERT Embedding.
@@ -224,10 +161,9 @@ class AddressAwareBERTEmbedding(nn.Module):
     2. Sequence positional embedding (sinusoidal)
     3. Address positional embedding (sin/cos on binary_pos, function_pos, bb_pos) - OPTIONAL
     4. Segment embedding (for NSP task)
-    5. Var positional embedding (sin/cos on var offsets for var(0xXX) tokens) - OPTIONAL
     """
     
-    def __init__(self, vocab_size, embed_size, dropout=0.1, max_len=512, use_address_embedding=True, use_var_embedding=True):
+    def __init__(self, vocab_size, embed_size, dropout=0.1, max_len=512, use_address_embedding=True):
         """
         Args:
             vocab_size: Size of vocabulary
@@ -235,13 +171,11 @@ class AddressAwareBERTEmbedding(nn.Module):
             dropout: Dropout rate
             max_len: Maximum sequence length
             use_address_embedding: Whether to use address-aware positional embeddings
-            use_var_embedding: Whether to use var offset embeddings
         """
         super().__init__()
         
         self.embed_size = embed_size
         self.use_address_embedding = use_address_embedding
-        self.use_var_embedding = use_var_embedding
         
         # 1. Token embedding - trained from scratch
         self.token_embedding = nn.Embedding(vocab_size, embed_size, padding_idx=0)
@@ -259,16 +193,10 @@ class AddressAwareBERTEmbedding(nn.Module):
         # Increased from 2 to 16 to support instruction IDs (1-8) plus padding (0)
         self.segment_embedding = nn.Embedding(16, embed_size, padding_idx=0)
         
-        # 5. Var positional embedding - sin/cos encoding on var offsets (OPTIONAL)
-        if self.use_var_embedding:
-            self.var_position = VarPositionalEmbedding(embed_size)
-        else:
-            self.var_position = None
-        
         self.dropout = nn.Dropout(p=dropout)
         self.layer_norm = nn.LayerNorm(embed_size)
     
-    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None):
+    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos):
         """
         Forward pass.
         
@@ -278,7 +206,6 @@ class AddressAwareBERTEmbedding(nn.Module):
             binary_pos: [batch_size, seq_len] binary-level positions
             function_pos: [batch_size, seq_len] function-level positions
             bb_pos: [batch_size, seq_len] basic block-level positions
-            var_offsets: [batch_size, seq_len] var offset values (0 for non-var tokens)
             
         Returns:
             embedding: [batch_size, seq_len, embed_size]
@@ -294,17 +221,11 @@ class AddressAwareBERTEmbedding(nn.Module):
         # 3. Get address positional embeddings (3-level sinusoidal) - OPTIONAL
         if self.use_address_embedding:
             addr_pos_emb = self.address_position(binary_pos, function_pos, bb_pos)
+            # Combine: token + seq_position + addr_position + segment
+            embedding = token_emb + seq_pos_emb + addr_pos_emb + self.segment_embedding(segment_labels)
         else:
-            addr_pos_emb = 0
-        
-        # 4. Get var positional embeddings - OPTIONAL
-        if self.use_var_embedding and var_offsets is not None:
-            var_pos_emb = self.var_position(var_offsets)
-        else:
-            var_pos_emb = 0
-        
-        # Combine all embeddings
-        embedding = token_emb + seq_pos_emb + addr_pos_emb + self.segment_embedding(segment_labels) + var_pos_emb
+            # Combine: token + seq_position + segment (standard BERT)
+            embedding = token_emb + seq_pos_emb + self.segment_embedding(segment_labels)
         
         # Apply layer norm and dropout
         embedding = self.layer_norm(embedding)

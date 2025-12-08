@@ -23,7 +23,7 @@ class AddressAwareBERT(nn.Module):
     Trained from scratch (no pre-trained PalmTree weights).
     """
     
-    def __init__(self, vocab_size, hidden=768, n_layers=12, attn_heads=12, dropout=0.1, max_len=512, use_address_embedding=True, use_var_embedding=True):
+    def __init__(self, vocab_size, hidden=768, n_layers=12, attn_heads=12, dropout=0.1, max_len=512, use_address_embedding=True):
         """
         Args:
             vocab_size: Size of the vocabulary
@@ -33,7 +33,6 @@ class AddressAwareBERT(nn.Module):
             dropout: Dropout rate
             max_len: Maximum sequence length
             use_address_embedding: Whether to use address-aware positional embeddings
-            use_var_embedding: Whether to use var offset embeddings for var(0xXX) tokens
         """
         super().__init__()
         
@@ -41,7 +40,6 @@ class AddressAwareBERT(nn.Module):
         self.n_layers = n_layers
         self.attn_heads = attn_heads
         self.use_address_embedding = use_address_embedding
-        self.use_var_embedding = use_var_embedding
         
         # Address-aware embedding layer - ALL components trained from scratch
         self.embedding = AddressAwareBERTEmbedding(
@@ -49,8 +47,7 @@ class AddressAwareBERT(nn.Module):
             embed_size=hidden,
             dropout=dropout,
             max_len=max_len,
-            use_address_embedding=use_address_embedding,
-            use_var_embedding=use_var_embedding
+            use_address_embedding=use_address_embedding
         )
         
         # Transformer blocks - trained from scratch

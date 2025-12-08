@@ -44,17 +44,17 @@ TOKEN_MASK_PROB=0.15          # Standard MLM masking rate
 INSTRUCTION_MASK_PROB=0.125    # Instruction-level masking rate
 
 # Data parameters
-TRAIN_PERCENTAGE=1.0  # Use 100% of training data
-VAL_PERCENTAGE=1.0    # Use 100% of validation data
+TRAIN_PERCENTAGE=1  # Use 100% of training data
+VAL_PERCENTAGE=1   # Use 100% of validation data
 
 # Data paths
 VOCAB_PATH="./strupos/vocab.pkl"
-CFG_TRAIN="/data/kun/dataset/train_cfg.txt"
-DFG_TRAIN="/data/kun/dataset/train_dfg.txt"
-CFG_VAL="/data/kun/dataset/val_cfg.txt"
-DFG_VAL="/data/kun/dataset/val_dfg.txt"
-SCOPE_TRAIN="/data/kun/dataset/train_scope.txt"
-SCOPE_VAL="/data/kun/dataset/val_scope.txt"
+CFG_TRAIN="/work/kliu14/txtdataset/train_cfg.txt"
+DFG_TRAIN="/work/kliu14/txtdataset/train_dfg.txt"
+CFG_VAL="/work/kliu14/txtdataset/val_cfg.txt"
+DFG_VAL="/work/kliu14/txtdataset/val_dfg.txt"
+SCOPE_TRAIN="/work/kliu14/txtdataset/train_scope.txt"
+SCOPE_VAL="/work/kliu14/txtdataset/val_scope.txt"
 
 # Multi-GPU
 CUDA="--cuda"

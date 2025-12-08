@@ -2,9 +2,8 @@
 #SBATCH --job-name=mlm_imc_scope_addr
 #SBATCH --output=/work/kliu14/haapr/log/%x_%j.out
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=4
-#SBATCH --mem=64G                 
-#SBATCH --time=00:10:00
+#SBATCH --cpus-per-task=6
+#SBATCH --time=3-00:00:00
 #SBATCH --partition=gpu2
 #SBATCH --account=loni_progsyn01
 
