@@ -49,12 +49,12 @@ VAL_PERCENTAGE=1.0    # Use 100% of validation data
 
 # Data paths
 VOCAB_PATH="./strupos/vocab.pkl"
-CFG_TRAIN="/data/kun/dataset/train_cfg.txt"
-DFG_TRAIN="/data/kun/dataset/train_dfg.txt"
-CFG_VAL="/data/kun/dataset/val_cfg.txt"
-DFG_VAL="/data/kun/dataset/val_dfg.txt"
-SCOPE_TRAIN="/data/kun/dataset/train_scope.txt"
-SCOPE_VAL="/data/kun/dataset/val_scope.txt"
+CFG_TRAIN="/work/kliu14/vardataset/train_cfg.txt"
+DFG_TRAIN="/work/kliu14/vardataset/train_dfg.txt"
+CFG_VAL="/work/kliu14/vardataset/val_cfg.txt"
+DFG_VAL="/work/kliu14/vardataset/val_dfg.txt"
+SCOPE_TRAIN="/work/kliu14/vardataset/train_scope.txt"
+SCOPE_VAL="/work/kliu14/vardataset/val_scope.txt"
 
 # Multi-GPU
 CUDA="--cuda"

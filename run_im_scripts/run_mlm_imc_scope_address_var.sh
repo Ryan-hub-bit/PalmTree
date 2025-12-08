@@ -25,7 +25,7 @@ echo ""
 # Experiment 1: IMC + MLM + Address + Var (Full features)
 # -> Auto-generates: imc_mlm_addr_var
 # -----------------------------------------------------------------------------
-TASKS="--enable_imc --enable_mlm"
+TASKS="--enable_imc --enable_mlm --enable_scope"
 USE_ADDRESS_EMBEDDING=true
 USE_VAR_EMBEDDING=true
 
@@ -142,8 +142,8 @@ DFG_TEST="/work/kliu14/vardataset/test_dfg.txt"
 
 # Multi-GPU
 CUDA="--cuda"
-# MULTI_GPU=""
-MULTI_GPU="--multi_gpu"
+MULTI_GPU=""
+# MULTI_GPU="--multi_gpu"
 
 echo "Configuration:"
 echo "  Model: ${MODEL_NAME}"

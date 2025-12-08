@@ -111,13 +111,13 @@ def create_vocab(data_files, vocab_path, max_size=13000, min_freq=2, logger=None
 
 
 if __name__ == "__main__":
-    # Data files from /data/kun/dataset/
-    train_cfg_dataset = "/data/kun/dataset/train_cfg.txt"
-    train_dfg_dataset = "/data/kun/dataset/train_dfg.txt"
-    val_cfg_dataset = "/data/kun/dataset/val_cfg.txt"
-    val_dfg_dataset = "/data/kun/dataset/val_dfg.txt"
-    test_cfg_dataset = "/data/kun/dataset/test_cfg.txt"
-    test_dfg_dataset = "/data/kun/dataset/test_dfg.txt"
+    # Data files from /work/kliu14/vardataset/
+    train_cfg_dataset = "/work/kliu14/vardataset/train_cfg.txt"
+    train_dfg_dataset = "/work/kliu14/vardataset/train_dfg.txt"
+    val_cfg_dataset = "/work/kliu14/vardataset/val_cfg.txt"
+    val_dfg_dataset = "/work/kliu14/vardataset/val_dfg.txt"
+    test_cfg_dataset = "/work/kliu14/vardataset/test_cfg.txt"
+    test_dfg_dataset = "/work/kliu14/vardataset/test_dfg.txt"
     
     vocab_path = "./vocab.pkl"
     

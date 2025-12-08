@@ -82,7 +82,7 @@ def main():
     test_dir = "/work/kliu14/txtdataset/test_cdfg"
     
     # Output paths
-    output_dir = "/data/kun/dataset"
+    output_dir = "/work/kliu14/vardataset"
     os.makedirs(output_dir, exist_ok=True)
     
     train_output = os.path.join(output_dir, "train_cfg.txt")

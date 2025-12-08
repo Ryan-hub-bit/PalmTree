@@ -8,7 +8,7 @@ set -e  # Exit on error
 
 # Configuration
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-DATA_DIR="/data/kun/dataset"
+DATA_DIR="/work/kliu14/vardataset"
 
 # CDFG directory paths
 TRAIN_CDFG="${DATA_DIR}/train_cdfg"
