@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=mlm_imc_scope_addr
+#SBATCH --job-name=mlm_imc_scope_addr_var
 #SBATCH --output=/work/kliu14/haapr/log/%x_%j.out
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6
@@ -16,7 +16,7 @@ source ~/.bashrc
 conda activate /work/kliu14/conda/haapr
 
 # Ensure we are in the repo root
-cd /home/kliu14/PalmTree
+cd /home/kliu14/PalmTree/strupos
 
 # Run the script
 bash run_im_scripts/run_mlm_imc_scope_address_var.sh
