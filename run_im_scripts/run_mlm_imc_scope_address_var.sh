@@ -59,8 +59,8 @@ EXPERIMENT="${TASK_NAME}${ADDR_SUFFIX}${VAR_SUFFIX}"
 
 # Configuration
 MODEL_NAME="${EXPERIMENT}"
-OUTPUT_DIR="../output/${MODEL_NAME}"
-LOG_DIR="../log/${MODEL_NAME}"
+OUTPUT_DIR="/work/kliu14/happr/output/${MODEL_NAME}"
+LOG_DIR="/work/kliu14/happr/log/${MODEL_NAME}"
 
 # Model parameters
 HIDDEN=768
