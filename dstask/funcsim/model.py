@@ -1,0 +1,296 @@
+"""
+Function Similarity Model for Fine-tuning
+
+This model takes a pre-trained AddressAwareBERT and fine-tunes it for 
+function similarity tasks using contrastive learning.
+
+Uses the function blocks and ground truth pairs from funcsim dataset.
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import sys
+import os
+
+# Add strupos to path to import models
+strupos_path = os.path.join(os.path.dirname(__file__), '..', '..', 'strupos')
+if strupos_path not in sys.path:
+    sys.path.insert(0, strupos_path)
+
+# Import from strupos using absolute import to avoid circular import
+import importlib.util
+spec = importlib.util.spec_from_file_location("strupos_model", os.path.join(strupos_path, "model.py"))
+strupos_model = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(strupos_model)
+AddressAwareBERT = strupos_model.AddressAwareBERT
+
+
+class FunctionSimilarityModel(nn.Module):
+    """
+    Function Similarity model using contrastive learning.
+    
+    Architecture:
+    1. Pre-trained AddressAwareBERT encoder
+    2. Function embedding layer (mean pooling over sequence)
+    3. Similarity computation (cosine similarity or euclidean distance)
+    
+    Training:
+    - Positive pairs: Same function at different optimization levels
+    - Negative pairs: Different functions
+    - Loss: Contrastive loss or triplet loss
+    """
+    
+    def __init__(
+        self,
+        vocab_size,
+        hidden=768,
+        n_layers=12,
+        attn_heads=12,
+        dropout=0.1,
+        max_len=512,
+        use_address_embedding=True,
+        use_var_embedding=True,
+        embedding_dim=256,
+        freeze_bert=False
+    ):
+        """
+        Args:
+            vocab_size: Size of vocabulary
+            hidden: BERT hidden dimension
+            n_layers: Number of BERT layers
+            attn_heads: Number of attention heads
+            dropout: Dropout rate
+            max_len: Maximum sequence length
+            use_address_embedding: Use address-aware embeddings
+            use_var_embedding: Use variable offset embeddings
+            embedding_dim: Dimension of function embedding (output)
+            freeze_bert: Whether to freeze BERT weights during fine-tuning
+        """
+        super().__init__()
+        
+        # BERT encoder
+        self.bert = AddressAwareBERT(
+            vocab_size=vocab_size,
+            hidden=hidden,
+            n_layers=n_layers,
+            attn_heads=attn_heads,
+            dropout=dropout,
+            max_len=max_len,
+            use_address_embedding=use_address_embedding,
+            use_var_embedding=use_var_embedding
+        )
+        
+        # Freeze BERT if requested (useful for initial training)
+        if freeze_bert:
+            for param in self.bert.parameters():
+                param.requires_grad = False
+        
+        # Projection layer to function embedding space
+        self.projection = nn.Sequential(
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden, embedding_dim)
+        )
+        
+        # L2 normalize embeddings for cosine similarity
+        self.normalize = True
+    
+    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None):
+        """
+        Forward pass to get function embeddings.
+        
+        Args:
+            token_ids: [batch_size, seq_len]
+            segment_labels: [batch_size, seq_len]
+            binary_pos: [batch_size, seq_len]
+            function_pos: [batch_size, seq_len]
+            bb_pos: [batch_size, seq_len]
+            var_offsets: [batch_size, seq_len] - Variable offsets for var(0xXX) tokens (optional)
+            
+        Returns:
+            embeddings: [batch_size, embedding_dim] - Function embeddings
+        """
+        # Get BERT output (pass var_offsets to embedding layer)
+        bert_output = self.bert(
+            token_ids, segment_labels,
+            binary_pos, function_pos, bb_pos,
+            var_offsets
+        )  # [batch_size, seq_len, hidden]
+        
+        # Mean pooling over sequence dimension (ignoring padding)
+        mask = (token_ids != 0).unsqueeze(-1).float()  # [batch_size, seq_len, 1]
+        masked_output = bert_output * mask
+        pooled = masked_output.sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)  # [batch_size, hidden]
+        
+        # Project to embedding space
+        embeddings = self.projection(pooled)  # [batch_size, embedding_dim]
+        
+        # L2 normalize
+        if self.normalize:
+            embeddings = F.normalize(embeddings, p=2, dim=1)
+        
+        return embeddings
+    
+    def compute_similarity(self, emb1, emb2, metric='cosine'):
+        """
+        Compute similarity between two embeddings.
+        
+        Args:
+            emb1: [batch_size, embedding_dim]
+            emb2: [batch_size, embedding_dim]
+            metric: 'cosine' or 'euclidean'
+            
+        Returns:
+            similarity: [batch_size] - Similarity scores
+        """
+        if metric == 'cosine':
+            # Cosine similarity (higher is more similar)
+            return F.cosine_similarity(emb1, emb2, dim=1)
+        elif metric == 'euclidean':
+            # Negative euclidean distance (higher is more similar)
+            return -torch.norm(emb1 - emb2, p=2, dim=1)
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
+    
+    def load_pretrained_bert(self, checkpoint_path):
+        """
+        Load pre-trained BERT weights.
+        
+        Args:
+            checkpoint_path: Path to pre-trained BERT checkpoint
+        """
+        print(f"[INFO] Loading pre-trained BERT from {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+        
+        # Handle different checkpoint formats
+        if isinstance(checkpoint, dict):
+            # Checkpoint is a dictionary
+            if 'bert_state_dict' in checkpoint:
+                state_dict = checkpoint['bert_state_dict']
+            elif 'model_state_dict' in checkpoint:
+                state_dict = checkpoint['model_state_dict']
+                # Extract BERT weights (remove 'bert.' prefix if present)
+                bert_state_dict = {}
+                for k, v in state_dict.items():
+                    if k.startswith('bert.'):
+                        bert_state_dict[k[5:]] = v
+                    elif not k.startswith('MLM.') and not k.startswith('NSP.'):
+                        bert_state_dict[k] = v
+                state_dict = bert_state_dict
+            else:
+                # Assume the dict itself is the state dict
+                state_dict = checkpoint
+        else:
+            # Checkpoint is a model object directly
+            print(f"[INFO] Checkpoint is a model object (type: {type(checkpoint).__name__})")
+            state_dict = checkpoint.state_dict()
+        
+        # Load weights
+        missing_keys, unexpected_keys = self.bert.load_state_dict(state_dict, strict=False)
+        
+        if missing_keys:
+            print(f"[WARNING] Missing keys: {missing_keys}")
+        if unexpected_keys:
+            print(f"[WARNING] Unexpected keys: {unexpected_keys}")
+        
+        print("[INFO] Pre-trained BERT loaded successfully")
+
+
+class ContrastiveLoss(nn.Module):
+    """
+    Contrastive loss for function similarity.
+    
+    Pulls together positive pairs (same function, different opt levels)
+    Pushes apart negative pairs (different functions)
+    """
+    
+    def __init__(self, margin=1.0, metric='cosine'):
+        """
+        Args:
+            margin: Margin for negative pairs
+            metric: 'cosine' or 'euclidean'
+        """
+        super().__init__()
+        self.margin = margin
+        self.metric = metric
+    
+    def forward(self, emb1, emb2, labels):
+        """
+        Compute contrastive loss.
+        
+        Args:
+            emb1: [batch_size, embedding_dim]
+            emb2: [batch_size, embedding_dim]
+            labels: [batch_size] - 1 for positive pairs, 0 for negative pairs
+            
+        Returns:
+            loss: Scalar loss value
+        """
+        if self.metric == 'cosine':
+            # Cosine similarity (range: -1 to 1)
+            similarity = F.cosine_similarity(emb1, emb2, dim=1)
+            # Convert to distance (range: 0 to 2)
+            distance = 1 - similarity
+        else:
+            # Euclidean distance
+            distance = torch.norm(emb1 - emb2, p=2, dim=1)
+        
+        # Contrastive loss
+        # Positive pairs: minimize distance
+        # Negative pairs: maximize distance (up to margin)
+        pos_loss = labels.float() * distance.pow(2)
+        neg_loss = (1 - labels.float()) * F.relu(self.margin - distance).pow(2)
+        
+        loss = (pos_loss + neg_loss).mean()
+        
+        return loss
+
+
+class TripletLoss(nn.Module):
+    """
+    Triplet loss for function similarity.
+    
+    Anchor: Query function
+    Positive: Same function at different opt level
+    Negative: Different function
+    
+    Loss encourages: distance(anchor, positive) + margin < distance(anchor, negative)
+    """
+    
+    def __init__(self, margin=1.0, metric='cosine'):
+        """
+        Args:
+            margin: Margin between positive and negative distances
+            metric: 'cosine' or 'euclidean'
+        """
+        super().__init__()
+        self.margin = margin
+        self.metric = metric
+    
+    def forward(self, anchor, positive, negative):
+        """
+        Compute triplet loss.
+        
+        Args:
+            anchor: [batch_size, embedding_dim]
+            positive: [batch_size, embedding_dim]
+            negative: [batch_size, embedding_dim]
+            
+        Returns:
+            loss: Scalar loss value
+        """
+        if self.metric == 'cosine':
+            # Cosine distance (1 - similarity)
+            pos_distance = 1 - F.cosine_similarity(anchor, positive, dim=1)
+            neg_distance = 1 - F.cosine_similarity(anchor, negative, dim=1)
+        else:
+            # Euclidean distance
+            pos_distance = torch.norm(anchor - positive, p=2, dim=1)
+            neg_distance = torch.norm(anchor - negative, p=2, dim=1)
+        
+        # Triplet loss
+        loss = F.relu(pos_distance - neg_distance + self.margin).mean()
+        
+        return loss

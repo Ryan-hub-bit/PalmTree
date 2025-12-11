@@ -1,0 +1,377 @@
+"""
+Training script for Function Similarity Fine-tuning
+
+Fine-tunes a pre-trained AddressAwareBERT model for function similarity
+using contrastive learning on funcsim dataset.
+"""
+
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, random_split
+from torch.optim import Adam
+from torch.optim.lr_scheduler import CosineAnnealingLR
+import argparse
+import os
+import json
+import logging
+from datetime import datetime
+from tqdm import tqdm
+import sys
+import os
+import importlib.util
+
+# Add strupos to path first
+strupos_path = os.path.join(os.path.dirname(__file__), '..', '..', 'strupos')
+if strupos_path not in sys.path:
+    sys.path.insert(0, strupos_path)
+
+# Now import from strupos
+from vocab import WordVocab
+
+# Import local modules using importlib to avoid conflicts
+current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Load local model.py
+spec = importlib.util.spec_from_file_location("funcsim_model", os.path.join(current_dir, "model.py"))
+funcsim_model = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(funcsim_model)
+
+# Load local dataloader.py
+spec = importlib.util.spec_from_file_location("funcsim_dataloader", os.path.join(current_dir, "dataloader.py"))
+funcsim_dataloader = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(funcsim_dataloader)
+
+# Extract classes
+FunctionSimilarityModel = funcsim_model.FunctionSimilarityModel
+ContrastiveLoss = funcsim_model.ContrastiveLoss
+FunctionSimilarityDataset = funcsim_dataloader.FunctionSimilarityDataset
+
+
+def setup_logging(log_dir, experiment_name):
+    """Setup logging configuration."""
+    os.makedirs(log_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = os.path.join(log_dir, f'train_{experiment_name}_{timestamp}.log')
+    
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()
+        ]
+    )
+    
+    return logging.getLogger(__name__)
+
+
+def train_epoch(model, dataloader, criterion, optimizer, device, logger):
+    """Train for one epoch."""
+    model.train()
+    total_loss = 0
+    correct = 0
+    total = 0
+    
+    progress = tqdm(dataloader, desc="Training")
+    
+    for batch in progress:
+        # Move to device
+        func1_input = batch['func1_input'].to(device)
+        func1_segment = batch['func1_segment'].to(device)
+        func1_bin_pos = batch['func1_binary_pos'].to(device)
+        func1_func_pos = batch['func1_function_pos'].to(device)
+        func1_bb_pos = batch['func1_bb_pos'].to(device)
+        func1_var_offsets = batch['func1_var_offsets'].to(device)
+        
+        func2_input = batch['func2_input'].to(device)
+        func2_segment = batch['func2_segment'].to(device)
+        func2_bin_pos = batch['func2_binary_pos'].to(device)
+        func2_func_pos = batch['func2_function_pos'].to(device)
+        func2_bb_pos = batch['func2_bb_pos'].to(device)
+        func2_var_offsets = batch['func2_var_offsets'].to(device)
+        
+        labels = batch['label'].to(device)
+        
+        # Forward pass
+        emb1 = model(func1_input, func1_segment, func1_bin_pos, func1_func_pos, func1_bb_pos, func1_var_offsets)
+        emb2 = model(func2_input, func2_segment, func2_bin_pos, func2_func_pos, func2_bb_pos, func2_var_offsets)
+        
+        # Compute loss
+        loss = criterion(emb1, emb2, labels)
+        
+        # Backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        
+        # Compute accuracy (cosine similarity > 0.5 for positive, < 0.5 for negative)
+        similarity = model.compute_similarity(emb1, emb2, metric='cosine')
+        predictions = (similarity > 0.5).long()
+        correct += (predictions == labels).sum().item()
+        total += labels.size(0)
+        
+        total_loss += loss.item()
+        
+        # Update progress bar
+        progress.set_postfix({
+            'loss': f'{loss.item():.4f}',
+            'acc': f'{correct/total:.4f}'
+        })
+    
+    avg_loss = total_loss / len(dataloader)
+    accuracy = correct / total
+    
+    return avg_loss, accuracy
+
+
+def validate_epoch(model, dataloader, criterion, device, logger):
+    """Validate for one epoch."""
+    model.eval()
+    total_loss = 0
+    correct = 0
+    total = 0
+    
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Validation"):
+            # Move to device
+            func1_input = batch['func1_input'].to(device)
+            func1_segment = batch['func1_segment'].to(device)
+            func1_bin_pos = batch['func1_binary_pos'].to(device)
+            func1_func_pos = batch['func1_function_pos'].to(device)
+            func1_bb_pos = batch['func1_bb_pos'].to(device)
+            func1_var_offsets = batch['func1_var_offsets'].to(device)
+            
+            func2_input = batch['func2_input'].to(device)
+            func2_segment = batch['func2_segment'].to(device)
+            func2_bin_pos = batch['func2_binary_pos'].to(device)
+            func2_func_pos = batch['func2_function_pos'].to(device)
+            func2_bb_pos = batch['func2_bb_pos'].to(device)
+            func2_var_offsets = batch['func2_var_offsets'].to(device)
+            
+            labels = batch['label'].to(device)
+            
+            # Forward pass
+            emb1 = model(func1_input, func1_segment, func1_bin_pos, func1_func_pos, func1_bb_pos, func1_var_offsets)
+            emb2 = model(func2_input, func2_segment, func2_bin_pos, func2_func_pos, func2_bb_pos, func2_var_offsets)
+            
+            # Compute loss
+            loss = criterion(emb1, emb2, labels)
+            
+            # Compute accuracy
+            similarity = model.compute_similarity(emb1, emb2, metric='cosine')
+            predictions = (similarity > 0.5).long()
+            correct += (predictions == labels).sum().item()
+            total += labels.size(0)
+            
+            total_loss += loss.item()
+    
+    avg_loss = total_loss / len(dataloader)
+    accuracy = correct / total
+    
+    return avg_loss, accuracy
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Fine-tune for function similarity")
+    
+    # Data
+    parser.add_argument("--function_blocks", type=str, required=True, help="Path to function_blocks.json")
+    parser.add_argument("--funcsim_pairs", type=str, required=True, help="Path to funcsim_pairs.json")
+    parser.add_argument("--vocab", type=str, required=True, help="Path to vocab.pkl")
+    
+    # Model
+    parser.add_argument("--pretrained_bert", type=str, required=True, help="Path to pre-trained BERT checkpoint")
+    parser.add_argument("--hidden", type=int, default=768, help="Hidden size")
+    parser.add_argument("--n_layers", type=int, default=12, help="Number of layers")
+    parser.add_argument("--attn_heads", type=int, default=12, help="Number of attention heads")
+    parser.add_argument("--embedding_dim", type=int, default=256, help="Function embedding dimension")
+    parser.add_argument("--freeze_bert", action="store_true", help="Freeze BERT weights")
+    parser.add_argument("--no_address", action="store_true", help="Disable address embeddings")
+    
+    # Training
+    parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
+    parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--seq_len", type=int, default=512, help="Maximum sequence length")
+    parser.add_argument("--negative_samples", type=int, default=3, help="Negative samples per positive")
+    parser.add_argument("--margin", type=float, default=1.0, help="Contrastive loss margin")
+    parser.add_argument("--train_split", type=float, default=0.8, help="Training split ratio (rest is test)")
+    parser.add_argument("--val_split", type=float, default=0.1, help="Validation split ratio (from training set)")
+    
+    # Output
+    parser.add_argument("--output_dir", type=str, default="../../output/funcsim", help="Output directory")
+    parser.add_argument("--log_dir", type=str, default="../../log/funcsim", help="Log directory")
+    parser.add_argument("--experiment_name", type=str, default="funcsim", help="Experiment name")
+    
+    # Device
+    parser.add_argument("--device", type=str, default="cuda", help="Device (cuda or cpu)")
+    parser.add_argument("--num_workers", type=int, default=4, help="Number of data loading workers")
+    
+    args = parser.parse_args()
+    
+    # Setup
+    device = torch.device(args.device if torch.cuda.is_available() else "cpu")
+    logger = setup_logging(args.log_dir, args.experiment_name)
+    os.makedirs(args.output_dir, exist_ok=True)
+    
+    logger.info("=" * 80)
+    logger.info("Function Similarity Fine-tuning")
+    logger.info("=" * 80)
+    logger.info(f"Device: {device}")
+    logger.info(f"Pre-trained BERT: {args.pretrained_bert}")
+    logger.info(f"Function blocks: {args.function_blocks}")
+    logger.info(f"Funcsim pairs: {args.funcsim_pairs}")
+    logger.info(f"Output directory: {args.output_dir}")
+    logger.info("=" * 80)
+    
+    # Save arguments
+    args_file = os.path.join(args.output_dir, 'args.json')
+    with open(args_file, 'w') as f:
+        json.dump(vars(args), f, indent=2)
+    logger.info(f"Arguments saved to: {args_file}")
+    
+    # Load vocabulary
+    logger.info(f"Loading vocabulary from {args.vocab}")
+    vocab = WordVocab.load_vocab(args.vocab)
+    logger.info(f"Vocabulary size: {len(vocab)}")
+    
+    # Create dataset
+    logger.info("Creating dataset...")
+    full_dataset = FunctionSimilarityDataset(
+        function_blocks_file=args.function_blocks,
+        funcsim_pairs_file=args.funcsim_pairs,
+        vocab=vocab,
+        seq_len=args.seq_len,
+        negative_samples=args.negative_samples
+    )
+    
+    # Split into train+val (80%) and test (20%)
+    test_size = int(len(full_dataset) * (1 - args.train_split))
+    train_val_size = len(full_dataset) - test_size
+    train_val_dataset, test_dataset = random_split(
+        full_dataset, 
+        [train_val_size, test_size],
+        generator=torch.Generator().manual_seed(42)  # Fixed seed for reproducibility
+    )
+    
+    # Further split train_val into train and val
+    val_size = int(len(train_val_dataset) * args.val_split)
+    train_size = len(train_val_dataset) - val_size
+    train_dataset, val_dataset = random_split(
+        train_val_dataset, 
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(42)
+    )
+    
+    logger.info(f"Total samples: {len(full_dataset)}")
+    logger.info(f"Training samples: {len(train_dataset)} ({len(train_dataset)/len(full_dataset)*100:.1f}%)")
+    logger.info(f"Validation samples: {len(val_dataset)} ({len(val_dataset)/len(full_dataset)*100:.1f}%)")
+    logger.info(f"Test samples: {len(test_dataset)} ({len(test_dataset)/len(full_dataset)*100:.1f}%)")
+    
+    # Create dataloaders
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
+    
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
+    
+    # Save test indices for later evaluation
+    test_indices_file = os.path.join(args.output_dir, 'test_indices.json')
+    test_indices = test_dataset.indices if hasattr(test_dataset, 'indices') else list(range(len(test_dataset)))
+    with open(test_indices_file, 'w') as f:
+        json.dump({'test_indices': test_indices, 'test_size': len(test_dataset)}, f)
+    logger.info(f"Test indices saved to: {test_indices_file}")
+    
+    # Create model
+    logger.info("Creating model...")
+    model = FunctionSimilarityModel(
+        vocab_size=len(vocab),
+        hidden=args.hidden,
+        n_layers=args.n_layers,
+        attn_heads=args.attn_heads,
+        max_len=args.seq_len,
+        use_address_embedding=not args.no_address,
+        embedding_dim=args.embedding_dim,
+        freeze_bert=args.freeze_bert
+    )
+    
+    # Load pre-trained BERT
+    model.load_pretrained_bert(args.pretrained_bert)
+    
+    model = model.to(device)
+    
+    # Count parameters
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(f"Total parameters: {total_params:,}")
+    logger.info(f"Trainable parameters: {trainable_params:,}")
+    
+    # Loss and optimizer
+    criterion = ContrastiveLoss(margin=args.margin, metric='cosine')
+    optimizer = Adam(model.parameters(), lr=args.lr)
+    scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs)
+    
+    # Training loop
+    best_val_acc = 0.0
+    
+    logger.info("\nStarting training...")
+    logger.info("=" * 80)
+    
+    for epoch in range(args.epochs):
+        logger.info(f"\nEpoch {epoch+1}/{args.epochs}")
+        logger.info("-" * 80)
+        
+        # Train
+        train_loss, train_acc = train_epoch(model, train_loader, criterion, optimizer, device, logger)
+        logger.info(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
+        
+        # Validate
+        val_loss, val_acc = validate_epoch(model, val_loader, criterion, device, logger)
+        logger.info(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc:.4f}")
+        
+        # Update learning rate
+        scheduler.step()
+        logger.info(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
+        
+        # Save checkpoint
+        checkpoint = {
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'train_loss': train_loss,
+            'val_loss': val_loss,
+            'train_acc': train_acc,
+            'val_acc': val_acc,
+        }
+        
+        # Save latest checkpoint
+        latest_path = os.path.join(args.output_dir, 'checkpoint_latest.pt')
+        torch.save(checkpoint, latest_path)
+        
+        # Save best model
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_path = os.path.join(args.output_dir, 'best_model.pt')
+            torch.save(checkpoint, best_path)
+            logger.info(f"New best model saved! Val Acc: {val_acc:.4f}")
+    
+    logger.info("\n" + "=" * 80)
+    logger.info("Training complete!")
+    logger.info(f"Best validation accuracy: {best_val_acc:.4f}")
+    logger.info("=" * 80)
+
+
+if __name__ == '__main__':
+    main()

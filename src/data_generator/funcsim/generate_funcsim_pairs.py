@@ -14,13 +14,51 @@ of the same function:
 - O3 function -> ground truth: O0, O1, O2 of same function
 
 Usage:
-    python generate_funcsim_pairs.py /data/kun/funcsim_match/combined_deduplicated.json
+    python generate_funcsim_pairs.py /data/kun/funcsim_match/combined_deduplicated.json [missing_tokens_report.json]
 """
 
 import json
 import sys
 import os
-from typing import Dict, List
+from typing import Dict, List, Set, Optional
+
+
+def load_missing_tokens(report_path: str) -> Set[str]:
+    """
+    Load global missing tokens from the missing tokens report.
+    
+    Args:
+        report_path: Path to missing_tokens_report.json
+        
+    Returns:
+        Set of missing token strings
+    """
+    with open(report_path, 'r') as f:
+        report = json.load(f)
+    
+    missing_tokens = set(report.get("global_missing_tokens", {}).keys())
+    print(f"[INFO] Loaded {len(missing_tokens)} global missing tokens from report")
+    return missing_tokens
+
+
+def function_has_missing_tokens(instructions: List[str], missing_tokens: Set[str]) -> bool:
+    """
+    Check if any instruction contains a missing token.
+    
+    Args:
+        instructions: List of instruction strings
+        missing_tokens: Set of missing tokens to check
+        
+    Returns:
+        True if any instruction contains a missing token
+    """
+    for instr in instructions:
+        # Split instruction into tokens and check each
+        tokens = instr.split()
+        for token in tokens:
+            if token in missing_tokens:
+                return True
+    return False
 
 
 def generate_function_id(base_key: str, opt_level: str, func_idx: int) -> str:
@@ -45,12 +83,15 @@ def generate_function_id(base_key: str, opt_level: str, func_idx: int) -> str:
     return str(block_id)
 
 
-def create_function_blocks_and_pairs(deduplicated_file: str) -> tuple:
+def create_function_blocks_and_pairs(deduplicated_file: str, missing_tokens: Optional[Set[str]] = None) -> tuple:
     """
     Create function blocks and similarity pairs from deduplicated data.
     
     Args:
         deduplicated_file: Path to combined_deduplicated.json
+        missing_tokens: Optional set of tokens to filter out. If any optimization
+                        level of a function contains a missing token, the entire
+                        function (all 4 opt levels) is skipped.
         
     Returns:
         Tuple of (function_blocks, funcsim_pairs)
@@ -67,16 +108,41 @@ def create_function_blocks_and_pairs(deduplicated_file: str) -> tuple:
     
     opt_levels = ['O0', 'O1', 'O2', 'O3']
     
-    # Process each function (1-based indexing)
+    # Statistics for filtering
+    skipped_count = 0
+    processed_count = 0
+    
+    # Process each function (1-based indexing for output IDs)
+    output_func_idx = 0  # Will be incremented only for functions we keep
     for func_idx, (func_key, func_data) in enumerate(dedup_data.items(), start=1):
         project = func_data['project']
         binary = func_data['binary']
         func_name = func_data['function_name']
         
+        # Check if any optimization level contains missing tokens
+        if missing_tokens:
+            has_missing = False
+            for opt in opt_levels:
+                if function_has_missing_tokens(func_data[opt], missing_tokens):
+                    has_missing = True
+                    break
+            
+            if has_missing:
+                skipped_count += 1
+                if skipped_count <= 10:
+                    print(f"[FILTER] Skipping function '{func_name}' from {project}/{binary} (contains missing tokens)")
+                elif skipped_count == 11:
+                    print(f"[FILTER] ... (suppressing further skip messages)")
+                continue
+        
+        # Increment output function index only for functions we keep
+        output_func_idx += 1
+        processed_count += 1
+        
         # Create function block IDs for each optimization level
         func_ids = {}
         for opt in opt_levels:
-            func_id = generate_function_id(func_key, opt, func_idx)
+            func_id = generate_function_id(func_key, opt, output_func_idx)
             func_ids[opt] = func_id
             
             # Store function block with ONLY instructions (no metadata)
@@ -99,13 +165,16 @@ def create_function_blocks_and_pairs(deduplicated_file: str) -> tuple:
                 'ground_truth': ground_truth
             }
         
-        if func_idx % 100 == 0:
-            print(f"[INFO] Processed {func_idx} functions...")
+        if output_func_idx % 100 == 0:
+            print(f"[INFO] Processed {output_func_idx} valid functions (scanned {func_idx} total)...")
     
     print(f"\n[SUMMARY]")
-    print(f"  Total unique functions: {len(dedup_data)}")
+    print(f"  Total unique functions in input: {len(dedup_data)}")
+    if missing_tokens:
+        print(f"  Functions skipped (missing tokens): {skipped_count}")
+        print(f"  Functions kept: {processed_count}")
     print(f"  Function IDs: 1 to {len(function_blocks)} (sequential numbering)")
-    print(f"  Total function blocks: {len(function_blocks)} (4 opt levels × {len(dedup_data)} functions)")
+    print(f"  Total function blocks: {len(function_blocks)} (4 opt levels × {processed_count} functions)")
     print(f"  Total similarity pairs: {len(funcsim_pairs)}")
     print(f"  Each function has 3 ground truth matches")
     print(f"  ID mapping: func_N -> IDs [(N-1)*4+1, (N-1)*4+2, (N-1)*4+3, (N-1)*4+4] for [O0, O1, O2, O3]")
@@ -167,15 +236,25 @@ def save_outputs(function_blocks: Dict, funcsim_pairs: Dict, output_dir: str):
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python generate_funcsim_pairs.py <combined_deduplicated.json>")
+        print("Usage: python generate_funcsim_pairs.py <combined_deduplicated.json> [missing_tokens_report.json]")
         print("Example: python generate_funcsim_pairs.py /data/kun/funcsim_match/combined_deduplicated.json")
+        print("Example with filtering: python generate_funcsim_pairs.py /data/kun/funcsim_match/combined_deduplicated.json /data/kun/funcsim_match/missing_tokens_report.json")
         sys.exit(1)
     
     deduplicated_file = sys.argv[1]
+    missing_tokens_file = sys.argv[2] if len(sys.argv) > 2 else None
     
     if not os.path.exists(deduplicated_file):
         print(f"[ERROR] File not found: {deduplicated_file}")
         sys.exit(1)
+    
+    # Load missing tokens if provided
+    missing_tokens = None
+    if missing_tokens_file:
+        if not os.path.exists(missing_tokens_file):
+            print(f"[ERROR] Missing tokens file not found: {missing_tokens_file}")
+            sys.exit(1)
+        missing_tokens = load_missing_tokens(missing_tokens_file)
     
     # Output to same directory as input file
     output_dir = os.path.dirname(deduplicated_file)
@@ -184,12 +263,16 @@ def main():
     print("Generate Function Similarity Pairs")
     print("=" * 80)
     print(f"Input file: {deduplicated_file}")
+    if missing_tokens_file:
+        print(f"Missing tokens filter: {missing_tokens_file}")
+    else:
+        print(f"Missing tokens filter: None (no filtering)")
     print(f"Output directory: {output_dir}")
     print("=" * 80)
     
     # Create function blocks and pairs
     print("\n[STEP 1] Creating function blocks and similarity pairs...")
-    function_blocks, funcsim_pairs = create_function_blocks_and_pairs(deduplicated_file)
+    function_blocks, funcsim_pairs = create_function_blocks_and_pairs(deduplicated_file, missing_tokens)
     
     # Save outputs
     print("\n[STEP 2] Saving outputs...")

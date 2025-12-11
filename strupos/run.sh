@@ -5,6 +5,9 @@
 
 set -e
 
+# Set GPU to use (GPU 1)
+export CUDA_VISIBLE_DEVICES=1
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -13,6 +16,7 @@ NC='\033[0m'
 echo "========================================"
 echo "Instruction Masking Training"
 echo "========================================"
+echo "Using GPU: 1 (CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES)"
 echo ""
 
 # =============================================================================
@@ -25,8 +29,9 @@ echo ""
 # Experiment 1: IMC + MLM + Address + Var (Full features)
 # -> Auto-generates: imc_mlm_addr_var
 # -----------------------------------------------------------------------------
-TASKS="--enable_imc --enable_mlm"
-USE_ADDRESS_EMBEDDING=true
+# TASKS="--enable_imc --enable_mlm"
+TASKS="--enable_mlm"
+USE_ADDRESS_EMBEDDING=false
 USE_VAR_EMBEDDING=true
 
 # -----------------------------------------------------------------------------

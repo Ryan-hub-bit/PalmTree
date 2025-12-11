@@ -59,7 +59,7 @@ class AddressAwareBERT(nn.Module):
             for _ in range(n_layers)
         ])
     
-    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos):
+    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None):
         """
         Forward pass.
         
@@ -69,6 +69,7 @@ class AddressAwareBERT(nn.Module):
             binary_pos: [batch_size, seq_len]
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
+            var_offsets: [batch_size, seq_len] (optional, for var positional embedding)
             
         Returns:
             output: [batch_size, seq_len, hidden]
@@ -76,8 +77,8 @@ class AddressAwareBERT(nn.Module):
         # Create attention mask (mask out padding tokens)
         mask = (token_ids > 0).unsqueeze(1).repeat(1, token_ids.size(1), 1).unsqueeze(1)
         
-        # Get embeddings with address awareness
-        x = self.embedding(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
+        # Get embeddings with address and var awareness
+        x = self.embedding(token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets)
         
         # Pass through transformer blocks
         for transformer in self.transformer_blocks:
@@ -169,7 +170,7 @@ class AddressAwareBERTForPretraining(nn.Module):
         else:
             self.SCOPE = None
     
-    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg'):
+    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None, corpus_type='cfg'):
         """
         Forward pass for pretraining.
         
@@ -179,6 +180,7 @@ class AddressAwareBERTForPretraining(nn.Module):
             binary_pos: [batch_size, seq_len]
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
+            var_offsets: [batch_size, seq_len] (optional, for var positional embedding)
             corpus_type: 'cfg' or 'dfg' - determines which NSP head to use
             
         Returns:
@@ -186,7 +188,7 @@ class AddressAwareBERTForPretraining(nn.Module):
             nsp_output: [batch_size, 2] - binary classification for NSP (None if disabled)
         """
         # Get BERT output
-        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
+        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets)
         
         # MLM prediction for all tokens (only if enabled)
         mlm_output = self.MLM(sequence_output) if self.enable_mlm else None
@@ -200,7 +202,7 @@ class AddressAwareBERTForPretraining(nn.Module):
         
         return mlm_output, nsp_output
     
-    def forward_im(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, corpus_type='cfg'):
+    def forward_im(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None, corpus_type='cfg'):
         """
         Forward pass for instruction masking.
         
@@ -210,13 +212,14 @@ class AddressAwareBERTForPretraining(nn.Module):
             binary_pos: [batch_size, seq_len]
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
+            var_offsets: [batch_size, seq_len] (optional, for var positional embedding)
             corpus_type: 'cfg' or 'dfg' - determines which IM head to use
             
         Returns:
             im_output: [batch_size, seq_len, vocab_size] - predictions for instruction-masked tokens
         """
         # Get BERT output
-        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
+        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets)
         
         # Use appropriate IM head based on corpus type
         im_output = None
@@ -227,7 +230,7 @@ class AddressAwareBERTForPretraining(nn.Module):
         
         return im_output
     
-    def forward_scope(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos):
+    def forward_scope(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None):
         """
         Forward pass for scope prediction.
         
@@ -237,6 +240,7 @@ class AddressAwareBERTForPretraining(nn.Module):
             binary_pos: [batch_size, seq_len]
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
+            var_offsets: [batch_size, seq_len] (optional, for var positional embedding)
             
         Returns:
             scope_output: [batch_size, 3] - 3-class classification for scope (None if disabled)
@@ -245,7 +249,7 @@ class AddressAwareBERTForPretraining(nn.Module):
             return None
         
         # Get BERT output
-        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos)
+        sequence_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets)
         
         # Scope prediction using [CLS] token
         cls_output = sequence_output[:, 0, :]

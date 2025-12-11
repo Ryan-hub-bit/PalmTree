@@ -96,16 +96,18 @@ class ScopeDataset(Dataset):
         Returns:
             tokens: List of token strings
             positions: List of (binary_pos, function_pos, bb_pos) tuples for each token
+            var_offsets: List of var offset values (0 for non-var tokens)
         """
         inst_str = inst_str.strip()
         if not inst_str:
-            return [], []
+            return [], [], []
         
         # Match main instruction pattern
         main_match = self.addr_pattern.match(inst_str)
         if not main_match:
             # No address info, treat as regular tokens
-            return inst_str.split(), [(0.0, 0.0, 0.0)] * len(inst_str.split())
+            tokens = inst_str.split()
+            return tokens, [(0.0, 0.0, 0.0)] * len(tokens), [0] * len(tokens)
         
         opcode = main_match.group(1)
         bnorm = float(main_match.group(3))
@@ -115,6 +117,7 @@ class ScopeDataset(Dataset):
         # Start with opcode and its position
         tokens = [opcode]
         positions = [(bnorm, fnorm, bbnorm)]
+        var_offsets = [0]  # Opcode is not a var
         
         # Get operands (everything after the address part)
         operands_str = inst_str[main_match.end():].strip()
@@ -131,12 +134,24 @@ class ScopeDataset(Dataset):
                     nested_bbnorm = float(nested_match.group(4))
                     tokens.append('address')
                     positions.append((nested_bnorm, nested_fnorm, nested_bbnorm))
+                    var_offsets.append(0)  # address is not a var
+                elif operand.startswith('var(') and operand.endswith(')'):
+                    # Extract var offset: var(0x10) -> offset = 16
+                    var_hex = operand[4:-1]  # Remove 'var(' and ')'
+                    try:
+                        var_offset_value = int(var_hex, 16)
+                    except ValueError:
+                        var_offset_value = 0
+                    tokens.append(operand)
+                    positions.append((0.0, 0.0, 0.0))  # var has no position info
+                    var_offsets.append(var_offset_value)
                 else:
                     # Regular operand (rax, imm, etc.) - no position info
                     tokens.append(operand)
                     positions.append((0.0, 0.0, 0.0))
+                    var_offsets.append(0)  # Not a var
         
-        return tokens, positions
+        return tokens, positions, var_offsets
     
     def _convert_to_ids(self, tokens):
         """Convert token strings to vocabulary IDs."""
@@ -154,6 +169,7 @@ class ScopeDataset(Dataset):
                 - binary_pos: Binary-level positions
                 - function_pos: Function-level positions
                 - bb_pos: Basic block-level positions
+                - var_offsets: Var offset values (0 for non-var tokens)
         """
         line = self.lines[index]
         
@@ -176,8 +192,8 @@ class ScopeDataset(Dataset):
             scope_label = int(parts[2]) if parts[2].isdigit() else 0
         
         # Parse both instructions
-        tokens1, positions1 = self._parse_instruction(inst1_str)
-        tokens2, positions2 = self._parse_instruction(inst2_str)
+        tokens1, positions1, var_offsets1 = self._parse_instruction(inst1_str)
+        tokens2, positions2, var_offsets2 = self._parse_instruction(inst2_str)
         
         # Convert to IDs
         ids1 = self._convert_to_ids(tokens1)
@@ -189,6 +205,8 @@ class ScopeDataset(Dataset):
         ids2 = ids2[:max_len_per_inst]
         positions1 = positions1[:max_len_per_inst]
         positions2 = positions2[:max_len_per_inst]
+        var_offsets1 = var_offsets1[:max_len_per_inst]
+        var_offsets2 = var_offsets2[:max_len_per_inst]
         
         # Build sequence: [SOS] inst1 [EOS] inst2 [EOS]
         bert_input = [self.vocab.sos_index] + ids1 + [self.vocab.eos_index] + ids2 + [self.vocab.eos_index]
@@ -202,6 +220,10 @@ class ScopeDataset(Dataset):
         function_pos = [pos[1] for pos in all_positions]
         bb_pos = [pos[2] for pos in all_positions]
         
+        # Build var_offsets sequence
+        # Special tokens ([SOS], [EOS]) get 0 - not a var
+        all_var_offsets = [0] + var_offsets1 + [0] + var_offsets2 + [0]
+        
         # Pad to seq_len
         padding_len = self.seq_len - len(bert_input)
         bert_input += [self.vocab.pad_index] * padding_len
@@ -209,6 +231,7 @@ class ScopeDataset(Dataset):
         binary_pos += [0.0] * padding_len
         function_pos += [0.0] * padding_len
         bb_pos += [0.0] * padding_len
+        all_var_offsets += [0] * padding_len
         
         return {
             'bert_input': torch.tensor(bert_input, dtype=torch.long),
@@ -217,4 +240,5 @@ class ScopeDataset(Dataset):
             'binary_pos': torch.tensor(binary_pos, dtype=torch.float),
             'function_pos': torch.tensor(function_pos, dtype=torch.float),
             'bb_pos': torch.tensor(bb_pos, dtype=torch.float),
+            'var_offsets': torch.tensor(all_var_offsets, dtype=torch.long),
         }

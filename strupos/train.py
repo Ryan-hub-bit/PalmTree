@@ -127,16 +127,17 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             imc_binary_pos = imc_batch['binary_pos'].to(device)
             imc_function_pos = imc_batch['function_pos'].to(device)
             imc_bb_pos = imc_batch['bb_pos'].to(device)
+            imc_var_offsets = imc_batch['var_offsets'].to(device)
             
             if hasattr(model, 'module'):
                 imc_output = model.module.forward_im(
                     imc_input, imc_segment,
-                    imc_binary_pos, imc_function_pos, imc_bb_pos
+                    imc_binary_pos, imc_function_pos, imc_bb_pos, imc_var_offsets
                 )
             else:
                 imc_output = model.forward_im(
                     imc_input, imc_segment,
-                    imc_binary_pos, imc_function_pos, imc_bb_pos
+                    imc_binary_pos, imc_function_pos, imc_bb_pos, imc_var_offsets
                 )
             
             imc_output = imc_output.view(-1, imc_output.size(-1))
@@ -154,16 +155,17 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             imd_binary_pos = imd_batch['binary_pos'].to(device)
             imd_function_pos = imd_batch['function_pos'].to(device)
             imd_bb_pos = imd_batch['bb_pos'].to(device)
+            imd_var_offsets = imd_batch['var_offsets'].to(device)
             
             if hasattr(model, 'module'):
                 imd_output = model.module.forward_im(
                     imd_input, imd_segment,
-                    imd_binary_pos, imd_function_pos, imd_bb_pos
+                    imd_binary_pos, imd_function_pos, imd_bb_pos, imd_var_offsets
                 )
             else:
                 imd_output = model.forward_im(
                     imd_input, imd_segment,
-                    imd_binary_pos, imd_function_pos, imd_bb_pos
+                    imd_binary_pos, imd_function_pos, imd_bb_pos, imd_var_offsets
                 )
             
             imd_output = imd_output.view(-1, imd_output.size(-1))
@@ -181,11 +183,12 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             mlm_binary_pos = mlm_batch['binary_pos'].to(device)
             mlm_function_pos = mlm_batch['function_pos'].to(device)
             mlm_bb_pos = mlm_batch['bb_pos'].to(device)
+            mlm_var_offsets = mlm_batch['var_offsets'].to(device)
             
             # Use standard forward pass for MLM
             mlm_output, _ = model(
                 mlm_input, mlm_segment,
-                mlm_binary_pos, mlm_function_pos, mlm_bb_pos
+                mlm_binary_pos, mlm_function_pos, mlm_bb_pos, mlm_var_offsets
             )
             
             mlm_output = mlm_output.view(-1, mlm_output.size(-1))
@@ -206,17 +209,18 @@ def train_epoch(model, data_loader, scope_loader, optimizer, device, log_freq=10
             scope_binary_pos = scope_batch['binary_pos'].to(device)
             scope_function_pos = scope_batch['function_pos'].to(device)
             scope_bb_pos = scope_batch['bb_pos'].to(device)
+            scope_var_offsets = scope_batch['var_offsets'].to(device)
             scope_labels = scope_batch['scope_label'].to(device)
             
             if hasattr(model, 'module'):
                 scope_output = model.module.forward_scope(
                     scope_token_ids, scope_segment_labels,
-                    scope_binary_pos, scope_function_pos, scope_bb_pos
+                    scope_binary_pos, scope_function_pos, scope_bb_pos, scope_var_offsets
                 )
             else:
                 scope_output = model.forward_scope(
                     scope_token_ids, scope_segment_labels,
-                    scope_binary_pos, scope_function_pos, scope_bb_pos
+                    scope_binary_pos, scope_function_pos, scope_bb_pos, scope_var_offsets
                 )
             
             scope_loss = scope_criterion(scope_output, scope_labels)
@@ -302,16 +306,17 @@ def validate_epoch(model, data_loader, scope_loader, device, logger=None,
                 imc_binary_pos = imc_batch['binary_pos'].to(device)
                 imc_function_pos = imc_batch['function_pos'].to(device)
                 imc_bb_pos = imc_batch['bb_pos'].to(device)
+                imc_var_offsets = imc_batch['var_offsets'].to(device)
                 
                 if hasattr(model, 'module'):
                     imc_output = model.module.forward_im(
                         imc_input, imc_segment,
-                        imc_binary_pos, imc_function_pos, imc_bb_pos
+                        imc_binary_pos, imc_function_pos, imc_bb_pos, imc_var_offsets
                     )
                 else:
                     imc_output = model.forward_im(
                         imc_input, imc_segment,
-                        imc_binary_pos, imc_function_pos, imc_bb_pos
+                        imc_binary_pos, imc_function_pos, imc_bb_pos, imc_var_offsets
                     )
                 
                 imc_output = imc_output.view(-1, imc_output.size(-1))
@@ -329,16 +334,17 @@ def validate_epoch(model, data_loader, scope_loader, device, logger=None,
                 imd_binary_pos = imd_batch['binary_pos'].to(device)
                 imd_function_pos = imd_batch['function_pos'].to(device)
                 imd_bb_pos = imd_batch['bb_pos'].to(device)
+                imd_var_offsets = imd_batch['var_offsets'].to(device)
                 
                 if hasattr(model, 'module'):
                     imd_output = model.module.forward_im(
                         imd_input, imd_segment,
-                        imd_binary_pos, imd_function_pos, imd_bb_pos
+                        imd_binary_pos, imd_function_pos, imd_bb_pos, imd_var_offsets
                     )
                 else:
                     imd_output = model.forward_im(
                         imd_input, imd_segment,
-                        imd_binary_pos, imd_function_pos, imd_bb_pos
+                        imd_binary_pos, imd_function_pos, imd_bb_pos, imd_var_offsets
                     )
                 
                 imd_output = imd_output.view(-1, imd_output.size(-1))
@@ -356,10 +362,11 @@ def validate_epoch(model, data_loader, scope_loader, device, logger=None,
                 mlm_binary_pos = mlm_batch['binary_pos'].to(device)
                 mlm_function_pos = mlm_batch['function_pos'].to(device)
                 mlm_bb_pos = mlm_batch['bb_pos'].to(device)
+                mlm_var_offsets = mlm_batch['var_offsets'].to(device)
                 
                 mlm_output, _ = model(
                     mlm_input, mlm_segment,
-                    mlm_binary_pos, mlm_function_pos, mlm_bb_pos
+                    mlm_binary_pos, mlm_function_pos, mlm_bb_pos, mlm_var_offsets
                 )
                 
                 mlm_output = mlm_output.view(-1, mlm_output.size(-1))
@@ -380,17 +387,18 @@ def validate_epoch(model, data_loader, scope_loader, device, logger=None,
                 scope_binary_pos = scope_batch['binary_pos'].to(device)
                 scope_function_pos = scope_batch['function_pos'].to(device)
                 scope_bb_pos = scope_batch['bb_pos'].to(device)
+                scope_var_offsets = scope_batch['var_offsets'].to(device)
                 scope_labels = scope_batch['scope_label'].to(device)
                 
                 if hasattr(model, 'module'):
                     scope_output = model.module.forward_scope(
                         scope_token_ids, scope_segment_labels,
-                        scope_binary_pos, scope_function_pos, scope_bb_pos
+                        scope_binary_pos, scope_function_pos, scope_bb_pos, scope_var_offsets
                     )
                 else:
                     scope_output = model.forward_scope(
                         scope_token_ids, scope_segment_labels,
-                        scope_binary_pos, scope_function_pos, scope_bb_pos
+                        scope_binary_pos, scope_function_pos, scope_bb_pos, scope_var_offsets
                     )
                 
                 scope_loss = scope_criterion(scope_output, scope_labels)
