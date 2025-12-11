@@ -32,7 +32,7 @@ echo ""
 # TASKS="--enable_imc --enable_mlm"
 TASKS="--enable_mlm"
 USE_ADDRESS_EMBEDDING=false
-USE_VAR_EMBEDDING=true
+USE_VAR_EMBEDDING=false
 
 # -----------------------------------------------------------------------------
 # Experiment 2: IMC + MLM + Address (No Var embedding)
