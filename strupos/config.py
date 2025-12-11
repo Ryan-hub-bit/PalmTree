@@ -7,12 +7,12 @@ Actual training uses command-line arguments in run_*.sh scripts.
 
 # ==================== Data Paths (Reference) ====================
 # These paths are used in shell scripts, not loaded directly
-cfg_train = "/work/kliu14/vardataset/train_cfg.txt"
-dfg_train = "/work/kliu14/vardataset/train_dfg.txt"
-cfg_val = "/work/kliu14/vardataset/val_cfg.txt"
-dfg_val = "/work/kliu14/vardataset/val_dfg.txt"
-cfg_test = "/work/kliu14/vardataset/test_cfg.txt"
-dfg_test = "/work/kliu14/vardataset/test_dfg.txt"
+cfg_train = "/data/kun/dataset/train_cfg.txt"
+dfg_train = "/data/kun/dataset/train_dfg.txt"
+cfg_val = "/data/kun/dataset/val_cfg.txt"
+dfg_val = "/data/kun/dataset/val_dfg.txt"
+cfg_test = "/data/kun/dataset/test_cfg.txt"
+dfg_test = "/data/kun/dataset/test_dfg.txt"
 vocab_path = "./vocab.txt"
 
 # ==================== Model Architecture (Reference) ====================

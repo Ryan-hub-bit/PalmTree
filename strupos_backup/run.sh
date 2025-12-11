@@ -5,9 +5,6 @@
 
 set -e
 
-# Set GPU to use (GPU 1)
-export CUDA_VISIBLE_DEVICES=1
-
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -16,7 +13,6 @@ NC='\033[0m'
 echo "========================================"
 echo "Instruction Masking Training"
 echo "========================================"
-echo "Using GPU: 1 (CUDA_VISIBLE_DEVICES=$CUDA_VISIBLE_DEVICES)"
 echo ""
 
 # =============================================================================
@@ -29,9 +25,8 @@ echo ""
 # Experiment 1: IMC + MLM + Address + Var (Full features)
 # -> Auto-generates: imc_mlm_addr_var
 # -----------------------------------------------------------------------------
-# TASKS="--enable_imc --enable_mlm"
-TASKS="--enable_mlm"
-USE_ADDRESS_EMBEDDING=false
+TASKS="--enable_imc --enable_mlm"
+USE_ADDRESS_EMBEDDING=true
 USE_VAR_EMBEDDING=true
 
 # -----------------------------------------------------------------------------
@@ -135,15 +130,15 @@ VAL_PERCENTAGE=1    # Use 20% of validation data
 
 # Data paths
 VOCAB_PATH="./vocab.pkl"
-CFG_TRAIN="/data/kun/dataset/train_cfg.txt"
-DFG_TRAIN="/data/kun/dataset/train_dfg.txt"
-CFG_VAL="/data/kun/dataset/val_cfg.txt"
-DFG_VAL="/data/kun/dataset/val_dfg.txt"
-SCOPE_TRAIN="/data/kun/dataset/train_scope.txt"
-SCOPE_VAL="/data/kun/dataset/val_scope.txt"
+CFG_TRAIN="/work/kliu14/vardataset/train_cfg.txt"
+DFG_TRAIN="/work/kliu14/vardataset/train_dfg.txt"
+CFG_VAL="/work/kliu14/vardataset/val_cfg.txt"
+DFG_VAL="/work/kliu14/vardataset/val_dfg.txt"
+SCOPE_TRAIN="/work/kliu14/vardataset/train_scope.txt"
+SCOPE_VAL="/work/kliu14/vardataset/val_scope.txt"
 # Test data (only used for vocab generation, not training)
-CFG_TEST="/data/kun/dataset/test_cfg.txt"
-DFG_TEST="/data/kun/dataset/test_dfg.txt"
+CFG_TEST="/work/kliu14/vardataset/test_cfg.txt"
+DFG_TEST="/work/kliu14/vardataset/test_dfg.txt"
 
 # Multi-GPU
 CUDA="--cuda"

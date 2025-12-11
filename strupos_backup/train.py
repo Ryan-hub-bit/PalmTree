@@ -24,10 +24,26 @@ import json
 import logging
 from datetime import datetime
 from tqdm import tqdm
+import random
+import numpy as np
+
+
+def set_seed(seed):
+    """Set random seed for reproducibility."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        # torch.backends.cudnn.deterministic = True
+        # torch.backends.cudnn.benchmark = False
+
 
 # Import local modules
 from vocab import WordVocab
-from dataloader_instruction_mask import InstructionMaskingDataset
+from create_vocab import create_vocab
+from dataloader import InstructionMaskingDataset
 from dataloader_scope import ScopeDataset
 from model import AddressAwareBERT, AddressAwareBERTForPretraining
 
@@ -407,6 +423,9 @@ def main():
     parser.add_argument("--dfg_val", type=str, help="Validation DFG corpus")
     parser.add_argument("--scope_train", type=str, help="Training scope corpus")
     parser.add_argument("--scope_val", type=str, help="Validation scope corpus")
+    # Test data (only used for vocab generation, not training)
+    parser.add_argument("--cfg_test", type=str, help="Test CFG corpus (for vocab only)")
+    parser.add_argument("--dfg_test", type=str, help="Test DFG corpus (for vocab only)")
     parser.add_argument("--vocab", type=str, required=True, help="Vocabulary file")
     
     # Model args
@@ -441,6 +460,8 @@ def main():
     parser.add_argument("--enable_scope", action="store_true", help="Enable Scope Prediction")
     parser.add_argument("--use_address_embedding", action="store_true", default=True, help="Use address embeddings")
     parser.add_argument("--disable_address_embedding", action="store_true", help="Disable address embeddings")
+    parser.add_argument("--use_var_embedding", action="store_true", default=True, help="Use var offset embeddings for var(0xXX) tokens")
+    parser.add_argument("--disable_var_embedding", action="store_true", help="Disable var offset embeddings")
     
     # Output args
     parser.add_argument("--output_dir", type=str, required=True, help="Output directory")
@@ -453,6 +474,9 @@ def main():
     parser.add_argument("--cuda", action="store_true", help="Use CUDA")
     parser.add_argument("--multi_gpu", action="store_true", help="Use multiple GPUs")
     
+    # Reproducibility
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    
     args = parser.parse_args()
     
     # Handle disable flags
@@ -462,6 +486,12 @@ def main():
         args.enable_mlm = False
     if args.disable_address_embedding:
         args.use_address_embedding = False
+    if args.disable_var_embedding:
+        args.use_var_embedding = False
+    
+    # Set random seed for reproducibility
+    set_seed(args.seed)
+    print(f"Random seed set to: {args.seed}")
     
     # Setup device
     device = torch.device("cuda" if args.cuda and torch.cuda.is_available() else "cpu")
@@ -491,9 +521,20 @@ def main():
         json.dump(vars(args), f, indent=2)
     logger.info(f"Arguments saved to: {os.path.join(args.output_dir, 'args.json')}")
     
-    # Load vocabulary
-    logger.info(f"Loading vocabulary from {args.vocab}")
-    vocab = WordVocab.load_vocab(args.vocab)
+    # Load or create vocabulary
+    # Include train, val, and test data for vocab generation
+    # Test data is only used for vocab, not for training
+    data_files = [
+        args.cfg_train,
+        args.dfg_train,
+        args.cfg_val,
+        args.dfg_val,
+        args.scope_train,
+        args.scope_val,
+        args.cfg_test,  # Only for vocab generation
+        args.dfg_test,  # Only for vocab generation
+    ]
+    vocab = create_vocab(data_files, args.vocab, logger=logger)
     logger.info(f"Vocabulary size: {len(vocab)}")
     
     # Create datasets
@@ -595,6 +636,7 @@ def main():
     logger.info(f"  - MLM: {args.enable_mlm}")
     logger.info(f"  - SCOPE: {args.enable_scope}")
     logger.info(f"  - Address Embedding: {args.use_address_embedding}")
+    logger.info(f"  - Var Embedding: {args.use_var_embedding}")
     
     bert = AddressAwareBERT(
         vocab_size=len(vocab),
@@ -603,7 +645,8 @@ def main():
         attn_heads=args.attn_heads,
         dropout=args.dropout,
         max_len=args.seq_len,
-        use_address_embedding=args.use_address_embedding
+        use_address_embedding=args.use_address_embedding,
+        use_var_embedding=args.use_var_embedding
     )
     
     model = AddressAwareBERTForPretraining(
