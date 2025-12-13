@@ -10,12 +10,17 @@ set -e
 FUNCTION_BLOCKS="/data/kun/funcsim_match/function_blocks.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../strupos/vocab.pkl"
+
+# Pre-trained BERT model
+# The script will auto-detect if this model has address/var embeddings:
+# - If YES (e.g., mlm_address/best_bert.pt): Use address/var info from data
+# - If NO  (e.g., mlm/best_bert.pt):         Set all positions/offsets to 0
 PRETRAINED_BERT="../../output/mlm/best_bert.pt"
 
 # Output
-OUTPUT_DIR="../../output/funcsim"
-LOG_DIR="../../log/funcsim"
-EXPERIMENT_NAME="funcsim_mlm"
+OUTPUT_DIR="../../output/funcsim/addr"
+LOG_DIR="../../log/funcsim/addr"
+EXPERIMENT_NAME="funcsim_mlm_addr"
 
 # Model config (must match pre-trained BERT)
 HIDDEN=768
@@ -24,14 +29,28 @@ ATTN_HEADS=12
 EMBEDDING_DIM=256
 
 # Training config
-BATCH_SIZE=32
-EPOCHS=20
+BATCH_SIZE=256
+EPOCHS=5
 LR=1e-4
-SEQ_LEN=512
+SEQ_LEN=60
 NEGATIVE_SAMPLES=3
 MARGIN=1.0
-TRAIN_SPLIT=0.9  # 80% for training, 20% for testing
-VAL_SPLIT=0.1    # 10% of training set for validation
+
+# Data usage configuration
+# DATASET_FRACTION: Fraction of entire dataset to use (for faster experiments)
+# Set to 1.0 to use full dataset, 0.2 for 20%, 0.1 for 10%, etc.
+DATASET_FRACTION=0.2  # Use only 20% of entire dataset
+
+# Data split configuration (applied to the fraction above)
+# TRAIN_SPLIT: Percentage for train+val (rest goes to test)
+# VAL_SPLIT: Percentage of train+val that goes to validation
+#
+# With DATASET_FRACTION=0.2, TRAIN_SPLIT=0.8, VAL_SPLIT=0.125:
+# → Use 20% of data, then split: 14% train, 2% val, 4% test (of total dataset)
+#
+TRAIN_SPLIT=0.8  # 80% of selected data for training+validation, 20% for testing
+VAL_SPLIT=0.125  # 12.5% of train+val for validation
+# Result within 20% selected: 70% train, 10% val, 20% test
 
 # Device
 DEVICE="cuda"
@@ -87,6 +106,7 @@ python3 train.py \
   --seq_len ${SEQ_LEN} \
   --negative_samples ${NEGATIVE_SAMPLES} \
   --margin ${MARGIN} \
+  --dataset_fraction ${DATASET_FRACTION} \
   --train_split ${TRAIN_SPLIT} \
   --val_split ${VAL_SPLIT} \
   --output_dir "${OUTPUT_DIR}" \

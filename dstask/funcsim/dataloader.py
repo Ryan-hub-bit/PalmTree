@@ -49,6 +49,10 @@ class FunctionSimilarityDataset(Dataset):
         self.seq_len = seq_len
         self.negative_samples = negative_samples
         
+        # Flag to control whether to load address/var info or set to 0
+        # Will be set based on what the loaded BERT model has
+        self.use_address_var = True
+        
         # Special token IDs
         self.pad_idx = vocab.stoi.get('<pad>', 0)
         self.unk_idx = vocab.stoi.get('<unk>', 1)
@@ -62,14 +66,20 @@ class FunctionSimilarityDataset(Dataset):
         self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
         
         # Load function blocks
-        print(f"[INFO] Loading function blocks from {function_blocks_file}")
-        with open(function_blocks_file, 'r') as f:
-            self.function_blocks = json.load(f)
+        if function_blocks_file is not None:
+            print(f"[INFO] Loading function blocks from {function_blocks_file}")
+            with open(function_blocks_file, 'r') as f:
+                self.function_blocks = json.load(f)
+        else:
+            self.function_blocks = {}
         
         # Load ground truth pairs
-        print(f"[INFO] Loading ground truth pairs from {funcsim_pairs_file}")
-        with open(funcsim_pairs_file, 'r') as f:
-            self.funcsim_pairs = json.load(f)
+        if funcsim_pairs_file is not None:
+            print(f"[INFO] Loading ground truth pairs from {funcsim_pairs_file}")
+            with open(funcsim_pairs_file, 'r') as f:
+                self.funcsim_pairs = json.load(f)
+        else:
+            self.funcsim_pairs = {}
         
         # Create training pairs
         self.training_pairs = self._create_training_pairs()
@@ -240,10 +250,18 @@ class FunctionSimilarityDataset(Dataset):
         # Pad
         padding_len = self.seq_len - len(token_ids)
         token_ids = token_ids + [self.pad_idx] * padding_len
-        all_binary_pos = all_binary_pos + [0.0] * padding_len
-        all_function_pos = all_function_pos + [0.0] * padding_len
-        all_bb_pos = all_bb_pos + [0.0] * padding_len
-        all_var_offsets = all_var_offsets + [0] * padding_len
+        
+        # If model doesn't have address/var embeddings, set everything to 0
+        if not self.use_address_var:
+            all_binary_pos = [0.0] * self.seq_len
+            all_function_pos = [0.0] * self.seq_len
+            all_bb_pos = [0.0] * self.seq_len
+            all_var_offsets = [0] * self.seq_len
+        else:
+            all_binary_pos = all_binary_pos + [0.0] * padding_len
+            all_function_pos = all_function_pos + [0.0] * padding_len
+            all_bb_pos = all_bb_pos + [0.0] * padding_len
+            all_var_offsets = all_var_offsets + [0] * padding_len
         
         # Segment labels (all 0 for single function)
         segment_labels = [0] * self.seq_len

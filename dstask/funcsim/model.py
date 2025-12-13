@@ -48,7 +48,7 @@ class FunctionSimilarityModel(nn.Module):
         n_layers=12,
         attn_heads=12,
         dropout=0.1,
-        max_len=512,
+        max_len=60,
         use_address_embedding=True,
         use_var_embedding=True,
         embedding_dim=256,
@@ -156,10 +156,13 @@ class FunctionSimilarityModel(nn.Module):
     
     def load_pretrained_bert(self, checkpoint_path):
         """
-        Load pre-trained BERT weights.
+        Load pre-trained BERT weights and detect if it has address/var embeddings.
         
         Args:
             checkpoint_path: Path to pre-trained BERT checkpoint
+            
+        Returns:
+            dict with 'has_address' and 'has_var' flags
         """
         print(f"[INFO] Loading pre-trained BERT from {checkpoint_path}")
         checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
@@ -187,6 +190,24 @@ class FunctionSimilarityModel(nn.Module):
             print(f"[INFO] Checkpoint is a model object (type: {type(checkpoint).__name__})")
             state_dict = checkpoint.state_dict()
         
+        # Detect if checkpoint has address/var embeddings
+        # Look for specific keys in the embedding module
+        has_address = any('address_position' in k or 'address_embedding' in k for k in state_dict.keys())
+        has_var = any('var_position' in k or 'var_embedding' in k for k in state_dict.keys())
+        
+        print(f"[INFO] Checkpoint detection:")
+        print(f"  - Has address embeddings: {has_address}")
+        print(f"  - Has var embeddings: {has_var}")
+        
+        # Debug: show some keys to help verify
+        embedding_keys = [k for k in state_dict.keys() if 'embedding' in k or 'position' in k]
+        if embedding_keys:
+            print(f"[DEBUG] Found {len(embedding_keys)} embedding-related keys:")
+            for key in embedding_keys[:5]:  # Show first 5
+                print(f"    {key}")
+            if len(embedding_keys) > 5:
+                print(f"    ... and {len(embedding_keys) - 5} more")
+        
         # Load weights
         missing_keys, unexpected_keys = self.bert.load_state_dict(state_dict, strict=False)
         
@@ -196,6 +217,8 @@ class FunctionSimilarityModel(nn.Module):
             print(f"[WARNING] Unexpected keys: {unexpected_keys}")
         
         print("[INFO] Pre-trained BERT loaded successfully")
+        
+        return {'has_address': has_address, 'has_var': has_var}
 
 
 class ContrastiveLoss(nn.Module):

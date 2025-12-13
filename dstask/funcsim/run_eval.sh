@@ -25,8 +25,9 @@ EMBEDDING_DIM=256
 
 # Evaluation config
 BATCH_SIZE=32
-SEQ_LEN=512
+SEQ_LEN=60
 NEGATIVE_SAMPLES=3
+POOL_SIZE=10000  # Limit retrieval pool size (comment out or set to 0 to use all)
 
 # Device
 DEVICE="cuda"
@@ -55,6 +56,12 @@ if [ ! -f "$TEST_INDICES" ]; then
 fi
 
 # Run evaluation
+if [ -n "${POOL_SIZE}" ] && [ "${POOL_SIZE}" -gt 0 ]; then
+  POOL_SIZE_ARG="--pool_size ${POOL_SIZE}"
+else
+  POOL_SIZE_ARG=""
+fi
+
 python3 evaluate.py \
   --function_blocks "${FUNCTION_BLOCKS}" \
   --funcsim_pairs "${FUNCSIM_PAIRS}" \
@@ -68,6 +75,7 @@ python3 evaluate.py \
   --batch_size ${BATCH_SIZE} \
   --seq_len ${SEQ_LEN} \
   --negative_samples ${NEGATIVE_SAMPLES} \
+  ${POOL_SIZE_ARG} \
   --output "${OUTPUT}" \
   --log_dir "${LOG_DIR}" \
   --device "${DEVICE}" \

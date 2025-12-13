@@ -194,9 +194,10 @@ def main():
     parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
     parser.add_argument("--epochs", type=int, default=10, help="Number of epochs")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
-    parser.add_argument("--seq_len", type=int, default=512, help="Maximum sequence length")
+    parser.add_argument("--seq_len", type=int, default=60, help="Maximum sequence length")
     parser.add_argument("--negative_samples", type=int, default=3, help="Negative samples per positive")
     parser.add_argument("--margin", type=float, default=1.0, help="Contrastive loss margin")
+    parser.add_argument("--dataset_fraction", type=float, default=1.0, help="Fraction of dataset to use (e.g., 0.2 for 20%)")
     parser.add_argument("--train_split", type=float, default=0.8, help="Training split ratio (rest is test)")
     parser.add_argument("--val_split", type=float, default=0.1, help="Validation split ratio (from training set)")
     
@@ -247,7 +248,21 @@ def main():
         negative_samples=args.negative_samples
     )
     
-    # Split into train+val (80%) and test (20%)
+    # Apply dataset fraction if specified (for faster experiments)
+    if args.dataset_fraction < 1.0:
+        original_size = len(full_dataset)
+        subset_size = int(original_size * args.dataset_fraction)
+        remaining_size = original_size - subset_size
+        
+        logger.info(f"Using {args.dataset_fraction*100:.1f}% of dataset: {subset_size}/{original_size} samples")
+        
+        full_dataset, _ = random_split(
+            full_dataset,
+            [subset_size, remaining_size],
+            generator=torch.Generator().manual_seed(42)
+        )
+    
+    # Split into train+val and test
     test_size = int(len(full_dataset) * (1 - args.train_split))
     train_val_size = len(full_dataset) - test_size
     train_val_dataset, test_dataset = random_split(
@@ -265,7 +280,7 @@ def main():
         generator=torch.Generator().manual_seed(42)
     )
     
-    logger.info(f"Total samples: {len(full_dataset)}")
+    logger.info(f"Dataset samples: {len(full_dataset)}")
     logger.info(f"Training samples: {len(train_dataset)} ({len(train_dataset)/len(full_dataset)*100:.1f}%)")
     logger.info(f"Validation samples: {len(val_dataset)} ({len(val_dataset)/len(full_dataset)*100:.1f}%)")
     logger.info(f"Test samples: {len(test_dataset)} ({len(test_dataset)/len(full_dataset)*100:.1f}%)")
@@ -307,8 +322,18 @@ def main():
         freeze_bert=args.freeze_bert
     )
     
-    # Load pre-trained BERT
-    model.load_pretrained_bert(args.pretrained_bert)
+    # Load pre-trained BERT and detect its capabilities
+    logger.info(f"Loading pre-trained BERT from {args.pretrained_bert}")
+    bert_capabilities = model.load_pretrained_bert(args.pretrained_bert)
+    
+    # Configure dataset based on what BERT has
+    has_address_var = bert_capabilities['has_address'] and bert_capabilities['has_var']
+    full_dataset.use_address_var = has_address_var
+    
+    if has_address_var:
+        logger.info("[INFO] BERT has address/var embeddings → Dataloader will load address/var info")
+    else:
+        logger.info("[INFO] BERT does NOT have address/var embeddings → All positions/offsets set to 0")
     
     model = model.to(device)
     

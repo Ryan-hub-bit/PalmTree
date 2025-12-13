@@ -63,7 +63,7 @@ def setup_logging(log_dir, experiment_name):
     return logging.getLogger(__name__)
 
 
-def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, device, logger, seq_len=512, top_k=[1, 5, 10]):
+def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, device, logger, seq_len=512, top_k=[1, 5, 10], pool_size=None):
     """
     Compute retrieval metrics: Recall@K and MRR.
     
@@ -79,13 +79,30 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
         logger: Logger instance
         seq_len: Maximum sequence length
         top_k: List of K values for Recall@K
+        pool_size: Maximum number of functions in retrieval pool (None = use all)
         
     Returns:
         Dictionary with recall@k and MRR metrics
     """
-    from dataloader import FunctionSimilarityDataset
-    
     model.eval()
+    
+    # Limit pool size if specified
+    if pool_size is not None and pool_size < len(function_blocks):
+        import random
+        all_func_ids = list(function_blocks.keys())
+        # Make sure query functions are included
+        query_ids = set(funcsim_pairs.keys())
+        selected_ids = list(query_ids)
+        
+        # Add random functions to reach pool_size
+        remaining_ids = [fid for fid in all_func_ids if fid not in query_ids]
+        random.shuffle(remaining_ids)
+        selected_ids.extend(remaining_ids[:pool_size - len(selected_ids)])
+        
+        function_blocks = {fid: function_blocks[fid] for fid in selected_ids if fid in function_blocks}
+        logger.info(f"Sampled pool size: {len(function_blocks)} functions (from {len(all_func_ids)} total)")
+    else:
+        logger.info(f"Pool size: {len(function_blocks)} functions")
     
     logger.info("Computing embeddings for all function blocks...")
     
@@ -107,7 +124,7 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
     with torch.no_grad():
         for func_id in tqdm(all_func_ids, desc="Encoding functions"):
             # Process function
-            func_input, func_segment, func_bin_pos, func_func_pos, func_bb_pos = dataset._process_function(func_id)
+            func_input, func_segment, func_bin_pos, func_func_pos, func_bb_pos, func_var_offsets = dataset._process_function(func_id)
             
             # Move to device and add batch dimension
             func_input = func_input.unsqueeze(0).to(device)
@@ -284,6 +301,7 @@ def main():
     parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--seq_len", type=int, default=512, help="Maximum sequence length")
     parser.add_argument("--negative_samples", type=int, default=3, help="Negative samples per positive")
+    parser.add_argument("--pool_size", type=int, default=None, help="Limit retrieval pool size (None = use all)")
     
     # Output
     parser.add_argument("--output", type=str, default="../../output/funcsim/test_results.json", help="Output file")
@@ -404,7 +422,8 @@ def main():
         device=device,
         logger=logger,
         seq_len=args.seq_len,
-        top_k=[1, 5, 10, 20]
+        top_k=[1, 5, 10, 20],
+        pool_size=args.pool_size
     )
     
     # Save results
