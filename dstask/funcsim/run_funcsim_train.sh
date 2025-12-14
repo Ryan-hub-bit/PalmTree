@@ -5,8 +5,10 @@
 # Usage: ./run_funcsim_train.sh
 
 set -e
+export CUDA_VISIBLE_DEVICES=1
 
-# Paths
+# Path
+#
 FUNCTION_BLOCKS="/data/kun/funcsim_match/function_blocks.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../strupos/vocab.pkl"
@@ -15,7 +17,7 @@ VOCAB="../../strupos/vocab.pkl"
 # The script will auto-detect if this model has address/var embeddings:
 # - If YES (e.g., mlm_address/best_bert.pt): Use address/var info from data
 # - If NO  (e.g., mlm/best_bert.pt):         Set all positions/offsets to 0
-PRETRAINED_BERT="../../output/mlm/best_bert.pt"
+PRETRAINED_BERT="../../output/mlm_addr_var/best_bert.pt"
 
 # Output
 OUTPUT_DIR="../../output/funcsim/addr"
@@ -53,6 +55,7 @@ VAL_SPLIT=0.125  # 12.5% of train+val for validation
 # Result within 20% selected: 70% train, 10% val, 20% test
 
 # Device
+export CUDA_VISIBLE_DEVICES=1
 DEVICE="cuda"
 NUM_WORKERS=4
 

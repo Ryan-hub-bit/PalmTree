@@ -90,19 +90,23 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
     if pool_size is not None and pool_size < len(function_blocks):
         import random
         all_func_ids = list(function_blocks.keys())
-        # Make sure query functions are included
         query_ids = set(funcsim_pairs.keys())
-        selected_ids = list(query_ids)
         
-        # Add random functions to reach pool_size
-        remaining_ids = [fid for fid in all_func_ids if fid not in query_ids]
-        random.shuffle(remaining_ids)
-        selected_ids.extend(remaining_ids[:pool_size - len(selected_ids)])
+        # Randomly sample pool_size functions from all available
+        random.shuffle(all_func_ids)
+        selected_ids = all_func_ids[:pool_size]
+        
+        # Keep only queries that are in the sampled pool
+        sampled_query_ids = [fid for fid in selected_ids if fid in query_ids]
         
         function_blocks = {fid: function_blocks[fid] for fid in selected_ids if fid in function_blocks}
+        funcsim_pairs = {fid: funcsim_pairs[fid] for fid in sampled_query_ids if fid in funcsim_pairs}
+        
         logger.info(f"Sampled pool size: {len(function_blocks)} functions (from {len(all_func_ids)} total)")
+        logger.info(f"Sampled queries: {len(funcsim_pairs)} query functions (from {len(query_ids)} total)")
     else:
         logger.info(f"Pool size: {len(function_blocks)} functions")
+        logger.info(f"Query functions: {len(funcsim_pairs)}")
     
     logger.info("Computing embeddings for all function blocks...")
     
@@ -302,6 +306,7 @@ def main():
     parser.add_argument("--seq_len", type=int, default=512, help="Maximum sequence length")
     parser.add_argument("--negative_samples", type=int, default=3, help="Negative samples per positive")
     parser.add_argument("--pool_size", type=int, default=None, help="Limit retrieval pool size (None = use all)")
+    parser.add_argument("--data_fraction", type=float, default=1.0, help="Fraction of test data to use (0.0-1.0)")
     
     # Output
     parser.add_argument("--output", type=str, default="../../output/funcsim/test_results.json", help="Output file")
@@ -345,6 +350,14 @@ def main():
     with open(args.test_indices, 'r') as f:
         test_info = json.load(f)
     test_indices = test_info['test_indices']
+    
+    # Sample test data if data_fraction < 1.0
+    if args.data_fraction < 1.0:
+        import random
+        sample_size = int(len(test_indices) * args.data_fraction)
+        random.seed(42)  # For reproducibility
+        test_indices = random.sample(test_indices, sample_size)
+        logger.info(f"Sampled {sample_size} test indices ({args.data_fraction*100:.1f}% of {len(test_info['test_indices'])} total)")
     
     # Create test dataset
     test_dataset = Subset(full_dataset, test_indices)

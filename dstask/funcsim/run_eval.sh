@@ -10,11 +10,11 @@ set -e
 FUNCTION_BLOCKS="/data/kun/funcsim_match/function_blocks.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../strupos/vocab.pkl"
-CHECKPOINT="../../output/funcsim/best_model.pt"
+CHECKPOINT="../../output/funcsim/addr/best_model.pt"
 TEST_INDICES="../../output/funcsim/test_indices.json"
 
 # Output
-OUTPUT="../../output/funcsim/test_results.json"
+OUTPUT="../../output/funcsim/addr/test_results.json"
 LOG_DIR="../../log/funcsim"
 
 # Model config (must match training)
@@ -28,8 +28,10 @@ BATCH_SIZE=32
 SEQ_LEN=60
 NEGATIVE_SAMPLES=3
 POOL_SIZE=10000  # Limit retrieval pool size (comment out or set to 0 to use all)
+DATA_FRACTION=1.0  # Use only 20% of test data (set to 1.0 to use all)
 
 # Device
+export CUDA_VISIBLE_DEVICES=1
 DEVICE="cuda"
 NUM_WORKERS=4
 
@@ -62,6 +64,12 @@ else
   POOL_SIZE_ARG=""
 fi
 
+if [ -n "${DATA_FRACTION}" ] && (( $(echo "${DATA_FRACTION} < 1.0" | bc -l) )); then
+  DATA_FRACTION_ARG="--data_fraction ${DATA_FRACTION}"
+else
+  DATA_FRACTION_ARG=""
+fi
+
 python3 evaluate.py \
   --function_blocks "${FUNCTION_BLOCKS}" \
   --funcsim_pairs "${FUNCSIM_PAIRS}" \
@@ -76,6 +84,7 @@ python3 evaluate.py \
   --seq_len ${SEQ_LEN} \
   --negative_samples ${NEGATIVE_SAMPLES} \
   ${POOL_SIZE_ARG} \
+  ${DATA_FRACTION_ARG} \
   --output "${OUTPUT}" \
   --log_dir "${LOG_DIR}" \
   --device "${DEVICE}" \
