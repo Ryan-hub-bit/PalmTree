@@ -1,223 +1,214 @@
 """
-Training script for PalmTree with support for:
-1. Original BERT (ignore address info, just use tokens)
-2. Address-Aware BERT (use both tokens and address information)
+Address-Aware PalmTree Training Script
 
-Usage:
-    # Original BERT training
-    python train_palmtree_addressaware.py --mode original
-    
-    # Address-Aware BERT training
-    python train_palmtree_addressaware.py --mode addressaware
+Uses AddressAwareBERT with hierarchical address positions and var offset embeddings.
+Requires input data with inline address information in the format:
+    opcode(addr:bnorm:fnorm:bbnorm) operand1 operand2 var(0xXX)
 """
 
 import torch
 import torch.nn as nn
-import argparse
 from torch.utils.data import DataLoader
+import sys
+sys.path.insert(0, 'src')
+
 from config import *
 import palmtree
 from palmtree import dataset
-from palmtree.trainer import pretrain_addressaware
-from palmtree.model import BERT, AddressAwareBERT
+from palmtree import trainer
+from palmtree.model import AddressAwareBERT
+from palmtree.dataset.dataset_addressaware import BERTDatasetAddressAware
 
 print(palmtree.__file__)
+print("\n" + "="*80)
+print("Address-Aware PalmTree Training")
+print("="*80 + "\n")
 
+# ============================================================================
+# Configuration - Using parameters from config.py and additional settings
+# ============================================================================
+vocab_path = "cdfg_bert_addressaware/vocab"
+train_cfg_dataset = "data/training/cdfg_bert_addressaware/cfg_train.txt"
+train_dfg_dataset = "data/training/cdfg_bert_addressaware/dfg_train.txt"
+test_cfg_dataset = "data/training/cdfg_bert_addressaware/cfg_test.txt"
+test_dfg_dataset = "data/training/cdfg_bert_addressaware/dfg_test.txt"
+output_path = "cdfg_bert_addressaware/transformer"
 
-def main():
-    parser = argparse.ArgumentParser(description='PalmTree Training with Address-Aware Support')
-    
-    # Training mode
-    parser.add_argument('--mode', type=str, default='original', choices=['original', 'addressaware'],
-                        help='Training mode: original (ignore address) or addressaware (use address)')
-    
-    # Data paths
-    parser.add_argument('--vocab_path', type=str, default='cdfg_bert_1/vocab',
-                        help='Path to save/load vocabulary')
-    parser.add_argument('--train_cfg', type=str, required=True,
-                        help='Path to CFG training data')
-    parser.add_argument('--train_dfg', type=str, required=True,
-                        help='Path to DFG training data')
-    parser.add_argument('--test_data', type=str, default=None,
-                        help='Path to test data (optional)')
-    parser.add_argument('--output_path', type=str, required=True,
-                        help='Path to save model checkpoints')
-    
-    # Model hyperparameters
-    parser.add_argument('--hidden', type=int, default=128,
-                        help='Hidden size')
-    parser.add_argument('--n_layers', type=int, default=12,
-                        help='Number of transformer layers')
-    parser.add_argument('--attn_heads', type=int, default=8,
-                        help='Number of attention heads')
-    parser.add_argument('--dropout', type=float, default=0.0,
-                        help='Dropout rate')
-    parser.add_argument('--seq_len', type=int, default=20,
-                        help='Maximum sequence length')
-    
-    # Address-aware specific parameters
-    parser.add_argument('--address_hidden', type=int, default=64,
-                        help='Hidden size for address embedding (for addressaware mode)')
-    parser.add_argument('--var_size', type=int, default=256,
-                        help='Variable offset vocabulary size (for addressaware mode)')
-    
-    # Training hyperparameters
-    parser.add_argument('--batch_size', type=int, default=256,
-                        help='Batch size')
-    parser.add_argument('--epochs', type=int, default=20,
-                        help='Number of epochs')
-    parser.add_argument('--lr', type=float, default=1e-5,
-                        help='Learning rate')
-    parser.add_argument('--weight_decay', type=float, default=0.0,
-                        help='Weight decay')
-    parser.add_argument('--num_workers', type=int, default=10,
-                        help='Number of data loading workers')
-    parser.add_argument('--log_freq', type=int, default=100,
-                        help='Logging frequency')
-    
-    # Vocab parameters
-    parser.add_argument('--vocab_max_size', type=int, default=13000,
-                        help='Maximum vocabulary size')
-    parser.add_argument('--vocab_min_freq', type=int, default=1,
-                        help='Minimum token frequency for vocabulary')
-    
-    # GPU settings
-    parser.add_argument('--cuda_devices', type=int, nargs='+', default=[0],
-                        help='CUDA device IDs')
-    
-    args = parser.parse_args()
-    
-    print(f"\n{'='*60}")
-    print(f"Training Mode: {args.mode.upper()}")
-    print(f"{'='*60}\n")
-    
-    # Step 1: Build/Load Vocabulary
-    print(f"Building vocabulary from training data...")
-    with open(args.train_cfg, "r", encoding="utf-8") as f1:
-        with open(args.train_dfg, "r", encoding="utf-8") as f2:
-            vocab = dataset.WordVocab([f1, f2], max_size=args.vocab_max_size, min_freq=args.vocab_min_freq)
-    
-    print(f"VOCAB SIZE: {len(vocab)}")
-    vocab.save_vocab(args.vocab_path)
-    
-    print(f"Loading Vocab from {args.vocab_path}")
-    vocab = dataset.WordVocab.load_vocab(args.vocab_path)
-    print(f"Vocab Size: {len(vocab)}")
-    
-    # Step 2: Load Dataset
-    if args.mode == 'original':
-        print("\n[ORIGINAL MODE] Loading dataset without address information...")
-        print("Using BERTDataset (tokens only)")
-        
-        train_dataset = dataset.BERTDataset(
-            args.train_cfg, args.train_dfg, vocab, 
-            seq_len=args.seq_len, corpus_lines=None, on_memory=True
+# Model hyperparameters (use config.py values where available)
+VOCAB_SIZE = VOCAB_SIZE if 'VOCAB_SIZE' in dir() else 13000
+MIN_FREQ = 1
+SEQ_LEN = MAXLEN if 'MAXLEN' in dir() else 20
+BATCH_SIZE = 256
+NUM_WORKERS = 10
+
+HIDDEN_SIZE = 128
+N_LAYERS = 12
+ATTN_HEADS = 8
+DROPOUT = 0.1
+
+# Training hyperparameters
+LEARNING_RATE = 1e-5
+BETAS = (0.9, 0.999)
+WEIGHT_DECAY = 0.01
+WARMUP_STEPS = 10000
+NUM_EPOCHS = 20
+
+# Address-aware specific flags
+USE_ADDRESS_EMBEDDING = True  # Use hierarchical address positions
+USE_VAR_EMBEDDING = True       # Use var(0xXX) offset embeddings
+
+# CUDA settings (use config.py values)
+USE_CUDA = USE_CUDA if 'USE_CUDA' in dir() else True
+CUDA_DEVICES = DEVICES if 'DEVICES' in dir() else [0]
+LOG_FREQ = 100
+
+# ============================================================================
+# Build Vocabulary
+# ============================================================================
+print("Building vocabulary from training data...")
+with open(train_cfg_dataset, "r", encoding="utf-8") as f1:
+    with open(train_dfg_dataset, "r", encoding="utf-8") as f2:
+        vocab = dataset.WordVocab([f1, f2], max_size=VOCAB_SIZE, min_freq=MIN_FREQ)
+
+print(f"VOCAB SIZE: {len(vocab)}")
+vocab.save_vocab(vocab_path)
+
+# ============================================================================
+# Load Vocabulary
+# ============================================================================
+print(f"\nLoading Vocab from {vocab_path}")
+vocab = dataset.WordVocab.load_vocab(vocab_path)
+print(f"Vocab Size: {len(vocab)}")
+# print(vocab.itos)
+
+# ============================================================================
+# Load Training Dataset (Address-Aware)
+# ============================================================================
+print("\nLoading Address-Aware Training Dataset...")
+print(f"  CFG: {train_cfg_dataset}")
+print(f"  DFG: {train_dfg_dataset}")
+train_dataset = BERTDatasetAddressAware(
+    dfg_corpus_path=train_dfg_dataset,
+    cfg_corpus_path=train_cfg_dataset,
+    vocab=vocab,
+    seq_len=SEQ_LEN,
+    corpus_lines=None,
+    on_memory=True
+)
+print(f"  Loaded {len(train_dataset)} training samples")
+
+# ============================================================================
+# Load Test Dataset (Address-Aware) - Optional
+# ============================================================================
+test_dataset = None
+if test_cfg_dataset is not None and test_dfg_dataset is not None:
+    try:
+        print("\nLoading Address-Aware Test Dataset...")
+        print(f"  CFG: {test_cfg_dataset}")
+        print(f"  DFG: {test_dfg_dataset}")
+        test_dataset = BERTDatasetAddressAware(
+            dfg_corpus_path=test_dfg_dataset,
+            cfg_corpus_path=test_cfg_dataset,
+            vocab=vocab,
+            seq_len=SEQ_LEN,
+            corpus_lines=None,
+            on_memory=True
         )
-        
-        test_dataset = dataset.BERTDataset(
-            args.test_data, args.test_data, vocab, 
-            seq_len=args.seq_len, on_memory=True
-        ) if args.test_data is not None else None
-        
-    elif args.mode == 'addressaware':
-        print("\n[ADDRESS-AWARE MODE] Loading dataset with address information...")
-        print("Using BERTDatasetAddressAware (tokens + binary/function/BB positions + var offsets)")
-        
-        train_dataset = dataset.BERTDatasetAddressAware(
-            args.train_cfg, args.train_dfg, vocab, 
-            seq_len=args.seq_len, corpus_lines=None, on_memory=True
-        )
-        
-        test_dataset = dataset.BERTDatasetAddressAware(
-            args.test_data, args.test_data, vocab, 
-            seq_len=args.seq_len, on_memory=True
-        ) if args.test_data is not None else None
-    
-    print(f"Training dataset size: {len(train_dataset)}")
-    
-    # Step 3: Create DataLoader
-    print("Creating DataLoader...")
-    train_data_loader = DataLoader(
-        train_dataset, 
-        batch_size=args.batch_size, 
-        num_workers=args.num_workers,
-        shuffle=True
-    )
-    
+        print(f"  Loaded {len(test_dataset)} test samples")
+    except FileNotFoundError:
+        print("  Test dataset files not found, skipping test evaluation")
+        test_dataset = None
+
+# ============================================================================
+# Create DataLoaders
+# ============================================================================
+print("\nCreating DataLoaders...")
+train_data_loader = DataLoader(
+    train_dataset,
+    batch_size=BATCH_SIZE,
+    num_workers=NUM_WORKERS,
+    shuffle=True
+)
+
+test_data_loader = None
+if test_dataset is not None:
     test_data_loader = DataLoader(
-        test_dataset, 
-        batch_size=args.batch_size, 
-        num_workers=args.num_workers
-    ) if test_dataset is not None else None
-    
-    # Step 4: Build Model
-    if args.mode == 'original':
-        print("\n[ORIGINAL MODE] Building standard BERT model...")
-        model = BERT(
-            len(vocab), 
-            hidden=args.hidden, 
-            n_layers=args.n_layers, 
-            attn_heads=args.attn_heads, 
-            dropout=args.dropout
-        )
-        
-    elif args.mode == 'addressaware':
-        print("\n[ADDRESS-AWARE MODE] Building AddressAwareBERT model...")
-        print(f"  - Token vocab size: {len(vocab)}")
-        print(f"  - Hidden size: {args.hidden}")
-        print(f"  - Address hidden size: {args.address_hidden}")
-        print(f"  - Var offset vocab size: {args.var_size}")
-        
-        model = AddressAwareBERT(
-            vocab_size=len(vocab),
-            hidden=args.hidden,
-            n_layers=args.n_layers,
-            attn_heads=args.attn_heads,
-            dropout=args.dropout,
-            address_hidden=args.address_hidden,
-            var_size=args.var_size
-        )
-    
-    print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
-    
-    # Step 5: Create Trainer
-    print("\nCreating BERT Trainer...")
-    bert_trainer = pretrain_addressaware.BERTTrainer(
-        model, 
-        len(vocab), 
-        train_dataloader=train_data_loader, 
-        test_dataloader=test_data_loader,
-        lr=args.lr, 
-        betas=(0.9, 0.999), 
-        weight_decay=args.weight_decay,
-        with_cuda=True, 
-        cuda_devices=args.cuda_devices, 
-        log_freq=args.log_freq,
-        mode=args.mode  # Pass mode to trainer
+        test_dataset,
+        batch_size=BATCH_SIZE,
+        num_workers=NUM_WORKERS
     )
-    
-    # Step 6: Training Loop
-    print(f"\n{'='*60}")
-    print(f"Starting Training for {args.epochs} epochs")
-    print(f"Output path: {args.output_path}")
-    print(f"{'='*60}\n")
-    
-    for epoch in range(args.epochs):
-        print(f"\n{'='*60}")
-        print(f"Epoch {epoch+1}/{args.epochs}")
-        print(f"{'='*60}")
-        
-        bert_trainer.train(epoch)
-        bert_trainer.save(epoch, args.output_path)
-        
-        # if test_data_loader is not None:
-        #     bert_trainer.test(epoch)
-    
-    print(f"\n{'='*60}")
-    print(f"Training Complete!")
-    print(f"Model saved to: {args.output_path}")
-    print(f"{'='*60}\n")
 
+# ============================================================================
+# Build Address-Aware BERT Model
+# ============================================================================
+print("\nBuilding Address-Aware BERT model...")
+print(f"  Hidden size: {HIDDEN_SIZE}")
+print(f"  Layers: {N_LAYERS}")
+print(f"  Attention heads: {ATTN_HEADS}")
+print(f"  Dropout: {DROPOUT}")
+print(f"  Use address embedding: {USE_ADDRESS_EMBEDDING}")
+print(f"  Use var embedding: {USE_VAR_EMBEDDING}")
 
-if __name__ == "__main__":
-    main()
+bert = AddressAwareBERT(
+    vocab_size=len(vocab),
+    hidden=HIDDEN_SIZE,
+    n_layers=N_LAYERS,
+    attn_heads=ATTN_HEADS,
+    dropout=DROPOUT,
+    use_address_embedding=USE_ADDRESS_EMBEDDING,
+    use_var_embedding=USE_VAR_EMBEDDING
+)
+
+# ============================================================================
+# Create Address-Aware BERT Trainer
+# ============================================================================
+print("\nCreating Address-Aware BERT Trainer...")
+print(f"  Learning rate: {LEARNING_RATE}")
+print(f"  Betas: {BETAS}")
+print(f"  Weight decay: {WEIGHT_DECAY}")
+print(f"  Warmup steps: {WARMUP_STEPS}")
+print(f"  CUDA: {USE_CUDA}")
+if USE_CUDA:
+    print(f"  CUDA devices: {CUDA_DEVICES}")
+
+trainer_instance = trainer.BERTTrainer(
+    bert=bert,
+    vocab_size=len(vocab),
+    train_dataloader=train_data_loader,
+    test_dataloader=test_data_loader,
+    lr=LEARNING_RATE,
+    betas=BETAS,
+    weight_decay=WEIGHT_DECAY,
+    warmup_steps=WARMUP_STEPS,
+    with_cuda=USE_CUDA,
+    cuda_devices=CUDA_DEVICES,
+    log_freq=LOG_FREQ,
+    mode='addressaware'  # KEY: Use address-aware mode
+)
+
+# ============================================================================
+# Training Loop
+# ============================================================================
+print("\n" + "="*80)
+print("Training Start")
+print("="*80 + "\n")
+
+for epoch in range(NUM_EPOCHS):
+    print(f"\nEpoch {epoch + 1}/{NUM_EPOCHS}")
+    print("-" * 80)
+    
+    # Train
+    trainer_instance.train(epoch)
+    
+    # Save checkpoint
+    trainer_instance.save(epoch, output_path)
+    print(f"Model saved to {output_path}/bert_trained_{epoch}.model")
+    
+    # Test (if test dataset available)
+    if test_data_loader is not None:
+        print("\nRunning test evaluation...")
+        trainer_instance.test(epoch)
+
+print("\n" + "="*80)
+print("Training Complete!")
+print("="*80)
