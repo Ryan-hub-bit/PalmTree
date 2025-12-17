@@ -97,9 +97,17 @@ class FunctionSimilarityModel(nn.Module):
         # L2 normalize embeddings for cosine similarity
         self.normalize = True
     
-    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None):
+    def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None, 
+                num_instructions=None, instruction_boundaries=None):
         """
-        Forward pass to get function embeddings.
+        Forward pass with chunked processing.
+        
+        Format: <sos> instr1 instr2 instr3 ... <eos> (no separators between instructions)
+        
+        Process:
+        1. Split function into chunks of 8 instructions
+        2. For each chunk (max 60 tokens): get BERT embedding and mean pool
+        3. Mean pool all chunk embeddings -> function embedding
         
         Args:
             token_ids: [batch_size, seq_len]
@@ -108,26 +116,87 @@ class FunctionSimilarityModel(nn.Module):
             function_pos: [batch_size, seq_len]
             bb_pos: [batch_size, seq_len]
             var_offsets: [batch_size, seq_len] - Variable offsets for var(0xXX) tokens (optional)
+            num_instructions: [batch_size] or int - Number of instructions per sample (optional)
+            instruction_boundaries: List of lists - Start positions of each instruction (optional)
             
         Returns:
             embeddings: [batch_size, embedding_dim] - Function embeddings
         """
-        # Get BERT output (pass var_offsets to embedding layer)
-        bert_output = self.bert(
-            token_ids, segment_labels,
-            binary_pos, function_pos, bb_pos,
-            var_offsets
-        )  # [batch_size, seq_len, hidden]
+        batch_size = token_ids.size(0)
+        chunk_size = 8  # Instructions per chunk
+        max_chunk_len = 60  # Max tokens per chunk
         
-        # Mean pooling over sequence dimension (ignoring padding)
-        mask = (token_ids != 0).unsqueeze(-1).float()  # [batch_size, seq_len, 1]
-        masked_output = bert_output * mask
-        pooled = masked_output.sum(dim=1) / mask.sum(dim=1).clamp(min=1e-9)  # [batch_size, hidden]
+        # If no instruction info provided, fall back to simple pooling
+        if num_instructions is None or instruction_boundaries is None:
+            bert_output = self.bert(token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets)
+            pad_mask = (token_ids != 0).float().unsqueeze(-1)
+            pooled = (bert_output * pad_mask).sum(dim=1) / (pad_mask.sum(dim=1) + 1e-9)
+            embeddings = self.projection(pooled)
+            if self.normalize:
+                embeddings = F.normalize(embeddings, p=2, dim=1)
+            return embeddings
         
-        # Project to embedding space
-        embeddings = self.projection(pooled)  # [batch_size, embedding_dim]
+        # Process each sample in batch
+        function_embeddings = []
         
-        # L2 normalize
+        for b in range(batch_size):
+            # Get instruction info for this sample
+            n_instr = num_instructions[b] if isinstance(num_instructions, (list, torch.Tensor)) else num_instructions
+            boundaries = instruction_boundaries[b] if isinstance(instruction_boundaries, list) else instruction_boundaries
+            
+            # Split instructions into chunks of 8
+            chunk_embeddings = []
+            
+            for chunk_idx in range(0, n_instr, chunk_size):
+                chunk_end_idx = min(chunk_idx + chunk_size, n_instr)
+                
+                # Get token range for this chunk
+                start_token_pos = boundaries[chunk_idx]
+                # End position: start of next chunk or end of sequence
+                if chunk_end_idx < n_instr:
+                    end_token_pos = boundaries[chunk_end_idx]
+                else:
+                    # Last chunk: find <eos> position
+                    eos_pos = (token_ids[b] == 2).nonzero(as_tuple=True)[0]
+                    end_token_pos = eos_pos[0].item() + 1 if len(eos_pos) > 0 else token_ids.size(1)
+                
+                # Extract chunk tokens (limit to max_chunk_len)
+                chunk_len = min(end_token_pos - start_token_pos, max_chunk_len)
+                chunk_token_ids = token_ids[b, start_token_pos:start_token_pos+chunk_len].unsqueeze(0)
+                chunk_segments = segment_labels[b, start_token_pos:start_token_pos+chunk_len].unsqueeze(0)
+                chunk_binary_pos = binary_pos[b, start_token_pos:start_token_pos+chunk_len].unsqueeze(0)
+                chunk_function_pos = function_pos[b, start_token_pos:start_token_pos+chunk_len].unsqueeze(0)
+                chunk_bb_pos = bb_pos[b, start_token_pos:start_token_pos+chunk_len].unsqueeze(0)
+                chunk_var_offsets = var_offsets[b, start_token_pos:start_token_pos+chunk_len].unsqueeze(0) if var_offsets is not None else None
+                
+                # Get BERT embedding for this chunk
+                chunk_bert_output = self.bert(
+                    chunk_token_ids, chunk_segments,
+                    chunk_binary_pos, chunk_function_pos, chunk_bb_pos,
+                    chunk_var_offsets
+                )  # [1, chunk_len, hidden]
+                
+                # Mean pool the chunk
+                chunk_mask = (chunk_token_ids != 0).float().unsqueeze(-1)  # [1, chunk_len, 1]
+                chunk_emb = (chunk_bert_output * chunk_mask).sum(dim=1) / (chunk_mask.sum(dim=1) + 1e-9)  # [1, hidden]
+                chunk_embeddings.append(chunk_emb.squeeze(0))  # [hidden]
+            
+            # Mean pool all chunk embeddings
+            if len(chunk_embeddings) > 0:
+                all_chunks = torch.stack(chunk_embeddings)  # [num_chunks, hidden]
+                func_emb = all_chunks.mean(dim=0)  # [hidden]
+            else:
+                func_emb = torch.zeros(self.bert.hidden, device=token_ids.device)
+            
+            function_embeddings.append(func_emb)
+        
+        # Stack into batch
+        pooled_output = torch.stack(function_embeddings)  # [batch_size, hidden]
+        
+        # Project to embedding dimension
+        embeddings = self.projection(pooled_output)  # [batch_size, embedding_dim]
+        
+        # L2 normalize for cosine similarity
         if self.normalize:
             embeddings = F.normalize(embeddings, p=2, dim=1)
         

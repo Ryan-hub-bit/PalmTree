@@ -225,8 +225,22 @@ class FunctionSimilarityDataset(Dataset):
         all_function_pos = []
         all_bb_pos = []
         all_var_offsets = []
+        all_instruction_boundaries = []  # Track where each instruction starts
         
-        for inst in instructions:
+        # Format: <sos> instr1 instr2 instr3 ... <eos>
+        # Only <sos> at start and <eos> at end, no separators between instructions
+        
+        # Add <sos> token at the beginning
+        all_tokens.append('<sos>')
+        all_binary_pos.append(-1.0)  # <sos> has no position
+        all_function_pos.append(-1.0)
+        all_bb_pos.append(-1.0)
+        all_var_offsets.append(-1)
+        
+        for idx, inst in enumerate(instructions):
+            # Mark the start of this instruction
+            all_instruction_boundaries.append(len(all_tokens))
+            
             tokens, positions, var_offsets = self._parse_instruction(inst)
             all_tokens.extend(tokens)
             all_var_offsets.extend(var_offsets)
@@ -235,6 +249,18 @@ class FunctionSimilarityDataset(Dataset):
                 all_binary_pos.append(pos[0])
                 all_function_pos.append(pos[1])
                 all_bb_pos.append(pos[2])
+            
+            # No <eos> after each instruction - only at the very end
+        
+        # Add <eos> at the end
+        all_tokens.append('<eos>')
+        all_binary_pos.append(-1.0)  # <eos> has no position
+        all_function_pos.append(-1.0)
+        all_bb_pos.append(-1.0)
+        all_var_offsets.append(-1)
+        
+        # Store instruction boundaries and number of instructions
+        num_instructions = len(instructions)
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
@@ -251,17 +277,20 @@ class FunctionSimilarityDataset(Dataset):
         padding_len = self.seq_len - len(token_ids)
         token_ids = token_ids + [self.pad_idx] * padding_len
         
-        # If model doesn't have address/var embeddings, set everything to 0
+        # If model doesn't have address/var embeddings, use sentinel -1 to mask everything
+        # This ensures the embedding layer produces true zero vectors [0,0,0,...]
+        # (Setting to 0.0 would produce sin(0)=0, cos(0)=1 -> [0,1,0,1,...] which is not zero!)
         if not self.use_address_var:
-            all_binary_pos = [0.0] * self.seq_len
-            all_function_pos = [0.0] * self.seq_len
-            all_bb_pos = [0.0] * self.seq_len
-            all_var_offsets = [0] * self.seq_len
+            all_binary_pos = [-1.0] * self.seq_len
+            all_function_pos = [-1.0] * self.seq_len
+            all_bb_pos = [-1.0] * self.seq_len
+            all_var_offsets = [-1] * self.seq_len
         else:
-            all_binary_pos = all_binary_pos + [0.0] * padding_len
-            all_function_pos = all_function_pos + [0.0] * padding_len
-            all_bb_pos = all_bb_pos + [0.0] * padding_len
-            all_var_offsets = all_var_offsets + [0] * padding_len
+            # Pad with -1 sentinel for padding tokens (which should also get zero embeddings)
+            all_binary_pos = all_binary_pos + [-1.0] * padding_len
+            all_function_pos = all_function_pos + [-1.0] * padding_len
+            all_bb_pos = all_bb_pos + [-1.0] * padding_len
+            all_var_offsets = all_var_offsets + [-1] * padding_len
         
         # Segment labels (all 0 for single function)
         segment_labels = [0] * self.seq_len
@@ -272,7 +301,9 @@ class FunctionSimilarityDataset(Dataset):
             torch.tensor(all_binary_pos, dtype=torch.float),
             torch.tensor(all_function_pos, dtype=torch.float),
             torch.tensor(all_bb_pos, dtype=torch.float),
-            torch.tensor(all_var_offsets, dtype=torch.long)
+            torch.tensor(all_var_offsets, dtype=torch.long),
+            num_instructions,  # Return number of instructions for chunking
+            all_instruction_boundaries  # Return instruction boundaries for chunking
         )
     
     def __len__(self):
@@ -287,12 +318,17 @@ class FunctionSimilarityDataset(Dataset):
             - func1_*: First function data (input, segment, binary_pos, function_pos, bb_pos, var_offsets)
             - func2_*: Second function data (input, segment, binary_pos, function_pos, bb_pos, var_offsets)
             - label: 1 for positive pair, 0 for negative pair
+            - num_instructions_1/2: Number of instructions in each function
+            - instruction_boundaries_1/2: Instruction boundary positions
         """
         func1_id, func2_id, label = self.training_pairs[idx]
         
-        # Process both functions (now returns 6 values including var_offsets)
-        func1_input, func1_segment, func1_bin_pos, func1_func_pos, func1_bb_pos, func1_var_offsets = self._process_function(func1_id)
-        func2_input, func2_segment, func2_bin_pos, func2_func_pos, func2_bb_pos, func2_var_offsets = self._process_function(func2_id)
+        # Process both functions (now returns 8 values)
+        func1_data = self._process_function(func1_id)
+        func1_input, func1_segment, func1_bin_pos, func1_func_pos, func1_bb_pos, func1_var_offsets, num_instr1, boundaries1 = func1_data
+        
+        func2_data = self._process_function(func2_id)
+        func2_input, func2_segment, func2_bin_pos, func2_func_pos, func2_bb_pos, func2_var_offsets, num_instr2, boundaries2 = func2_data
         
         return {
             'func1_input': func1_input,
@@ -301,12 +337,16 @@ class FunctionSimilarityDataset(Dataset):
             'func1_function_pos': func1_func_pos,
             'func1_bb_pos': func1_bb_pos,
             'func1_var_offsets': func1_var_offsets,
+            'func1_num_instructions': num_instr1,
+            'func1_boundaries': boundaries1,
             'func2_input': func2_input,
             'func2_segment': func2_segment,
             'func2_binary_pos': func2_bin_pos,
             'func2_function_pos': func2_func_pos,
             'func2_bb_pos': func2_bb_pos,
             'func2_var_offsets': func2_var_offsets,
+            'func2_num_instructions': num_instr2,
+            'func2_boundaries': boundaries2,
             'label': torch.tensor(label, dtype=torch.long)
         }
 

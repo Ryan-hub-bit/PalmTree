@@ -10,12 +10,12 @@ set -e
 FUNCTION_BLOCKS="/data/kun/funcsim_match/function_blocks.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../strupos/vocab.pkl"
-CHECKPOINT="../../output/funcsim/addr/best_model.pt"
-TEST_INDICES="../../output/funcsim/test_indices.json"
+CHECKPOINT="../../output/funcsim/mlm/best_model.pt"
+TEST_INDICES="../../output/funcsim/mlm/test_indices.json"
 
 # Output
-OUTPUT="../../output/funcsim/addr/test_results.json"
-LOG_DIR="../../log/funcsim"
+OUTPUT="../../output/funcsim/mlm/test_results.json"
+LOG_DIR="../../log/funcsim/mlm"
 
 # Model config (must match training)
 HIDDEN=768
@@ -27,8 +27,8 @@ EMBEDDING_DIM=256
 BATCH_SIZE=32
 SEQ_LEN=60
 NEGATIVE_SAMPLES=3
-POOL_SIZE=10000  # Limit retrieval pool size (comment out or set to 0 to use all)
-DATA_FRACTION=1.0  # Use only 20% of test data (set to 1.0 to use all)
+POOL_SIZE=100     # Limit retrieval pool size (comment out or set to 0 to use all)
+DATA_FRACTION=1.0 # Use only 20% of test data (set to 1.0 to use all)
 
 # Device
 export CUDA_VISIBLE_DEVICES=1
@@ -46,15 +46,15 @@ echo ""
 
 # Check if files exist
 if [ ! -f "$CHECKPOINT" ]; then
-    echo "[ERROR] Checkpoint not found: $CHECKPOINT"
-    echo "[INFO] Please train the model first: ./run_funcsim_train.sh"
-    exit 1
+  echo "[ERROR] Checkpoint not found: $CHECKPOINT"
+  echo "[INFO] Please train the model first: ./run_funcsim_train.sh"
+  exit 1
 fi
 
 if [ ! -f "$TEST_INDICES" ]; then
-    echo "[ERROR] Test indices not found: $TEST_INDICES"
-    echo "[INFO] Test indices are created during training"
-    exit 1
+  echo "[ERROR] Test indices not found: $TEST_INDICES"
+  echo "[INFO] Test indices are created during training"
+  exit 1
 fi
 
 # Run evaluation
@@ -64,7 +64,7 @@ else
   POOL_SIZE_ARG=""
 fi
 
-if [ -n "${DATA_FRACTION}" ] && (( $(echo "${DATA_FRACTION} < 1.0" | bc -l) )); then
+if [ -n "${DATA_FRACTION}" ] && (($(echo "${DATA_FRACTION} < 1.0" | bc -l))); then
   DATA_FRACTION_ARG="--data_fraction ${DATA_FRACTION}"
 else
   DATA_FRACTION_ARG=""

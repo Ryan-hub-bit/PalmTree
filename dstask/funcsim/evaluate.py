@@ -44,6 +44,55 @@ FunctionSimilarityModel = funcsim_model.FunctionSimilarityModel
 FunctionSimilarityDataset = funcsim_dataloader.FunctionSimilarityDataset
 
 
+def custom_collate_fn(batch):
+    """
+    Custom collate function to handle variable-length instruction_boundaries lists.
+    
+    Since different functions have different numbers of instructions, we keep
+    num_instructions and instruction_boundaries as lists instead of tensors.
+    """
+    # Separate the dictionary items
+    func1_input = torch.stack([item['func1_input'] for item in batch])
+    func1_segment = torch.stack([item['func1_segment'] for item in batch])
+    func1_binary_pos = torch.stack([item['func1_binary_pos'] for item in batch])
+    func1_function_pos = torch.stack([item['func1_function_pos'] for item in batch])
+    func1_bb_pos = torch.stack([item['func1_bb_pos'] for item in batch])
+    func1_var_offsets = torch.stack([item['func1_var_offsets'] for item in batch])
+    func1_num_instructions = [item['func1_num_instructions'] for item in batch]  # Keep as list
+    func1_boundaries = [item['func1_boundaries'] for item in batch]  # Keep as list
+    
+    func2_input = torch.stack([item['func2_input'] for item in batch])
+    func2_segment = torch.stack([item['func2_segment'] for item in batch])
+    func2_binary_pos = torch.stack([item['func2_binary_pos'] for item in batch])
+    func2_function_pos = torch.stack([item['func2_function_pos'] for item in batch])
+    func2_bb_pos = torch.stack([item['func2_bb_pos'] for item in batch])
+    func2_var_offsets = torch.stack([item['func2_var_offsets'] for item in batch])
+    func2_num_instructions = [item['func2_num_instructions'] for item in batch]  # Keep as list
+    func2_boundaries = [item['func2_boundaries'] for item in batch]  # Keep as list
+    
+    labels = torch.stack([item['label'] for item in batch])
+    
+    return {
+        'func1_input': func1_input,
+        'func1_segment': func1_segment,
+        'func1_binary_pos': func1_binary_pos,
+        'func1_function_pos': func1_function_pos,
+        'func1_bb_pos': func1_bb_pos,
+        'func1_var_offsets': func1_var_offsets,
+        'func1_num_instructions': func1_num_instructions,
+        'func1_boundaries': func1_boundaries,
+        'func2_input': func2_input,
+        'func2_segment': func2_segment,
+        'func2_binary_pos': func2_binary_pos,
+        'func2_function_pos': func2_function_pos,
+        'func2_bb_pos': func2_bb_pos,
+        'func2_var_offsets': func2_var_offsets,
+        'func2_num_instructions': func2_num_instructions,
+        'func2_boundaries': func2_boundaries,
+        'label': labels
+    }
+
+
 def setup_logging(log_dir, experiment_name):
     """Setup logging configuration."""
     os.makedirs(log_dir, exist_ok=True)
@@ -92,17 +141,46 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
         all_func_ids = list(function_blocks.keys())
         query_ids = set(funcsim_pairs.keys())
         
-        # Randomly sample pool_size functions from all available
-        random.shuffle(all_func_ids)
-        selected_ids = all_func_ids[:pool_size]
+        # CRITICAL: Collect all query functions AND their ground truth functions
+        # to ensure they're always in the pool for fair evaluation
+        required_func_ids = set()
+        for query_id, pair_data in funcsim_pairs.items():
+            if query_id in function_blocks:
+                required_func_ids.add(query_id)  # Add query itself
+                # Add all ground truth functions
+                for gt_id in pair_data['ground_truth']:
+                    if gt_id in function_blocks:
+                        required_func_ids.add(gt_id)
+        
+        logger.info(f"Required functions (queries + ground truth): {len(required_func_ids)}")
+        
+        # If required functions already exceed pool_size, warn and use all required
+        if len(required_func_ids) > pool_size:
+            logger.warning(f"Required functions ({len(required_func_ids)}) exceed pool_size ({pool_size})")
+            logger.warning(f"Using all required functions to ensure ground truth is in pool")
+            selected_ids = list(required_func_ids)
+        else:
+            # Sample additional functions to reach pool_size
+            remaining_func_ids = [fid for fid in all_func_ids if fid not in required_func_ids]
+            num_additional = pool_size - len(required_func_ids)
+            
+            if num_additional > 0:
+                random.shuffle(remaining_func_ids)
+                additional_ids = remaining_func_ids[:num_additional]
+                selected_ids = list(required_func_ids) + additional_ids
+            else:
+                selected_ids = list(required_func_ids)
+        
+        # Keep only selected functions
+        function_blocks = {fid: function_blocks[fid] for fid in selected_ids if fid in function_blocks}
         
         # Keep only queries that are in the sampled pool
-        sampled_query_ids = [fid for fid in selected_ids if fid in query_ids]
-        
-        function_blocks = {fid: function_blocks[fid] for fid in selected_ids if fid in function_blocks}
+        sampled_query_ids = [fid for fid in required_func_ids if fid in query_ids]
         funcsim_pairs = {fid: funcsim_pairs[fid] for fid in sampled_query_ids if fid in funcsim_pairs}
         
         logger.info(f"Sampled pool size: {len(function_blocks)} functions (from {len(all_func_ids)} total)")
+        logger.info(f"  - Required (queries + ground truth): {len(required_func_ids)}")
+        logger.info(f"  - Additional random functions: {len(selected_ids) - len(required_func_ids)}")
         logger.info(f"Sampled queries: {len(funcsim_pairs)} query functions (from {len(query_ids)} total)")
     else:
         logger.info(f"Pool size: {len(function_blocks)} functions")
@@ -127,8 +205,9 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
     
     with torch.no_grad():
         for func_id in tqdm(all_func_ids, desc="Encoding functions"):
-            # Process function
-            func_input, func_segment, func_bin_pos, func_func_pos, func_bb_pos, func_var_offsets = dataset._process_function(func_id)
+            # Process function (now returns 8 values including num_instructions and boundaries)
+            result = dataset._process_function(func_id)
+            func_input, func_segment, func_bin_pos, func_func_pos, func_bb_pos, func_var_offsets, num_instr, boundaries = result
             
             # Move to device and add batch dimension
             func_input = func_input.unsqueeze(0).to(device)
@@ -137,8 +216,9 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
             func_func_pos = func_func_pos.unsqueeze(0).to(device)
             func_bb_pos = func_bb_pos.unsqueeze(0).to(device)
             
-            # Compute embedding
-            emb = model(func_input, func_segment, func_bin_pos, func_func_pos, func_bb_pos)
+            # Compute embedding with instruction info
+            emb = model(func_input, func_segment, func_bin_pos, func_func_pos, func_bb_pos,
+                       num_instructions=[num_instr], instruction_boundaries=[boundaries])
             all_embeddings[func_id] = emb.squeeze(0).cpu()  # [embedding_dim]
     
     logger.info(f"Computed embeddings for {len(all_embeddings)} functions")
@@ -233,18 +313,24 @@ def evaluate_model(model, test_loader, device, logger):
             func1_bin_pos = batch['func1_binary_pos'].to(device)
             func1_func_pos = batch['func1_function_pos'].to(device)
             func1_bb_pos = batch['func1_bb_pos'].to(device)
+            func1_num_instr = batch['func1_num_instructions']
+            func1_boundaries = batch['func1_boundaries']
             
             func2_input = batch['func2_input'].to(device)
             func2_segment = batch['func2_segment'].to(device)
             func2_bin_pos = batch['func2_binary_pos'].to(device)
             func2_func_pos = batch['func2_function_pos'].to(device)
             func2_bb_pos = batch['func2_bb_pos'].to(device)
+            func2_num_instr = batch['func2_num_instructions']
+            func2_boundaries = batch['func2_boundaries']
             
             labels = batch['label'].to(device)
             
-            # Forward pass
-            emb1 = model(func1_input, func1_segment, func1_bin_pos, func1_func_pos, func1_bb_pos)
-            emb2 = model(func2_input, func2_segment, func2_bin_pos, func2_func_pos, func2_bb_pos)
+            # Forward pass with instruction info
+            emb1 = model(func1_input, func1_segment, func1_bin_pos, func1_func_pos, func1_bb_pos,
+                        num_instructions=func1_num_instr, instruction_boundaries=func1_boundaries)
+            emb2 = model(func2_input, func2_segment, func2_bin_pos, func2_func_pos, func2_bb_pos,
+                        num_instructions=func2_num_instr, instruction_boundaries=func2_boundaries)
             
             # Compute similarity
             similarity = model.compute_similarity(emb1, emb2, metric='cosine')
@@ -363,13 +449,14 @@ def main():
     test_dataset = Subset(full_dataset, test_indices)
     logger.info(f"Test samples: {len(test_dataset)}")
     
-    # Create test dataloader
+    # Create test dataloader with custom collate function
     test_loader = DataLoader(
         test_dataset,
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=custom_collate_fn
     )
     
     # Create model
@@ -395,10 +482,13 @@ def main():
     logger.info(f"Checkpoint val accuracy: {checkpoint.get('val_acc', 'N/A'):.4f}")
     
     # Evaluate
+    # logger.info("\n" + "="*80)
+    # logger.info("PAIRWISE EVALUATION (Accuracy)")
+    # logger.info("="*80)
+    # pairwise_results = evaluate_model(model, test_loader, device, logger)
     logger.info("\n" + "="*80)
-    logger.info("PAIRWISE EVALUATION (Accuracy)")
+    logger.info("SKIPPING PAIRWISE EVALUATION - Only computing retrieval metrics")
     logger.info("="*80)
-    pairwise_results = evaluate_model(model, test_loader, device, logger)
     
     # Compute retrieval metrics (Recall@K, MRR)
     logger.info("\n" + "="*80)
@@ -443,7 +533,7 @@ def main():
     output_data = {
         'checkpoint': args.checkpoint,
         'test_size': len(test_dataset),
-        'pairwise_results': pairwise_results,
+        # 'pairwise_results': pairwise_results,  # Commented out - not computed
         'retrieval_results': retrieval_results,
         'checkpoint_info': {
             'epoch': checkpoint.get('epoch', None),

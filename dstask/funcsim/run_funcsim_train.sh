@@ -17,12 +17,12 @@ VOCAB="../../strupos/vocab.pkl"
 # The script will auto-detect if this model has address/var embeddings:
 # - If YES (e.g., mlm_address/best_bert.pt): Use address/var info from data
 # - If NO  (e.g., mlm/best_bert.pt):         Set all positions/offsets to 0
-PRETRAINED_BERT="../../output/mlm_addr_var/best_bert.pt"
+PRETRAINED_BERT="../../output/mlm/best_bert.pt"
 
 # Output
-OUTPUT_DIR="../../output/funcsim/addr"
-LOG_DIR="../../log/funcsim/addr"
-EXPERIMENT_NAME="funcsim_mlm_addr"
+OUTPUT_DIR="../../output/funcsim/mlm"
+LOG_DIR="../../log/funcsim/mlm"
+EXPERIMENT_NAME="funcsim_mlm"
 
 # Model config (must match pre-trained BERT)
 HIDDEN=768
@@ -55,7 +55,6 @@ VAL_SPLIT=0.125  # 12.5% of train+val for validation
 # Result within 20% selected: 70% train, 10% val, 20% test
 
 # Device
-export CUDA_VISIBLE_DEVICES=1
 DEVICE="cuda"
 NUM_WORKERS=4
 

@@ -47,6 +47,55 @@ ContrastiveLoss = funcsim_model.ContrastiveLoss
 FunctionSimilarityDataset = funcsim_dataloader.FunctionSimilarityDataset
 
 
+def custom_collate_fn(batch):
+    """
+    Custom collate function to handle variable-length instruction_boundaries lists.
+    
+    Since different functions have different numbers of instructions, we keep
+    num_instructions and instruction_boundaries as lists instead of tensors.
+    """
+    # Separate the dictionary items
+    func1_input = torch.stack([item['func1_input'] for item in batch])
+    func1_segment = torch.stack([item['func1_segment'] for item in batch])
+    func1_binary_pos = torch.stack([item['func1_binary_pos'] for item in batch])
+    func1_function_pos = torch.stack([item['func1_function_pos'] for item in batch])
+    func1_bb_pos = torch.stack([item['func1_bb_pos'] for item in batch])
+    func1_var_offsets = torch.stack([item['func1_var_offsets'] for item in batch])
+    func1_num_instructions = [item['func1_num_instructions'] for item in batch]  # Keep as list
+    func1_boundaries = [item['func1_boundaries'] for item in batch]  # Keep as list
+    
+    func2_input = torch.stack([item['func2_input'] for item in batch])
+    func2_segment = torch.stack([item['func2_segment'] for item in batch])
+    func2_binary_pos = torch.stack([item['func2_binary_pos'] for item in batch])
+    func2_function_pos = torch.stack([item['func2_function_pos'] for item in batch])
+    func2_bb_pos = torch.stack([item['func2_bb_pos'] for item in batch])
+    func2_var_offsets = torch.stack([item['func2_var_offsets'] for item in batch])
+    func2_num_instructions = [item['func2_num_instructions'] for item in batch]  # Keep as list
+    func2_boundaries = [item['func2_boundaries'] for item in batch]  # Keep as list
+    
+    labels = torch.stack([item['label'] for item in batch])
+    
+    return {
+        'func1_input': func1_input,
+        'func1_segment': func1_segment,
+        'func1_binary_pos': func1_binary_pos,
+        'func1_function_pos': func1_function_pos,
+        'func1_bb_pos': func1_bb_pos,
+        'func1_var_offsets': func1_var_offsets,
+        'func1_num_instructions': func1_num_instructions,
+        'func1_boundaries': func1_boundaries,
+        'func2_input': func2_input,
+        'func2_segment': func2_segment,
+        'func2_binary_pos': func2_binary_pos,
+        'func2_function_pos': func2_function_pos,
+        'func2_bb_pos': func2_bb_pos,
+        'func2_var_offsets': func2_var_offsets,
+        'func2_num_instructions': func2_num_instructions,
+        'func2_boundaries': func2_boundaries,
+        'label': labels
+    }
+
+
 def setup_logging(log_dir, experiment_name):
     """Setup logging configuration."""
     os.makedirs(log_dir, exist_ok=True)
@@ -285,13 +334,14 @@ def main():
     logger.info(f"Validation samples: {len(val_dataset)} ({len(val_dataset)/len(full_dataset)*100:.1f}%)")
     logger.info(f"Test samples: {len(test_dataset)} ({len(test_dataset)/len(full_dataset)*100:.1f}%)")
     
-    # Create dataloaders
+    # Create dataloaders with custom collate function
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=custom_collate_fn
     )
     
     val_loader = DataLoader(
@@ -299,7 +349,8 @@ def main():
         batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
-        pin_memory=True
+        pin_memory=True,
+        collate_fn=custom_collate_fn
     )
     
     # Save test indices for later evaluation
