@@ -280,11 +280,6 @@ class FunctionSimilarityModel(nn.Module):
         # Load weights
         missing_keys, unexpected_keys = self.bert.load_state_dict(state_dict, strict=False)
         
-        if missing_keys:
-            print(f"[WARNING] Missing keys: {missing_keys}")
-        if unexpected_keys:
-            print(f"[WARNING] Unexpected keys: {unexpected_keys}")
-        
         print("[INFO] Pre-trained BERT loaded successfully")
         
         return {'has_address': has_address, 'has_var': has_var}
