@@ -113,7 +113,7 @@ def setup_logging(log_dir, experiment_name):
 
 
 def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, device, logger, seq_len=512, top_k=[1, 5, 10], pool_size=None,
-                            checkpoint_path=None, task_name=None, embedding_dim=256):
+                            checkpoint_path=None, task_name=None, embedding_dim=256, eval_pool_path=None):
     """
     Compute retrieval metrics: Recall@K and MRR.
 
@@ -139,8 +139,26 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
     """
     model.eval()
 
-    # Limit pool size if specified
-    if pool_size is not None and pool_size < len(function_blocks):
+    # Load pre-generated pool if specified
+    if eval_pool_path is not None:
+        logger.info(f"Loading pre-generated evaluation pool from: {eval_pool_path}")
+        with open(eval_pool_path, 'r') as f:
+            pool_data = json.load(f)
+        
+        sampled_query_ids = pool_data['query_ids']
+        selected_func_ids = pool_data['pool_function_ids']
+        
+        # Filter to selected functions
+        function_blocks = {fid: function_blocks[fid] for fid in selected_func_ids if fid in function_blocks}
+        funcsim_pairs = {fid: funcsim_pairs[fid] for fid in sampled_query_ids if fid in funcsim_pairs}
+        
+        logger.info(f"Loaded pre-generated pool:")
+        logger.info(f"  - Pool size: {len(function_blocks)} functions")
+        logger.info(f"  - Queries: {len(funcsim_pairs)}")
+        logger.info(f"  - Metadata: seed={pool_data['metadata'].get('seed')}, generated={pool_data['metadata'].get('generated_at')}")
+    
+    # Limit pool size if specified (and no pre-generated pool)
+    elif pool_size is not None and pool_size < len(function_blocks):
         import random
         random.seed(42)  # Set seed for reproducible sampling
 
@@ -440,6 +458,7 @@ def main():
     parser.add_argument("--seq_len", type=int, default=512, help="Maximum sequence length")
     parser.add_argument("--negative_samples", type=int, default=3, help="Negative samples per positive")
     parser.add_argument("--pool_size", type=int, default=None, help="Limit retrieval pool size (None = use all)")
+    parser.add_argument("--eval_pool", type=str, default=None, help="Path to pre-generated eval pool JSON (overrides pool_size)")
     parser.add_argument("--data_fraction", type=float, default=1.0, help="Fraction of test data to use (0.0-1.0)")
 
     # Output
@@ -469,6 +488,24 @@ def main():
     logger.info(f"Loading vocabulary from {args.vocab}")
     vocab = WordVocab.load_vocab(args.vocab)
     logger.info(f"Vocabulary size: {len(vocab)}")
+
+    # Load checkpoint first to detect configuration
+    logger.info(f"Loading checkpoint from {args.checkpoint}")
+    checkpoint = torch.load(args.checkpoint, map_location='cpu', weights_only=False)
+    
+    # Auto-detect address embeddings from checkpoint
+    state_dict = checkpoint.get('model_state_dict', checkpoint)
+    has_address = any('address_position' in k or 'address_embedding' in k for k in state_dict.keys())
+    has_var = any('var_position' in k or 'var_embedding' in k for k in state_dict.keys())
+    
+    logger.info(f"Checkpoint configuration detected:")
+    logger.info(f"  - Address embeddings: {has_address}")
+    logger.info(f"  - Var embeddings: {has_var}")
+    
+    if args.no_address and has_address:
+        logger.warning("--no_address specified but checkpoint has address embeddings. Using checkpoint config (address=True)")
+    
+    use_address = has_address  # Use checkpoint's configuration
 
     # Load full dataset
     logger.info("Loading dataset...")
@@ -508,7 +545,7 @@ def main():
         collate_fn=custom_collate_fn
     )
 
-    # Create model
+    # Create model with detected configuration
     logger.info("Creating model...")
     model = FunctionSimilarityModel(
         vocab_size=len(vocab),
@@ -516,15 +553,19 @@ def main():
         n_layers=args.n_layers,
         attn_heads=args.attn_heads,
         max_len=args.seq_len,
-        use_address_embedding=not args.no_address,
+        use_address_embedding=use_address,
         embedding_dim=args.embedding_dim,
         freeze_bert=False
     )
 
-    # Load checkpoint
-    logger.info(f"Loading checkpoint from {args.checkpoint}")
-    checkpoint = torch.load(args.checkpoint, map_location='cpu', weights_only=False)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # Load checkpoint weights
+    missing_keys, unexpected_keys = model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+    
+    if missing_keys:
+        logger.warning(f"Missing keys when loading checkpoint: {missing_keys}")
+    if unexpected_keys:
+        logger.warning(f"Unexpected keys when loading checkpoint: {unexpected_keys}")
+    
     model = model.to(device)
 
     logger.info(f"Checkpoint epoch: {checkpoint.get('epoch', 'N/A')}")
@@ -546,30 +587,54 @@ def main():
 
     # Load function blocks and pairs for retrieval evaluation
     logger.info("Loading function blocks and pairs for retrieval evaluation...")
-    with open(args.function_blocks, 'r') as f:
-        function_blocks = json.load(f)
+    
+    # If using pre-generated pool, try to load filtered function blocks first (much faster)
+    if args.eval_pool:
+        filtered_blocks_file = args.eval_pool.replace('.json', '_function_blocks.json')
+        if os.path.exists(filtered_blocks_file):
+            logger.info(f"Loading filtered function blocks from {filtered_blocks_file}...")
+            with open(filtered_blocks_file, 'r') as f:
+                function_blocks = json.load(f)
+            logger.info(f"Loaded {len(function_blocks)} functions (filtered for pool)")
+        else:
+            logger.info(f"Filtered blocks not found at {filtered_blocks_file}")
+            logger.info(f"Run: python3 extract_pool_functions.py --pool {args.eval_pool} --function_blocks {args.function_blocks} --output {filtered_blocks_file}")
+            logger.info(f"Loading full function blocks (this may take a while)...")
+            with open(args.function_blocks, 'r') as f:
+                function_blocks = json.load(f)
+            logger.info(f"Loaded {len(function_blocks)} functions (full dataset)")
+    else:
+        with open(args.function_blocks, 'r') as f:
+            function_blocks = json.load(f)
+        logger.info(f"Loaded {len(function_blocks)} functions")
+    
     with open(args.funcsim_pairs, 'r') as f:
         funcsim_pairs = json.load(f)
 
-    # Filter to only test set functions
-    test_func_ids = set()
-    for idx in test_indices:
-        # Get the function IDs from the test pairs
-        if idx < len(full_dataset.training_pairs):
-            func1_id, func2_id, _ = full_dataset.training_pairs[idx]
-            test_func_ids.add(func1_id)
-            test_func_ids.add(func2_id)
+    # If using pre-generated pool, don't filter to test set - pool defines the scope
+    # If not using pool, filter to test set only
+    if args.eval_pool is None:
+        # Filter to only test set functions
+        test_func_ids = set()
+        for idx in test_indices:
+            # Get the function IDs from the test pairs
+            if idx < len(full_dataset.training_pairs):
+                func1_id, func2_id, _ = full_dataset.training_pairs[idx]
+                test_func_ids.add(func1_id)
+                test_func_ids.add(func2_id)
 
-    # Filter function blocks and pairs to test set only
-    test_function_blocks = {fid: function_blocks[fid] for fid in test_func_ids if fid in function_blocks}
-    test_funcsim_pairs = {fid: funcsim_pairs[fid] for fid in test_func_ids if fid in funcsim_pairs}
+        # Filter function blocks and pairs to test set only
+        function_blocks = {fid: function_blocks[fid] for fid in test_func_ids if fid in function_blocks}
+        funcsim_pairs = {fid: funcsim_pairs[fid] for fid in test_func_ids if fid in funcsim_pairs}
 
-    logger.info(f"Test set has {len(test_funcsim_pairs)} query functions")
+        logger.info(f"Test set has {len(funcsim_pairs)} query functions")
+    else:
+        logger.info(f"Using pre-generated pool (skipping test set filtering)")
 
     retrieval_results = compute_retrieval_metrics(
         model=model,
-        function_blocks=test_function_blocks,
-        funcsim_pairs=test_funcsim_pairs,
+        function_blocks=function_blocks,
+        funcsim_pairs=funcsim_pairs,
         vocab=vocab,
         device=device,
         logger=logger,
@@ -578,7 +643,8 @@ def main():
         pool_size=args.pool_size,
         checkpoint_path=args.checkpoint,
         task_name=args.task_name if hasattr(args, 'task_name') else None,
-        embedding_dim=args.embedding_dim
+        embedding_dim=args.embedding_dim,
+        eval_pool_path=args.eval_pool
     )
 
     # Save results

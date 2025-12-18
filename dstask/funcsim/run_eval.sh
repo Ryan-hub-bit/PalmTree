@@ -7,7 +7,8 @@
 set -e
 
 # Paths
-FUNCTION_BLOCKS="/data/kun/funcsim_match/function_blocks.json"
+POOL_IDS="/data/kun/funcsim_match/pool_ids_10k.json"
+POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_10k.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../strupos/vocab.pkl"
 CHECKPOINT="../../output/funcsim/mlm/best_model.pt"
@@ -28,7 +29,7 @@ TASK_NAME="mlm"  # Task identifier for embedding cache (should match training)
 BATCH_SIZE=32
 SEQ_LEN=60
 NEGATIVE_SAMPLES=3
-POOL_SIZE=100     # Limit retrieval pool size (comment out or set to 0 to use all)
+# POOL_SIZE=100  # Deprecated: Use EVAL_POOL instead for fair comparison
 DATA_FRACTION=1.0 # Use only 20% of test data (set to 1.0 to use all)
 
 # Device
@@ -41,6 +42,8 @@ echo "Function Similarity Evaluation"
 echo "========================================"
 echo "Checkpoint:      ${CHECKPOINT}"
 echo "Test indices:    ${TEST_INDICES}"
+echo "Pool IDs:        ${POOL_IDS}"
+echo "Pool Blocks:     ${POOL_FUNCTION_BLOCKS}"
 echo "Output:          ${OUTPUT}"
 echo "========================================"
 echo ""
@@ -58,13 +61,19 @@ if [ ! -f "$TEST_INDICES" ]; then
   exit 1
 fi
 
-# Run evaluation
-if [ -n "${POOL_SIZE}" ] && [ "${POOL_SIZE}" -gt 0 ]; then
-  POOL_SIZE_ARG="--pool_size ${POOL_SIZE}"
-else
-  POOL_SIZE_ARG=""
+if [ ! -f "$POOL_IDS" ]; then
+  echo "[ERROR] Pool IDs not found: $POOL_IDS"
+  echo "[INFO] Please run: ./generate_pool_data.sh"
+  exit 1
 fi
 
+if [ ! -f "$POOL_FUNCTION_BLOCKS" ]; then
+  echo "[ERROR] Pool function blocks not found: $POOL_FUNCTION_BLOCKS"
+  echo "[INFO] Please run: ./generate_pool_data.sh"
+  exit 1
+fi
+
+# Run evaluation
 if [ -n "${DATA_FRACTION}" ] && (($(echo "${DATA_FRACTION} < 1.0" | bc -l))); then
   DATA_FRACTION_ARG="--data_fraction ${DATA_FRACTION}"
 else
@@ -72,7 +81,7 @@ else
 fi
 
 python3 evaluate.py \
-  --function_blocks "${FUNCTION_BLOCKS}" \
+  --function_blocks "${POOL_FUNCTION_BLOCKS}" \
   --funcsim_pairs "${FUNCSIM_PAIRS}" \
   --vocab "${VOCAB}" \
   --test_indices "${TEST_INDICES}" \
@@ -84,7 +93,7 @@ python3 evaluate.py \
   --batch_size ${BATCH_SIZE} \
   --seq_len ${SEQ_LEN} \
   --negative_samples ${NEGATIVE_SAMPLES} \
-  ${POOL_SIZE_ARG} \
+  --eval_pool "${POOL_IDS}" \
   ${DATA_FRACTION_ARG} \
   --task_name "${TASK_NAME}" \
   --output "${OUTPUT}" \
