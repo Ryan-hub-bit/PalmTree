@@ -660,5 +660,14 @@ def main():
         }
     }
 
+    # Write results to file
+    os.makedirs(os.path.dirname(args.output), exist_ok=True)
+    with open(args.output, 'w') as f:
+        json.dump(output_data, f, indent=2)
+    
+    logger.info(f"\n{'='*80}")
+    logger.info(f"Results saved to: {args.output}")
+    logger.info(f"{'='*80}")
+
 if __name__ == '__main__':
     main()
