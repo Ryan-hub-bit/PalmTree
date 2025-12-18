@@ -23,6 +23,7 @@ PRETRAINED_BERT="../../output/mlm/best_bert.pt"
 OUTPUT_DIR="../../output/funcsim/mlm"
 LOG_DIR="../../log/funcsim/mlm"
 EXPERIMENT_NAME="funcsim_mlm"
+TASK_NAME="mlm"  # Task identifier for embedding cache (e.g., 'mlm', 'mlm_addr_var')
 
 # Model config (must match pre-trained BERT)
 HIDDEN=768
@@ -114,6 +115,7 @@ python3 train.py \
   --output_dir "${OUTPUT_DIR}" \
   --log_dir "${LOG_DIR}" \
   --experiment_name "${EXPERIMENT_NAME}" \
+  --task_name "${TASK_NAME}" \
   --device "${DEVICE}" \
   --num_workers ${NUM_WORKERS}
 

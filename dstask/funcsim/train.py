@@ -254,6 +254,7 @@ def main():
     parser.add_argument("--output_dir", type=str, default="../../output/funcsim", help="Output directory")
     parser.add_argument("--log_dir", type=str, default="../../log/funcsim", help="Log directory")
     parser.add_argument("--experiment_name", type=str, default="funcsim", help="Experiment name")
+    parser.add_argument("--task_name", type=str, default="mlm", help="Task identifier for caching (e.g., 'mlm', 'mlm_addr_var')")
     
     # Device
     parser.add_argument("--device", type=str, default="cuda", help="Device (cuda or cpu)")
@@ -360,31 +361,75 @@ def main():
         json.dump({'test_indices': test_indices, 'test_size': len(test_dataset)}, f)
     logger.info(f"Test indices saved to: {test_indices_file}")
     
-    # Create model
-    logger.info("Creating model...")
+    # STEP 1: Detect what the pretrained checkpoint has BEFORE creating model
+    logger.info(f"Detecting capabilities of pretrained checkpoint: {args.pretrained_bert}")
+    checkpoint = torch.load(args.pretrained_bert, map_location='cpu', weights_only=False)
+    
+    # Extract state dict from checkpoint
+    if isinstance(checkpoint, dict):
+        if 'bert_state_dict' in checkpoint:
+            state_dict = checkpoint['bert_state_dict']
+        elif 'model_state_dict' in checkpoint:
+            state_dict = checkpoint['model_state_dict']
+        else:
+            state_dict = checkpoint
+    else:
+        state_dict = checkpoint.state_dict()
+    
+    # Detect if checkpoint has address/var embeddings
+    has_address = any('address_position' in k or 'address_pos' in k for k in state_dict.keys())
+    has_var = any('var_position' in k or 'var_offset' in k for k in state_dict.keys())
+    has_address_var = has_address and has_var
+    
+    logger.info("=" * 80)
+    logger.info("PRETRAINED CHECKPOINT CAPABILITIES")
+    logger.info("=" * 80)
+    logger.info(f"Checkpoint has address embeddings: {has_address}")
+    logger.info(f"Checkpoint has var embeddings: {has_var}")
+    logger.info("=" * 80)
+    
+    # Override --no_address flag based on what checkpoint actually has
+    use_address_embedding = has_address_var
+    if args.no_address and has_address_var:
+        logger.warning("--no_address was set but checkpoint HAS address/var embeddings!")
+        logger.warning("Ignoring --no_address flag to match checkpoint")
+    elif not args.no_address and not has_address_var:
+        logger.warning("--no_address was NOT set but checkpoint LACKS address/var embeddings!")
+        logger.warning("Disabling address embeddings to match checkpoint")
+    
+    # STEP 2: Create model matching checkpoint capabilities
+    logger.info("Creating model to match checkpoint...")
     model = FunctionSimilarityModel(
         vocab_size=len(vocab),
         hidden=args.hidden,
         n_layers=args.n_layers,
         attn_heads=args.attn_heads,
         max_len=args.seq_len,
-        use_address_embedding=not args.no_address,
+        use_address_embedding=use_address_embedding,
+        use_var_embedding=use_address_embedding,  # Keep them together
         embedding_dim=args.embedding_dim,
         freeze_bert=args.freeze_bert
     )
     
-    # Load pre-trained BERT and detect its capabilities
+    # STEP 3: Load pretrained weights (should have no missing/unexpected keys now)
     logger.info(f"Loading pre-trained BERT from {args.pretrained_bert}")
     bert_capabilities = model.load_pretrained_bert(args.pretrained_bert)
     
-    # Configure dataset based on what BERT has
-    has_address_var = bert_capabilities['has_address'] and bert_capabilities['has_var']
-    full_dataset.use_address_var = has_address_var
+    # STEP 4: Configure dataset based on what BERT has
+    # Get the underlying dataset object (handles both Dataset and Subset)
+    def get_base_dataset(ds):
+        """Recursively get the base dataset from a Subset."""
+        if hasattr(ds, 'dataset'):
+            return get_base_dataset(ds.dataset)
+        return ds
+    
+    base_dataset = get_base_dataset(full_dataset)
+    base_dataset.use_address_var = has_address_var
     
     if has_address_var:
-        logger.info("[INFO] BERT has address/var embeddings → Dataloader will load address/var info")
+        logger.info("[INFO] BERT has address/var embeddings → Dataloader will use parsed address/var info")
     else:
-        logger.info("[INFO] BERT does NOT have address/var embeddings → All positions/offsets set to 0")
+        logger.info("[INFO] BERT does NOT have address/var embeddings → All positions/offsets masked to -1")
     
     model = model.to(device)
     
@@ -430,6 +475,7 @@ def main():
             'val_loss': val_loss,
             'train_acc': train_acc,
             'val_acc': val_acc,
+            'task_name': args.task_name,  # Save task name for evaluation
         }
         
         # Save latest checkpoint

@@ -146,14 +146,14 @@ class FunctionSimilarityDataset(Dataset):
             # Fallback: use default positions
             opcode = inst.split()[0] if inst else ''
             operands = ' '.join(inst.split()[1:]) if len(inst.split()) > 1 else ''
-            binary_pos_val = 0.0
-            function_pos_val = 0.0
-            bb_pos_val = 0.0
+            binary_pos_val = -1.0
+            function_pos_val = -1.0
+            bb_pos_val = -1.0
         
         # Start with opcode
         tokens = [opcode]
         positions = [(binary_pos_val, function_pos_val, bb_pos_val)]
-        var_offsets = [0]  # Opcode is not a var
+        var_offsets = [-1]  # Opcode is not a var, use -1 as sentinel
         
         # Parse operands
         if operands:
@@ -168,7 +168,7 @@ class FunctionSimilarityDataset(Dataset):
                     nested_bb_pos = float(nested_match.group(4))
                     tokens.append('address')
                     positions.append((nested_binary_pos, nested_function_pos, nested_bb_pos))
-                    var_offsets.append(0)  # address is not a var
+                    var_offsets.append(-1)  # address is not a var, use -1 as sentinel
                     pos += nested_match.end()
                     continue
                 
@@ -179,7 +179,7 @@ class FunctionSimilarityDataset(Dataset):
                     var_hex = var_match.group(1)
                     var_offset_value = int(var_hex, 16)
                     tokens.append('var')
-                    positions.append((0.0, 0.0, 0.0))  # var has no address position
+                    positions.append((-1.0, -1.0, -1.0))  # var has no address position, use -1 as sentinel
                     var_offsets.append(var_offset_value)  # Store the offset
                     pos += var_match.end()
                     continue
@@ -190,8 +190,8 @@ class FunctionSimilarityDataset(Dataset):
                     pos += 1
                 elif char in '[]+-*,':
                     tokens.append(char)
-                    positions.append((0.0, 0.0, 0.0))
-                    var_offsets.append(0)
+                    positions.append((-1.0, -1.0, -1.0))  # Use -1 as sentinel
+                    var_offsets.append(-1)  # Use -1 as sentinel
                     pos += 1
                 else:
                     # Read word
@@ -199,8 +199,8 @@ class FunctionSimilarityDataset(Dataset):
                     while end < len(operands) and operands[end] not in ' []+-*,':
                         end += 1
                     tokens.append(operands[pos:end])
-                    positions.append((0.0, 0.0, 0.0))
-                    var_offsets.append(0)
+                    positions.append((-1.0, -1.0, -1.0))  # Use -1 as sentinel
+                    var_offsets.append(-1)  # Use -1 as sentinel
                     pos = end
         
         return tokens, positions, var_offsets

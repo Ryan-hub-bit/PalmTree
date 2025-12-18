@@ -22,6 +22,7 @@ HIDDEN=768
 N_LAYERS=12
 ATTN_HEADS=12
 EMBEDDING_DIM=256
+TASK_NAME="mlm"  # Task identifier for embedding cache (should match training)
 
 # Evaluation config
 BATCH_SIZE=32
@@ -85,6 +86,7 @@ python3 evaluate.py \
   --negative_samples ${NEGATIVE_SAMPLES} \
   ${POOL_SIZE_ARG} \
   ${DATA_FRACTION_ARG} \
+  --task_name "${TASK_NAME}" \
   --output "${OUTPUT}" \
   --log_dir "${LOG_DIR}" \
   --device "${DEVICE}" \
