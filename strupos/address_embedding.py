@@ -159,7 +159,6 @@ class AddressPositionalEmbedding(nn.Module):
         
         return embedding
         
-        return embedding
 
 
 class VarPositionalEmbedding(nn.Module):

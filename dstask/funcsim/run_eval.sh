@@ -33,7 +33,7 @@ NEGATIVE_SAMPLES=3
 DATA_FRACTION=1.0 # Use only 20% of test data (set to 1.0 to use all)
 
 # Device
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 DEVICE="cuda"
 NUM_WORKERS=4
 

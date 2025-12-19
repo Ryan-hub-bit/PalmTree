@@ -57,7 +57,7 @@
         "--train_dfg", "/data/kun/palmtreedata/dfg_train_2.txt",
         // "--test_cfg", "/data/kun/palmtreedata/cfg_test_2.txt",
         // "--test_dfg", "/data/kun/palmtreedata/dfg_test_2.txt",
-        "--vocab_path", "./vocab.pkl",
+        "--vocab_path", "./vocab_base",
         "--hidden_size", "768",
         "--n_layers", "12",
         "--attn_heads", "12",
@@ -96,7 +96,7 @@
         "--train_dfg", "/data/kun/palmtreedata/dfg_train_2.txt",
         // "--test_cfg", "/data/kun/palmtreedata/cfg_test_2.txt",
         // "--test_dfg", "/data/kun/palmtreedata/dfg_test_2.txt",
-        "--vocab_path", "./vocab.pkl",
+        "--vocab_path", "./vocab_addr",
         "--hidden_size", "768",
         "--n_layers", "12",
         "--attn_heads", "12",
@@ -119,7 +119,7 @@
         "--log_freq", "10"
       ],
       "env": {
-        "CUDA_VISIBLE_DEVICES": "0"
+        "CUDA_VISIBLE_DEVICES": "1"
       }
     }
   ]

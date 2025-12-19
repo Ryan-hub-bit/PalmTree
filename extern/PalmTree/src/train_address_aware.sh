@@ -23,7 +23,7 @@ TRAIN_CFG="/data/kun/palmtreedata/cfg_train_2.txt"
 TRAIN_DFG="/data/kun/palmtreedata/dfg_train_2.txt"
 TEST_CFG="/data/kun/palmtreedata/cfg_test_2.txt"
 TEST_DFG="/data/kun/palmtreedata/dfg_test_2.txt"
-VOCAB="strupos/vocab.pkl"
+VOCAB="./vocab_addr.pkl"
 
 # Model hyperparameters
 HIDDEN_SIZE=768

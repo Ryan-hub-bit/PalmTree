@@ -30,7 +30,7 @@ echo ""
 # -> Auto-generates: imc_mlm_addr_var
 # -----------------------------------------------------------------------------
 # TASKS="--enable_imc --enable_mlm"
-TASKS="--enable_mlm"
+TASKS="--enable_mlm --enable_imc"
 USE_ADDRESS_EMBEDDING=true
 USE_VAR_EMBEDDING=true
 
@@ -148,7 +148,7 @@ DFG_TEST="/data/kun/dataset/test_dfg.txt"
 # Multi-GPU
 CUDA="--cuda"
 # MULTI_GPU=""
-MULTI_GPU="--multi_gpu"
+MULTI_GPU=""
 
 echo "Configuration:"
 echo "  Model: ${MODEL_NAME}"

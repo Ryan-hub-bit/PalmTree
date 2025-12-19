@@ -1,17 +1,17 @@
 """
-Baseline Dataset - Masks position numbers in address() format
+Baseline Dataset - Strips position information and normalizes to simple tokens
 
 This dataset is for the baseline comparison where we:
-1. Keep the token format (address, var, etc.)
-2. MASK the position numbers within address() 
-3. Do NOT use address embeddings in the model
-4. Use standard BERT architecture
+1. Remove ALL position information (no hierarchical positions)
+2. Normalize daddr -> address (no distinction between code/data addresses)
+3. Flatten var(0xOFFSET) -> var_0xOFFSET (simple vocabulary tokens)
+4. Use standard BERT architecture (no address/position embeddings)
 
 Example transformation:
-Input:  call(0x401234:0.12345678:0.45678901:0.78901234) address(0x402000:0.23456789:0.56789012:0.89012345)
-Output: call(0x401234:0.00000000:0.00000000:0.00000000) address(0x402000:0.00000000:0.00000000:0.00000000)
+Input:  call(0x401234:0.12:0.45:0.78) address(0x402000:0.23:0.56:0.89) daddr(0x600000:0.11:0.22:0.33) var(0x20)
+Output: call address address var_0x20
 
-The model sees the structure but not the actual position values.
+This creates a clean baseline without any structural advantages from the new format.
 """
 
 import torch
@@ -60,6 +60,7 @@ class BaselineDataset(Dataset):
         # Regex patterns - same as address-aware version
         self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+        self.daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
         
         # Load CFG data
@@ -88,7 +89,7 @@ class BaselineDataset(Dataset):
         print(f"  CFG lines: {len(self.cfg_lines)}")
         if self.dfg_lines:
             print(f"  DFG lines: {len(self.dfg_lines)}")
-        print(f"  Position numbers will be MASKED (set to 0.0)")
+        print(f"  Format: Simple tokens (no positions, daddr->address, var->var_0xOFFSET)")
     
     def _load_corpus(self, path):
         """Load corpus file"""
@@ -102,70 +103,54 @@ class BaselineDataset(Dataset):
     
     def _mask_positions(self, text):
         """
-        Mask all position numbers in address() format.
+        Mask all position numbers and normalize format for baseline.
+        
+        Transformations:
+          1. daddr(0xADDR:pos:pos:pos) -> address (convert data addresses to generic address token)
+          2. address(0xADDR:pos:pos:pos) -> address (remove position info)
+          3. opcode(0xADDR:pos:pos:pos) -> opcode (remove position info from opcodes)
+          4. var(0xOFFSET) -> var_0xOFFSET (flatten var to simple token)
         
         Example:
-          Input:  call(0x401234:0.12345678:0.45678901:0.78901234)
-          Output: call(0x401234:0.00000000:0.00000000:0.00000000)
+          Input:  call(0x401234:0.12:0.45:0.78) daddr(0x600000:0.11:0.22:0.33) var(0x20)
+          Output: call address var_0x20
         
-        This ensures the model cannot use position information.
+        This creates a true baseline without any position or structural information.
         """
-        # Mask positions in opcode addresses: opcode(0xADDR:pos1:pos2:pos3)
-        def mask_opcode_addr(match):
-            opcode = match.group(1)
-            addr = match.group(2)
-            # Set all positions to 0.0
-            return f"{opcode}({addr}:0.00000000:0.00000000:0.00000000)"
+        # Replace daddr with position info -> just "address" token
+        text = self.daddr_pattern.sub('address', text)
         
-        text = self.addr_pattern.sub(mask_opcode_addr, text)
+        # Replace address with position info -> just "address" token
+        text = self.nested_addr_pattern.sub('address', text)
         
-        # Mask positions in nested addresses: address(0xADDR:pos1:pos2:pos3)
-        def mask_nested_addr(match):
-            addr = match.group(1)
-            return f"address({addr}:0.00000000:0.00000000:0.00000000)"
+        # Replace opcode(addr:pos:pos:pos) -> just opcode
+        def replace_opcode(match):
+            return match.group(1)  # Return only the opcode
+        text = self.addr_pattern.sub(replace_opcode, text)
         
-        text = self.nested_addr_pattern.sub(mask_nested_addr, text)
+        # Replace var(0xOFFSET) -> var_0xOFFSET
+        def replace_var(match):
+            offset = match.group(1)
+            return f"var_{offset}"
+        text = self.var_pattern.sub(replace_var, text)
         
         return text
     
     def _parse_instruction_baseline(self, inst_text):
         """
         Parse instruction for baseline model.
-        Returns only tokens (no positions, no var offsets).
+        After _mask_positions(), the text is already simplified:
+        - No position info
+        - daddr -> address
+        - var(0xOFFSET) -> var_0xOFFSET
+        
+        Just split into tokens.
         """
-        # Mask positions first
+        # Apply transformations
         inst_text = self._mask_positions(inst_text)
         
-        tokens = []
-        
-        # Match opcode with address
-        match = self.addr_pattern.match(inst_text)
-        if not match:
-            # Simple instruction without address format
-            return inst_text.split()
-        
-        opcode = match.group(1)
-        tokens.append(opcode)
-        
-        # Parse operands
-        operands_text = inst_text[match.end():].strip()
-        if operands_text:
-            for operand in operands_text.split():
-                # Check for nested address
-                nested_match = self.nested_addr_pattern.match(operand)
-                var_match = self.var_pattern.match(operand)
-                
-                if nested_match:
-                    # Keep as 'address' token (positions already masked)
-                    tokens.append('address')
-                elif var_match:
-                    # Keep as 'var' token (we don't use var embeddings in baseline)
-                    tokens.append('var')
-                else:
-                    # Regular operand
-                    tokens.append(operand)
-        
-        return tokens
+        # Simple split - everything is already normalized
+        return inst_text.split()
     
     def _parse_line(self, line):
         """Parse a line into instructions"""
@@ -283,7 +268,7 @@ if __name__ == "__main__":
     print("Testing BaselineDataset...")
     
     # Load vocab
-    vocab_path = '../../strupos/vocab.pkl'
+    vocab_path = './vocab.pkl'
     with open(vocab_path, 'rb') as f:
         vocab = pickle.load(f)
     

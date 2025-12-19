@@ -35,7 +35,7 @@ def parse_args():
     
     # Mode selection
     parser.add_argument('--mode', type=str, required=True, 
-                        choices=['baseline', 'address_aware'],
+                            choices=['baseline', 'address_aware'],
                         help='Training mode: baseline (no address) or address_aware (with address)')
     
     # Data paths
@@ -86,7 +86,7 @@ def parse_args():
     # Task configuration
     parser.add_argument('--enable_imc', action='store_true', default=True,
                         help='Enable instruction masking for CFG')
-    parser.add_argument('--enable_imd', action='store_true', default=False,
+    parser.add_argument('--enable_imd', action='store_true', default=True,
                         help='Enable instruction masking for DFG')
     parser.add_argument('--enable_mlm', action='store_true', default=True,
                         help='Enable token-level MLM')
@@ -333,19 +333,35 @@ def main():
     print(f"Vocab: {args.vocab_path}")
     print("="*80 + "\n")
     
-    # Load vocabulary
-    print(f"Loading vocabulary from {args.vocab_path}...")
-    if args.vocab_path.endswith('.pkl'):
-        # Load your strupos vocab
-        import pickle
-        with open(args.vocab_path, 'rb') as f:
-            vocab = pickle.load(f)
-    else:
-        # Load original palmtree vocab
-        from palmtree.dataset import WordVocab
-        vocab = WordVocab.load_vocab(args.vocab_path)
+    # Load or create vocabulary
+    if not os.path.exists(args.vocab_path):
+        print(f"Vocabulary file not found at {args.vocab_path}")
+        print("Building vocabulary from training data...")
+        
+        # Import WordVocab
+        from vocab import WordVocab
+        
+        # Create vocab directory if needed
+        vocab_dir = os.path.dirname(args.vocab_path)
+        if vocab_dir and not os.path.exists(vocab_dir):
+            os.makedirs(vocab_dir)
+        
+        # Build vocabulary from training files
+        with open(args.train_cfg, "r", encoding="utf-8") as f1:
+            if  args.train_dfg:
+                with open(args.train_dfg, "r", encoding="utf-8") as f2:
+                    vocab = WordVocab([f1, f2], max_size=13000, min_freq=2)
+            else:
+                vocab = WordVocab([f1], max_size=13000, min_freq=2)
+        
+        print(f"VOCAB SIZE: {len(vocab)}")
+        vocab.save_vocab(args.vocab_path)
+        print(f"Vocabulary saved to {args.vocab_path}")
     
-    print(f"Vocabulary size: {len(vocab)}")
+    # Load vocabulary
+    print(f"\nLoading Vocab from {args.vocab_path}")
+    vocab = WordVocab.load_vocab(args.vocab_path)
+    print(f"Vocab Size: {len(vocab)}")
     
     # Setup based on mode
     if args.mode == 'baseline':
