@@ -24,7 +24,7 @@ print("="*80 + "\n")
 # ============================================================================
 # Configuration - Using parameters from config.py and additional settings
 # ============================================================================
-vocab_path = "cdfg_bert_1/vocab"
+vocab_path = "./vocab"
 train_cfg_dataset = "data/training/cdfg_bert_1/cfg_train.txt"
 train_dfg_dataset = "data/training/cdfg_bert_1/dfg_train.txt"
 test_cfg_dataset = "data/training/cdfg_bert_1/cfg_test.txt"

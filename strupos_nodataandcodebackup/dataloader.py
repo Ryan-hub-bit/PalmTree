@@ -231,9 +231,9 @@ class InstructionMaskingDataset(Dataset):
     def _process_line_for_instruction_masking(self, line):
         """
         Process a full line and apply instruction-level masking.
-        Format: [SOS] inst1 [EOS] inst2 [EOS] inst3 [EOS] ...
-        Segment labels: [SOS] gets segment 1, inst1 tokens get 1, [EOS] gets 1,
-                        inst2 tokens get 2, [EOS] gets 2, etc.
+        Format: <sos> inst1 inst2 inst3 ... <eos>
+        NO separators between instructions, just <sos> at start and <eos> at end.
+        Segment labels: All tokens get segment 1 (single sequence).
         
         Strategy: Calculate number of instructions to mask based on instruction_mask_prob,
         then randomly select which instructions to mask.
@@ -241,9 +241,9 @@ class InstructionMaskingDataset(Dataset):
         Returns:
             bert_input: Token IDs with instruction-level masking
             bert_label: Labels for masked instructions (-1 for unmasked)
-            segment_label: Instruction ID (1 for inst1, 2 for inst2, ...)
+            segment_label: All 1s (single sequence)
             binary_pos, function_pos, bb_pos: Position embeddings
-            var_offsets: Var offset values (0 for non-var tokens)
+            var_offsets: Var offset values (-1 for non-var tokens)
         """
         instructions = [inst.strip() for inst in line.split('\t') if inst.strip()]
         
@@ -267,7 +267,7 @@ class InstructionMaskingDataset(Dataset):
         all_segments = []
         all_var_offsets = []
         
-        # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
+        # Add <sos> at the beginning (segment 1)
         all_tokens.append(self.sos_idx)
         all_positions.append((-1.0, -1.0, -1.0))
         all_labels.append(-1)
@@ -286,21 +286,21 @@ class InstructionMaskingDataset(Dataset):
                 masked_tokens = [self.vocab.stoi.get(t, self.unk_idx) for t in tokens]
                 labels = [-1] * len(tokens)  # Not masked at instruction level
             
-            # Segment label = instruction number (1-indexed)
-            inst_segment = inst_idx + 1
-            
+            # All tokens in the same segment (segment 1)
             all_tokens.extend(masked_tokens)
             all_positions.extend(positions)
             all_labels.extend(labels)
-            all_segments.extend([inst_segment] * len(masked_tokens))
+            all_segments.extend([1] * len(masked_tokens))
             all_var_offsets.extend(var_offsets)
             
-            # Add [EOS] after each instruction (same segment as the instruction)
-            all_tokens.append(self.eos_idx)
-            all_positions.append((-1.0, -1.0, -1.0))
-            all_labels.append(-1)
-            all_segments.append(inst_segment)
-            all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
+            # NO <eos> after each instruction - we'll add it only at the very end
+        
+        # Add <eos> at the end (segment 1)
+        all_tokens.append(self.eos_idx)
+        all_positions.append((-1.0, -1.0, -1.0))
+        all_labels.append(-1)
+        all_segments.append(1)
+        all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:

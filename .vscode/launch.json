@@ -41,6 +41,86 @@
         "--enable_mlm",
         "--cuda"
       ]
+    },
+    {
+      "name": "Debug BASELINE Training (No Address Features)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/extern/PalmTree/src/train_comparison.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/extern/PalmTree/src",
+      "justMyCode": false,
+      "python": "/home/kun/anaconda3/envs/palmtree/bin/python",
+      "args": [
+        "--mode", "baseline",
+        "--train_cfg", "/data/kun/palmtreedata/cfg_train_2.txt",
+        "--train_dfg", "/data/kun/palmtreedata/dfg_train_2.txt",
+        // "--test_cfg", "/data/kun/palmtreedata/cfg_test_2.txt",
+        // "--test_dfg", "/data/kun/palmtreedata/dfg_test_2.txt",
+        "--vocab_path", "./vocab.pkl",
+        "--hidden_size", "768",
+        "--n_layers", "12",
+        "--attn_heads", "12",
+        "--dropout", "0.1",
+        "--batch_size", "16",
+        "--learning_rate", "1e-4",
+        "--num_epochs", "20",
+        "--warmup_steps", "10000",
+        "--seq_len", "20",
+        "--instruction_mask_prob", "0.25",
+        "--token_mask_prob", "0.15",
+        "--enable_imc",
+        "--enable_mlm",
+        "--output_dir", "./output_comparison",
+        "--cuda_devices", "0",
+        "--data_percentage", "0.1",
+        "--num_workers", "2",
+        "--log_freq", "10"
+      ],
+      "env": {
+        "CUDA_VISIBLE_DEVICES": "0"
+      }
+    },
+    {
+      "name": "Debug ADDRESS-AWARE Training (With Address Features)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/extern/PalmTree/src/train_comparison.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/extern/PalmTree/src",
+      "justMyCode": false,
+      "python": "/home/kun/anaconda3/envs/palmtree/bin/python",
+      "args": [
+        "--mode", "address_aware",
+        "--train_cfg", "/data/kun/palmtreedata/cfg_train_2.txt",
+        "--train_dfg", "/data/kun/palmtreedata/dfg_train_2.txt",
+        // "--test_cfg", "/data/kun/palmtreedata/cfg_test_2.txt",
+        // "--test_dfg", "/data/kun/palmtreedata/dfg_test_2.txt",
+        "--vocab_path", "./vocab.pkl",
+        "--hidden_size", "768",
+        "--n_layers", "12",
+        "--attn_heads", "12",
+        "--dropout", "0.1",
+        "--address_embed_dim", "64",
+        "--var_embed_dim", "32",
+        "--batch_size", "16",
+        "--learning_rate", "1e-4",
+        "--num_epochs", "20",
+        "--warmup_steps", "10000",
+        "--seq_len", "20",
+        "--instruction_mask_prob", "0.25",
+        "--token_mask_prob", "0.15",
+        "--enable_imc",
+        "--enable_mlm",
+        "--output_dir", "./output_comparison",
+        "--cuda_devices", "0",
+        "--data_percentage", "0.1",
+        "--num_workers", "2",
+        "--log_freq", "10"
+      ],
+      "env": {
+        "CUDA_VISIBLE_DEVICES": "0"
+      }
     }
   ]
 }

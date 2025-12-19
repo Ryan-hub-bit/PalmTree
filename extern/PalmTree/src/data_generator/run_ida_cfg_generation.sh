@@ -5,9 +5,9 @@ IDA_PATH="/home/kun/ida-pro-9.0"
 SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/cfg_hierarchical_icfg_ida.py"
 
 # Default parameters
-SEG_LEN=${1:-8}
-BIN_FOLDER=${2:-"/home/kun/onebinary"}
-OUTPUT_DIR=${3:-"/home/kun/Document/PalmTree/src/data_generator/testres2"}
+SEG_LEN=${1:-2}
+BIN_FOLDER=${2:-"/data/kun/samplebinary"}
+OUTPUT_DIR=${3:-"/data/kun/palmtreedata"}
 
 export OUTPUT_DIR
 export SEG_LEN

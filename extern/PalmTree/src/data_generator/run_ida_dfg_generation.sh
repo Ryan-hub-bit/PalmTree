@@ -6,8 +6,8 @@ SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)/dfg_hierarchical_idfg_ida.py"
 
 # Default parameters
 SEG_LEN=${1:-2}
-BIN_FOLDER=${2:-"/home/kun/Document/PalmTree/src/data_generator/testbin"}
-OUTPUT_DIR=${3:-"/home/kun/Document/PalmTree/src/data_generator/testres"}
+BIN_FOLDER=${2:-"/data/kun/samplebinary"}
+OUTPUT_DIR=${3:-"/data/kun/palmtreedata"}
 
 export OUTPUT_DIR
 export SEG_LEN

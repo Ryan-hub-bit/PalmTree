@@ -1,5 +1,6 @@
 import pickle
 import tqdm
+import re
 from collections import Counter
 
 
@@ -125,11 +126,30 @@ class WordVocab(Vocab):
                 if isinstance(line, list):
                     words = line
                 else:
-                    words = line.replace("\n", " ").replace("\t", " ").split()
+                    words = self._preprocess_line(line)
 
                 for word in words:
                     counter[word] += 1
         super().__init__(counter, max_size=max_size, min_freq=min_freq)
+    
+    def _preprocess_line(self, line):
+        """
+        Remove all address information in parentheses from a line.
+        
+        Examples:
+            mov(0x401000:0.5:0.3:0.2) eax ebx -> mov eax ebx
+            address(0x123:0.5:0.3:0.2) -> address
+            var(0x10028) -> var
+        
+        Returns cleaned tokens as a list.
+        """
+        # Remove all patterns like (0xADDR:pos1:pos2:pos3) - address positions
+        cleaned = re.sub(r'\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)', '', line)
+        # Remove all patterns like (0xADDR) - var offsets, e.g., var(0x10028) -> var
+        cleaned = re.sub(r'\(0x[0-9a-fA-F]+\)', '', cleaned)
+        # Split by whitespace and tab, filter out empty strings
+        tokens = [tok for tok in cleaned.replace('\n', ' ').replace('\t', ' ').split() if tok]
+        return tokens
 
     def to_seq(self, sentence, seq_len=None, with_eos=False, with_sos=False, with_len=False):
         if isinstance(sentence, str):

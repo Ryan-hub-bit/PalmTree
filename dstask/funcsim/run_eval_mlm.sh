@@ -11,19 +11,19 @@ POOL_IDS="/data/kun/funcsim_match/pool_ids_100k.json"
 POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_100k.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../strupos/vocab.pkl"
-CHECKPOINT="../../output/funcsim/mlm_scope_addr_var/best_model.pt"
-TEST_INDICES="../../output/funcsim/mlm_scope_addr_var/test_indices.json"
+CHECKPOINT="../../output/funcsim/mlm/best_model.pt"
+TEST_INDICES="../../output/funcsim/mlm/test_indices.json"
 
 # Output
-OUTPUT="../../output/funcsim/mlm_scope_addr_var/test_results_100k.json"
-LOG_DIR="../../log/funcsim/mlm_scope_addr_var"
+OUTPUT="../../output/funcsim/mlm/test_results_100k.json"
+LOG_DIR="../../log/funcsim/mlm"
 
 # Model config (must match training)
 HIDDEN=768
 N_LAYERS=12
 ATTN_HEADS=12
 EMBEDDING_DIM=256
-TASK_NAME="mlm_scope_addr_var"  # Task identifier for embedding cache (should match training)
+TASK_NAME="mlm"  # Task identifier for embedding cache (should match training)
 
 # Evaluation config
 BATCH_SIZE=32

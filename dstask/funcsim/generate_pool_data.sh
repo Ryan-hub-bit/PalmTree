@@ -14,7 +14,7 @@ FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 OUTPUT_DIR="/data/kun/funcsim_match"
 
 # Pool configuration
-POOL_SIZE=10000
+POOL_SIZE=100000
 SEED=42
 
 echo "========================================"

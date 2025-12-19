@@ -31,8 +31,8 @@ echo ""
 # -----------------------------------------------------------------------------
 # TASKS="--enable_imc --enable_mlm"
 TASKS="--enable_mlm"
-USE_ADDRESS_EMBEDDING=true
-USE_VAR_EMBEDDING=true
+USE_ADDRESS_EMBEDDING=false
+USE_VAR_EMBEDDING=false
 
 # -----------------------------------------------------------------------------
 # Experiment 2: IMC + MLM + Address (No Var embedding)
@@ -120,7 +120,7 @@ SEQ_LEN=60
 # Training parameters
 BATCH_SIZE=256
 LR=1e-4
-EPOCHS=10
+EPOCHS=5
 WARMUP=1000
 NUM_WORKERS=4
 EARLY_STOPPING=3

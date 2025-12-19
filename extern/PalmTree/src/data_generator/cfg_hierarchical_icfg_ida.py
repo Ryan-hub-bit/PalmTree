@@ -134,6 +134,7 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
     min_addr = ctx.get('min_addr', 0)
     max_addr = ctx.get('max_addr', min_addr)
     sections = ctx.get('sections', [])
+    symbol_map = ctx.get('symbol_map', {})
 
     def get_section_for_addr(addr):
         """Find which section an address belongs to."""
@@ -278,6 +279,16 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                 # Use 0x1000 as minimum threshold to filter out small constants even when min_addr=0
                 addr_threshold = max(min_addr, 0x1000)
                 if tgt is not None and tgt >= addr_threshold:
+                    # Check if this address is in PLT section and has a symbol name
+                    section_info = get_section_for_addr(tgt)
+                    if section_info is not None:
+                        sec_start, sec_end, sec_name = section_info
+                        # Check if it's PLT section
+                        if '.plt' in sec_name.lower() and tgt in symbol_map:
+                            # Use the symbol name for PLT addresses
+                            formatted_ops.append(symbol_map[tgt])
+                            continue
+                    
                     if tgt in addr_positions:
                         # Code address: use hierarchical positions (func, bb, inst)
                         entry = addr_positions[tgt]
@@ -285,11 +296,27 @@ def build_chunk_inline(seq, start_idx: int, k: int, ctx: dict):
                         formatted_ops.append(f"address({mk_hex}:{pos})")
                     else:
                         # Data address (not in text section): use section-based hierarchical positions
+                        # Check if it's in data section (.data, .rodata, .bss)
+                        is_data_section = False
+                        if section_info is not None:
+                            sec_start, sec_end, sec_name = section_info
+                            sname = sec_name.lower()
+                            is_data_section = (
+                                ".data" in sname or
+                                ".rodata" in sname or
+                                ".bss" in sname
+                            )
+                        
                         # Position 1: Section's position in binary
                         # Position 2: Address position inside section
                         # Position 3: BB position = 0
                         pos = format_data_address_positions(tgt)
-                        formatted_ops.append(f"address({mk_hex}:{pos})")
+                        
+                        # Use 'daddr' for data section addresses, 'address' for others
+                        if is_data_section:
+                            formatted_ops.append(f"daddr({mk_hex}:{pos})")
+                        else:
+                            formatted_ops.append(f"address({mk_hex}:{pos})")
                 else:
                     # It's an immediate value or stack offset
                     formatted_ops.append("imm")
@@ -668,6 +695,7 @@ def process_file_ida(fpath: str, out_dir: str):
         'min_addr': min_addr,
         'max_addr': max_addr,
         'sections': sections,
+        'symbol_map': symbol_map,
     }
 
     # Perform random walks on the GLOBAL ICFG
