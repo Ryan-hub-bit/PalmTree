@@ -7,6 +7,10 @@ This dataset is for the baseline comparison where we:
 3. Flatten var(0xOFFSET) -> var_0xOFFSET (simple vocabulary tokens)
 4. Use standard BERT architecture (no address/position embeddings)
 
+Tasks implemented:
+- CFG: MLM (Masked Language Modeling) + CWP (Control flow Walk Prediction via is_next)
+- DFG: DUP (Data Use Prediction via is_next) - NO IMD (no instruction masking for DFG)
+
 Example transformation:
 Input:  call(0x401234:0.12:0.45:0.78) address(0x402000:0.23:0.56:0.89) daddr(0x600000:0.11:0.22:0.33) var(0x20)
 Output: call address address var_0x20
@@ -36,7 +40,7 @@ class BaselineDataset(Dataset):
         cfg_corpus_path,
         dfg_corpus_path,
         vocab,
-        seq_len=512,
+        seq_len=20,
         encoding="utf-8",
         on_memory=True,
         token_mask_prob=0.15,
@@ -198,13 +202,18 @@ class BaselineDataset(Dataset):
         """Create sequence from instructions with masking"""
         all_tokens = []
         all_labels = []
+        all_segments = []  # Segment labels: 1 for inst1, 2 for inst2, 3 for inst3, etc.
         
-        # Add SOS token
+        # Add SOS token with segment 1 (belongs to first instruction)
         all_tokens.append(self.sos_idx)
         all_labels.append(-100)
+        all_segments.append(1)
         
-        # Process each instruction
-        for inst_tokens in instructions:
+        # Process each instruction with incrementing segment labels starting from 1
+        for inst_idx, inst_tokens in enumerate(instructions):
+            # Segment label starts from 1: 1, 2, 3, 4, ...
+            segment_label = inst_idx + 1
+            
             # Convert tokens to IDs
             token_ids = [self.vocab.stoi.get(t, self.unk_idx) for t in inst_tokens]
             
@@ -216,47 +225,97 @@ class BaselineDataset(Dataset):
                 # Apply standard MLM masking
                 masked_ids, labels = self._mask_tokens_mlm(token_ids)
             
+            # All tokens in this instruction get the same segment label
             all_tokens.extend(masked_ids)
             all_labels.extend(labels)
-        
-        # Add EOS token
-        all_tokens.append(self.eos_idx)
-        all_labels.append(-100)
+            all_segments.extend([segment_label] * len(masked_ids))
+            
+            # Add EOS token after each instruction with same segment
+            all_tokens.append(self.eos_idx)
+            all_labels.append(-100)
+            all_segments.append(segment_label)
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
             all_tokens = all_tokens[:self.seq_len]
             all_labels = all_labels[:self.seq_len]
+            all_segments = all_segments[:self.seq_len]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens.extend([self.pad_idx] * padding_len)
             all_labels.extend([-100] * padding_len)
+            all_segments.extend([0] * padding_len)
         
-        return all_tokens, all_labels
+        return all_tokens, all_labels, all_segments
     
     def __len__(self):
         return len(self.cfg_lines)
     
+    def _get_random_cfg_line(self):
+        """Get a random CFG line for negative sampling"""
+        idx = random.randrange(len(self.cfg_lines))
+        return self.cfg_lines[idx]
+    
+    def _get_random_dfg_line(self):
+        """Get a random DFG line for negative sampling"""
+        if not self.dfg_lines:
+            return None
+        idx = random.randrange(len(self.dfg_lines))
+        return self.dfg_lines[idx]
+    
     def __getitem__(self, idx):
         # Get CFG line
         cfg_line = self.cfg_lines[idx]
-        cfg_instructions = self._parse_line(cfg_line)
-        cfg_tokens, cfg_labels = self._create_sequence(cfg_instructions)
+        
+        # For CFG: Implement CWP (Control flow Walk Prediction)
+        # 50% chance: keep consecutive instructions (is_next=1)
+        # 50% chance: replace with random line (is_next=0)
+        dice_cfg = random.random()
+        if dice_cfg > 0.5:
+            # Use original consecutive line
+            cfg_instructions = self._parse_line(cfg_line)
+            cfg_is_next = 1
+        else:
+            # Use random line
+            random_cfg_line = self._get_random_cfg_line()
+            cfg_instructions = self._parse_line(random_cfg_line)
+            cfg_is_next = 0
+        
+        cfg_tokens, cfg_labels, cfg_segments = self._create_sequence(cfg_instructions)
         
         output = {
             'bert_input': torch.tensor(cfg_tokens, dtype=torch.long),
             'bert_label': torch.tensor(cfg_labels, dtype=torch.long),
+            'cfg_bert_input': torch.tensor(cfg_tokens, dtype=torch.long),
+            'cfg_segment_label': torch.tensor(cfg_segments, dtype=torch.long),
+            'cfg_is_next': torch.tensor(cfg_is_next, dtype=torch.long),
         }
         
         # Add DFG if enabled
         if self.enable_imd and self.dfg_lines:
+            # For DFG: Implement DUP (Data Use Prediction)
+            # 50% chance: keep consecutive instructions (is_next=1)
+            # 50% chance: replace with random line (is_next=0)
             dfg_idx = idx % len(self.dfg_lines)
             dfg_line = self.dfg_lines[dfg_idx]
-            dfg_instructions = self._parse_line(dfg_line)
-            dfg_tokens, dfg_labels = self._create_sequence(dfg_instructions)
+            
+            dice_dfg = random.random()
+            if dice_dfg > 0.5:
+                # Use original consecutive line
+                dfg_instructions = self._parse_line(dfg_line)
+                dfg_is_next = 1
+            else:
+                # Use random line
+                random_dfg_line = self._get_random_dfg_line()
+                dfg_instructions = self._parse_line(random_dfg_line)
+                dfg_is_next = 0
+            
+            dfg_tokens, dfg_labels, dfg_segments = self._create_sequence(dfg_instructions)
             
             output['dfg_bert_input'] = torch.tensor(dfg_tokens, dtype=torch.long)
             output['dfg_bert_label'] = torch.tensor(dfg_labels, dtype=torch.long)
+            output['dfg_segment_label'] = torch.tensor(dfg_segments, dtype=torch.long)
+            output['dfg_is_next'] = torch.tensor(dfg_is_next, dtype=torch.long)
         
         return output
 
@@ -275,9 +334,9 @@ if __name__ == "__main__":
     # Create dataset
     dataset = BaselineDataset(
         cfg_corpus_path='/data/kun/palmtreedata/cfg_train_2.txt',
-        dfg_corpus_path=None,
+        dfg_corpus_path='/data/kun/palmtreedata/dfg_train_2.txt',
         vocab=vocab,
-        seq_len=512,
+        seq_len=20,
         data_percentage=0.01,  # Use 1% for testing
     )
     

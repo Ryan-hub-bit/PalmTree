@@ -7,8 +7,8 @@ directory = "/data/kun/palmtreedata"
 cfg_files = [f for f in os.listdir(directory) if f.endswith("_cfg_2_inline.txt")]
 dfg_files = [f for f in os.listdir(directory) if f.endswith("_dfg_2_inline.txt")]
 
-# Regex: Matches . followed by a letter, then any word characters
-pattern = re.compile(r'\.([a-zA-Z][a-zA-Z0-9_]*)')
+# Regex: Matches . followed by a letter or underscore, then any word characters
+pattern = re.compile(r'\.([a-zA-Z_][a-zA-Z0-9_]*)')
 
 def get_top_100(file_list):
     counts = Counter()
@@ -35,10 +35,20 @@ def merge_with_replace(file_list, output_name, top_set):
 
 # Execute for CFG
 top_100_cfg = get_top_100(cfg_files)
+# Save the top 100 unique strings to file
+with open(os.path.join(directory, "cfg_dot_strings_unique.txt"), 'w') as f:
+    for item in sorted(top_100_cfg):
+        f.write(f"{item}\n")
+print(f"Saved {len(top_100_cfg)} unique CFG strings to cfg_dot_strings_unique.txt")
 merge_with_replace(cfg_files, "cfg_train_2.txt", top_100_cfg)
 
 # Execute for DFG
 top_100_dfg = get_top_100(dfg_files)
+# Save the top 100 unique strings to file
+with open(os.path.join(directory, "dfg_dot_strings_unique.txt"), 'w') as f:
+    for item in sorted(top_100_dfg):
+        f.write(f"{item}\n")
+print(f"Saved {len(top_100_dfg)} unique DFG strings to dfg_dot_strings_unique.txt")
 merge_with_replace(dfg_files, "dfg_train_2.txt", top_100_dfg)
 
 print("Process Complete!")

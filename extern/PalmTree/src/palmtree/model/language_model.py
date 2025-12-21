@@ -8,6 +8,10 @@ class BERTLM(nn.Module):
     """
     BERT Language Model
     Next Sentence Prediction Model + Masked Language Model
+    
+    Tasks:
+    - CFG: CWP (Control flow Walk Prediction) + MLM (Masked Language Modeling)
+    - DFG: DUP (Data Use Prediction) only
     """
 
     def __init__(self, bert: BERT, vocab_size):
@@ -18,15 +22,15 @@ class BERTLM(nn.Module):
 
         super().__init__()
         self.bert = bert
-        self.CWP= NextSentencePrediction(self.bert.hidden)
-        self.DUP = NextSentencePrediction(self.bert.hidden)
-        self.MLM = MaskedLanguageModel(self.bert.hidden, vocab_size)
+        self.CWP= NextSentencePrediction(self.bert.hidden)  # CFG walk prediction
+        self.DUP = NextSentencePrediction(self.bert.hidden)  # DFG use prediction
+        self.MLM = MaskedLanguageModel(self.bert.hidden, vocab_size)  # CFG token masking
 
     def forward(self, d, d_segment_label, c, c_segment_label):
-        d = self.bert(d, d_segment_label)
-        c = self.bert(c, c_segment_label)
+        d = self.bert(d, d_segment_label)  # DFG encoding
+        c = self.bert(c, c_segment_label)  # CFG encoding
 
-        return self.DUP(d), self.CWP(c), self.MLM(d)
+        return self.DUP(d), self.CWP(c), self.MLM(c)  # MLM on CFG, not DFG
 
 
 class NextSentencePrediction(nn.Module):

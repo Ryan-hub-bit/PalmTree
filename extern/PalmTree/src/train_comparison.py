@@ -26,6 +26,7 @@ sys.path.insert(0, 'src')
 sys.path.insert(0, '../../strupos')  # For your address-aware components
 
 from config import *
+from vocab import WordVocab
 
 # ============================================================================
 # Parse Arguments
@@ -205,8 +206,7 @@ def setup_baseline_mode(args, vocab):
         warmup_steps=args.warmup_steps,
         with_cuda=torch.cuda.is_available(),
         cuda_devices=args.cuda_devices,
-        log_freq=args.log_freq,
-        mode='baseline'
+        log_freq=args.log_freq
     )
     
     return trainer, train_dataset, test_dataset
@@ -338,21 +338,46 @@ def main():
         print(f"Vocabulary file not found at {args.vocab_path}")
         print("Building vocabulary from training data...")
         
-        # Import WordVocab
-        from vocab import WordVocab
+        # Import regex for preprocessing
+        import re
         
         # Create vocab directory if needed
         vocab_dir = os.path.dirname(args.vocab_path)
         if vocab_dir and not os.path.exists(vocab_dir):
             os.makedirs(vocab_dir)
         
-        # Build vocabulary from training files
+        # Preprocessing wrapper for baseline vocab (same as baseline dataset preprocessing)
+        class PreprocessedFileWrapper:
+            """Preprocess lines to match baseline format during vocab creation"""
+            def __init__(self, file_handle):
+                self.file_handle = file_handle
+                self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+                self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+                self.daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+                self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
+            
+            def __iter__(self):
+                for line in self.file_handle:
+                    # Preprocess line same as baseline dataset
+                    # 1. daddr(...) -> address
+                    line = self.daddr_pattern.sub('address', line)
+                    # 2. address(...) -> address
+                    line = self.nested_addr_pattern.sub('address', line)
+                    # 3. opcode(...) -> opcode
+                    line = self.addr_pattern.sub(r'\1', line)
+                    # 4. var(0xOFFSET) -> var_0xOFFSET
+                    line = self.var_pattern.sub(r'var_\1', line)
+                    # Return tokens
+                    yield line.split()
+        
+        # Build vocabulary from training files with preprocessing
         with open(args.train_cfg, "r", encoding="utf-8") as f1:
-            if  args.train_dfg:
+            if args.train_dfg:
                 with open(args.train_dfg, "r", encoding="utf-8") as f2:
-                    vocab = WordVocab([f1, f2], max_size=13000, min_freq=2)
+                    vocab = WordVocab([PreprocessedFileWrapper(f1), PreprocessedFileWrapper(f2)], 
+                                     max_size=5000, min_freq=2)
             else:
-                vocab = WordVocab([f1], max_size=13000, min_freq=2)
+                vocab = WordVocab([PreprocessedFileWrapper(f1)], max_size=5000, min_freq=2)
         
         print(f"VOCAB SIZE: {len(vocab)}")
         vocab.save_vocab(args.vocab_path)

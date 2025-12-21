@@ -73,7 +73,8 @@ class BERTTrainer:
         self.optim_schedule = ScheduledOptim(self.optim, self.bert.hidden, n_warmup_steps=warmup_steps)
 
         # Loss functions
-        self.masked_criterion = nn.NLLLoss(ignore_index=0)
+        # Use ignore_index=-100 to ignore non-masked tokens in loss calculation
+        self.masked_criterion = nn.NLLLoss(ignore_index=-100)
         self.dfg_next_criterion = nn.NLLLoss()
         self.cfg_next_criterion = nn.NLLLoss()
         

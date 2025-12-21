@@ -60,10 +60,11 @@ class BERTTrainer:
         self.optim_schedule = ScheduledOptim(self.optim, self.bert.hidden, n_warmup_steps=warmup_steps)
 
         # Using Negative Log Likelihood Loss function for predicting the masked_token
-        self.masked_criterion = nn.NLLLoss(ignore_index=0)
+        # Use ignore_index=-100 to ignore non-masked tokens in loss calculation
+        self.masked_criterion = nn.NLLLoss(ignore_index=-100)
         self.dfg_next_criterion = nn.NLLLoss()
         self.cfg_next_criterion = nn.NLLLoss()
-        self.comp_criterion = nn.NLLLoss(ignore_index=0)
+        self.comp_criterion = nn.NLLLoss(ignore_index=-100)
         self.sentence_bert = nn.NLLLoss()
         self.log_freq = log_freq
 
@@ -110,8 +111,8 @@ class BERTTrainer:
             cfg_next_loss = self.cfg_next_criterion(cfg_next_sent_output, data["cfg_is_next"])
 
 
-            # 2-2. NLLLoss of predicting masked token word
-            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["dfg_bert_label"])
+            # 2-2. NLLLoss of predicting masked token word (CFG only, not DFG)
+            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["cfg_bert_label"])
 
             # 2-3 NLLloss of instruction component prediction
             #comp_loss = self.comp_criterion(inst_comp_output.transpose(1, 2), data["component"])

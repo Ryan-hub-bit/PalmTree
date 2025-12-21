@@ -47,12 +47,12 @@ INSTRUCTION_MASK_PROB=0.25
 TOKEN_MASK_PROB=0.15
 
 # Output
-OUTPUT_DIR="./output_comparison/address_aware"
+OUTPUT_DIR="./output_comparison/"
 mkdir -p ${OUTPUT_DIR}
 
 # CUDA settings
-export CUDA_VISIBLE_DEVICES=0
-CUDA_DEVICES=(0)
+export CUDA_VISIBLE_DEVICES=1
+CUDA_DEVICES=(1)
 
 # Data percentage (use 1.0 for full data, smaller for testing)
 DATA_PERCENTAGE=1.0
