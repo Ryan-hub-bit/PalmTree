@@ -26,9 +26,9 @@ TEST_DFG="/data/kun/palmtreedata/dfg_test_2.txt"
 VOCAB="./vocab_base"
 
 # Model hyperparameters
-HIDDEN_SIZE=768
+HIDDEN_SIZE=128
 N_LAYERS=12
-ATTN_HEADS=12
+ATTN_HEADS=8
 DROPOUT=0.1
 
 # Training hyperparameters
@@ -84,10 +84,8 @@ python3 train_comparison.py \
   --seq_len ${SEQ_LEN} \
   --instruction_mask_prob ${INSTRUCTION_MASK_PROB} \
   --token_mask_prob ${TOKEN_MASK_PROB} \
-  --enable_imc \
-  --enable_mlm \
   --output_dir ${OUTPUT_DIR} \
-  --cuda_devices ${CUDA_DEVICES[@]} \
+  --cuda_devices 1 \
   --data_percentage ${DATA_PERCENTAGE} \
   --num_workers 4 \
   --log_freq 100

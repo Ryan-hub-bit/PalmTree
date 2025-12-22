@@ -26,13 +26,13 @@ TEST_DFG="/data/kun/palmtreedata/dfg_test_2.txt"
 VOCAB="./vocab_addr.pkl"
 
 # Model hyperparameters
-HIDDEN_SIZE=768
+HIDDEN_SIZE=128
 N_LAYERS=12
-ATTN_HEADS=12
+ATTN_HEADS=8
 DROPOUT=0.1
 
 # Address-aware specific
-ADDRESS_EMBED_DIM=64
+ADDRESS_EMBED_DIM=128
 VAR_EMBED_DIM=32
 
 # Training hyperparameters

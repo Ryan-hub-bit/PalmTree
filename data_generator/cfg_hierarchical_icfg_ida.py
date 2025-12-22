@@ -339,7 +339,7 @@ def clean_ida_disasm(ea):
         if not op:
             break
         
-        # Clean up IDA's duplicate offsets in var format: [rsp+60h+var_60] -> [rsp+var_60]
+        # Clean up IDA's duplicate offsets in var format: [rsp+60h+var_60] -> [rsp+var_60] rbp + var_60 mov rax [rsp]  mov rax [rsp + 60h + var_60]  [rsp + imm + var_60]           
         # This handles the common case where IDA shows both hex offset and var_ symbol
         if 'var_' in op:
             op = re.sub(r'\+?\s*0x[0-9A-Fa-f]+\s*\+\s*(?=var_)', '+', op)

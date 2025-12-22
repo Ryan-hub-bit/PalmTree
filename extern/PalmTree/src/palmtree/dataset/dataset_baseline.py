@@ -46,13 +46,11 @@ class BaselineDataset(Dataset):
         token_mask_prob=0.15,
         instruction_mask_prob=0.25,
         data_percentage=1.0,
-        enable_imd=False,
     ):
         self.vocab = vocab
         self.seq_len = seq_len
         self.token_mask_prob = token_mask_prob
         self.instruction_mask_prob = instruction_mask_prob
-        self.enable_imd = enable_imd
         
         # Special token IDs
         self.pad_idx = vocab.stoi.get('<pad>', 0)
@@ -76,7 +74,7 @@ class BaselineDataset(Dataset):
         
         # Load DFG data if enabled
         self.dfg_lines = []
-        if self.enable_imd and dfg_corpus_path:
+        if dfg_corpus_path:
             print(f"Loading DFG corpus from {dfg_corpus_path}")
             self.dfg_lines = self._load_corpus(dfg_corpus_path)
             print(f"Loaded {len(self.dfg_lines)} DFG lines")
@@ -198,8 +196,14 @@ class BaselineDataset(Dataset):
         
         return masked_tokens, labels
     
-    def _create_sequence(self, instructions):
-        """Create sequence from instructions with masking"""
+    def _create_sequence(self, instructions, apply_masking=True):
+        """
+        Create sequence from instructions with optional masking
+        
+        Args:
+            instructions: List of instruction token lists
+            apply_masking: Whether to apply MLM/IMC masking (True for CFG, False for DFG)
+        """
         all_tokens = []
         all_labels = []
         all_segments = []  # Segment labels: 1 for inst1, 2 for inst2, 3 for inst3, etc.
@@ -217,13 +221,19 @@ class BaselineDataset(Dataset):
             # Convert tokens to IDs
             token_ids = [self.vocab.stoi.get(t, self.unk_idx) for t in inst_tokens]
             
-            # Decide whether to mask entire instruction
-            if random.random() < self.instruction_mask_prob:
-                # Mask entire instruction (IMC/IMD task)
-                masked_ids, labels = self._mask_instruction(token_ids)
+            if apply_masking:
+                # Apply masking for CFG (MLM + optional IMC)
+                # Decide whether to mask entire instruction
+                if random.random() < self.instruction_mask_prob:
+                    # Mask entire instruction (IMC task)
+                    masked_ids, labels = self._mask_instruction(token_ids)
+                else:
+                    # Apply standard MLM masking
+                    masked_ids, labels = self._mask_tokens_mlm(token_ids)
             else:
-                # Apply standard MLM masking
-                masked_ids, labels = self._mask_tokens_mlm(token_ids)
+                # No masking for DFG (DUP task only)
+                masked_ids = token_ids
+                labels = [-100] * len(token_ids)
             
             # All tokens in this instruction get the same segment label
             all_tokens.extend(masked_ids)
@@ -281,7 +291,7 @@ class BaselineDataset(Dataset):
             cfg_instructions = self._parse_line(random_cfg_line)
             cfg_is_next = 0
         
-        cfg_tokens, cfg_labels, cfg_segments = self._create_sequence(cfg_instructions)
+        cfg_tokens, cfg_labels, cfg_segments = self._create_sequence(cfg_instructions, apply_masking=True)
         
         output = {
             'bert_input': torch.tensor(cfg_tokens, dtype=torch.long),
@@ -291,8 +301,8 @@ class BaselineDataset(Dataset):
             'cfg_is_next': torch.tensor(cfg_is_next, dtype=torch.long),
         }
         
-        # Add DFG if enabled
-        if self.enable_imd and self.dfg_lines:
+        # Add DFG if available (DFG loaded based on dfg_corpus_path, not enable_imd)
+        if self.dfg_lines:
             # For DFG: Implement DUP (Data Use Prediction)
             # 50% chance: keep consecutive instructions (is_next=1)
             # 50% chance: replace with random line (is_next=0)
@@ -310,7 +320,8 @@ class BaselineDataset(Dataset):
                 dfg_instructions = self._parse_line(random_dfg_line)
                 dfg_is_next = 0
             
-            dfg_tokens, dfg_labels, dfg_segments = self._create_sequence(dfg_instructions)
+            # DFG: NO masking (apply_masking=False) - only DUP task
+            dfg_tokens, dfg_labels, dfg_segments = self._create_sequence(dfg_instructions, apply_masking=False)
             
             output['dfg_bert_input'] = torch.tensor(dfg_tokens, dtype=torch.long)
             output['dfg_bert_label'] = torch.tensor(dfg_labels, dtype=torch.long)

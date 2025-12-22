@@ -407,8 +407,6 @@ def main():
                 function_blocks = json.load(f)
             logger.info(f"Loaded {len(function_blocks)} functions (filtered for pool)")
         else:
-            logger.info(f"Filtered blocks not found at {filtered_blocks_file}")
-            logger.info(f"Run: python3 extract_pool_functions.py --pool {args.eval_pool} --function_blocks {args.function_blocks} --output {filtered_blocks_file}")
             logger.info(f"Loading full function blocks (this may take a while)...")
             with open(args.function_blocks, 'r') as f:
                 function_blocks = json.load(f)

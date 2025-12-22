@@ -112,7 +112,8 @@ class BERTTrainer:
 
 
             # 2-2. NLLLoss of predicting masked token word (CFG only, not DFG)
-            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["cfg_bert_label"])
+            # Note: dataset returns 'bert_label' not 'cfg_bert_label'
+            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["bert_label"])
 
             # 2-3 NLLloss of instruction component prediction
             #comp_loss = self.comp_criterion(inst_comp_output.transpose(1, 2), data["component"])

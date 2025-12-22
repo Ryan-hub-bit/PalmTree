@@ -3,9 +3,9 @@ import torch.nn as nn
 from torch.optim import Adam, AdamW
 from torch.utils.data import DataLoader
 
-from ..model import BERTLM, BERT
-from ..model.language_model_addressaware import AddressAwareBERTLM
-from .optim_schedule import ScheduledOptim
+from ..palmtree.model import BERTLM, BERT
+from ..palmtree.model.language_model_addressaware import AddressAwareBERTLM
+from ..palmtree.trainer.optim_schedule import ScheduledOptim
 
 import tqdm
 

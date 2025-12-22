@@ -12,7 +12,6 @@ This script loads pairs from the baseline dataset and shows:
 import torch
 import sys
 sys.path.insert(0, 'src')
-sys.path.insert(0, '../../strupos')
 
 from vocab import WordVocab
 from palmtree.dataset.dataset_baseline import BaselineDataset
@@ -22,26 +21,76 @@ def decode_tokens(token_ids, vocab):
     """Decode token IDs back to words"""
     tokens = []
     for tid in token_ids:
-        if tid == vocab.stoi.get('<pad>', 0):
+        tid_val = tid.item() if torch.is_tensor(tid) else tid
+        if tid_val == vocab.stoi.get('<pad>', 0):
             break  # Stop at padding
-        elif tid in vocab.itos:
-            tokens.append(vocab.itos[tid])
+        elif 0 <= tid_val < len(vocab.itos):
+            tokens.append(vocab.itos[tid_val])
         else:
-            tokens.append(f'<UNK:{tid}>')
+            tokens.append(f'<UNK:{tid_val}>')
     return tokens
 
 
 def format_with_masking(tokens, labels, segments):
-    """Format tokens showing masking and segment labels"""
+    """Format tokens showing masking (without inline segment labels)"""
     result = []
     for i, (token, label, seg) in enumerate(zip(tokens, labels, segments)):
         if token == '<pad>':
             break
         if label != -100:  # This token is masked
-            result.append(f"[{token}→MASKED|seg{seg}]")
+            result.append(f"[{token}→MASKED]")
         else:
-            result.append(f"{token}|seg{seg}")
+            result.append(token)
     return ' '.join(result)
+
+
+def format_original_tokens(tokens):
+    """Format original tokens without masking"""
+    result = []
+    for token in tokens:
+        if token == '<pad>':
+            break
+        result.append(token)
+    return ' '.join(result)
+
+
+def reconstruct_original_from_labels(tokens, labels, vocab):
+    """Reconstruct original tokens from masked tokens and labels"""
+    original = []
+    for token, label in zip(tokens, labels):
+        if token == '<pad>':
+            break
+        if label != -100 and token == '<mask>':
+            # This was masked, show original from label
+            if 0 <= label < len(vocab.itos):
+                original.append(vocab.itos[label])
+            else:
+                original.append(f'<UNK:{label}>')
+        else:
+            original.append(token)
+    return ' '.join(original)
+
+
+def format_segment_info(tokens, segments):
+    """Format segment labels separately for readability"""
+    result = []
+    current_seg = None
+    seg_tokens = []
+    
+    for token, seg in zip(tokens, segments):
+        if token == '<pad>':
+            break
+        if seg != current_seg:
+            if seg_tokens:
+                result.append(f"Seg{current_seg}: {' '.join(seg_tokens)}")
+                seg_tokens = []
+            current_seg = seg
+        seg_tokens.append(token)
+    
+    if seg_tokens:
+        result.append(f"Seg{current_seg}: {' '.join(seg_tokens)}")
+    
+    return '\n  '.join(result)
 
 
 def main():
@@ -58,8 +107,7 @@ def main():
         cfg_corpus_path="/data/kun/palmtreedata/cfg_train_2.txt",
         dfg_corpus_path="/data/kun/palmtreedata/dfg_train_2.txt",
         vocab=vocab,
-        seq_len=512,
-        enable_imd=True,  # Enable DFG data
+        seq_len=20,
         instruction_mask_prob=0.25,
         token_mask_prob=0.15
     )
@@ -73,9 +121,8 @@ def main():
         f.write("100 CFG-DFG PAIRS - DETAILED TEXT AND TENSOR REPRESENTATION\n")
         f.write("="*100 + "\n")
         f.write("\nLegend:\n")
-        f.write("  - [token→MASKED|segN]: Token that is masked for prediction\n")
-        f.write("  - token|segN: Regular token with segment label N\n")
-        f.write("  - Segment labels: 1, 2, 3... for each instruction (0 for padding)\n")
+        f.write("  - [token→MASKED]: Token that is masked for prediction\n")
+        f.write("  - Segment info shown separately below each sequence\n")
         f.write("  - is_next: 1 = consecutive sequences, 0 = random sequences\n")
         f.write("="*100 + "\n\n")
         
@@ -108,8 +155,23 @@ def main():
             cfg_labels_list = cfg_label.tolist()
             cfg_segments_list = cfg_segment.tolist()
             
-            # Show formatted text with masking and segments
-            f.write("\nCFG Instruction Text (with masking indicators):\n")
+            # Show original text BEFORE masking
+            f.write("\nCFG Original Instructions (before masking):\n")
+            original_cfg = reconstruct_original_from_labels(cfg_tokens, cfg_labels_list, vocab)
+            # Wrap long lines
+            words = original_cfg.split()
+            line = ""
+            for word in words:
+                if len(line) + len(word) + 1 > 90:
+                    f.write(f"  {line}\n")
+                    line = word
+                else:
+                    line = line + " " + word if line else word
+            if line:
+                f.write(f"  {line}\n")
+            
+            # Show formatted text with masking (clean, no inline segments)
+            f.write("\nCFG After Masking:\n")
             formatted_cfg = format_with_masking(cfg_tokens, cfg_labels_list, cfg_segments_list)
             # Wrap long lines
             words = formatted_cfg.split()
@@ -122,6 +184,11 @@ def main():
                     line = line + " " + word if line else word
             if line:
                 f.write(f"  {line}\n")
+            
+            # Show segment breakdown
+            f.write(f"\nSegment Breakdown:\n")
+            segment_info = format_segment_info(cfg_tokens, cfg_segments_list)
+            f.write(f"  {segment_info}\n")
             
             # Show raw text (first 50 tokens)
             f.write(f"\nCFG Raw Tokens (first 50): {' '.join(cfg_tokens[:50])}\n")
@@ -157,9 +224,9 @@ def main():
                 dfg_labels_list = dfg_label.tolist()
                 dfg_segments_list = dfg_segment.tolist()
                 
-                # Show formatted text with segments (no masking for DFG in baseline)
-                f.write("\nDFG Instruction Text (with segment labels):\n")
-                formatted_dfg = format_with_masking(dfg_tokens, dfg_labels_list, dfg_segments_list)
+                # Show original text (DFG should have no masking in baseline)
+                f.write("\nDFG Instructions (no masking in baseline):\n")
+                formatted_dfg = format_original_tokens(dfg_tokens)
                 # Wrap long lines
                 words = formatted_dfg.split()
                 line = ""
@@ -171,6 +238,11 @@ def main():
                         line = line + " " + word if line else word
                 if line:
                     f.write(f"  {line}\n")
+                
+                # Show segment breakdown
+                f.write(f"\nSegment Breakdown:\n")
+                segment_info = format_segment_info(dfg_tokens, dfg_segments_list)
+                f.write(f"  {segment_info}\n")
                 
                 # Show raw text (first 50 tokens)
                 f.write(f"\nDFG Raw Tokens (first 50): {' '.join(dfg_tokens[:50])}\n")

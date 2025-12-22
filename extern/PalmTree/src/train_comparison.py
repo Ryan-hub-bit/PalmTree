@@ -23,7 +23,6 @@ from pathlib import Path
 
 # Add paths
 sys.path.insert(0, 'src')
-sys.path.insert(0, '../../strupos')  # For your address-aware components
 
 from config import *
 from vocab import WordVocab
@@ -85,16 +84,8 @@ def parse_args():
                         help='Maximum sequence length')
     
     # Task configuration
-    parser.add_argument('--enable_imc', action='store_true', default=True,
-                        help='Enable instruction masking for CFG')
-    parser.add_argument('--enable_imd', action='store_true', default=True,
-                        help='Enable instruction masking for DFG')
-    parser.add_argument('--enable_mlm', action='store_true', default=True,
-                        help='Enable token-level MLM')
-    parser.add_argument('--instruction_mask_prob', type=float, default=0.25,
-                        help='Instruction masking probability')
     parser.add_argument('--token_mask_prob', type=float, default=0.15,
-                        help='Token masking probability')
+                        help='Token masking probability (MLM)')
     
     # Training settings
     parser.add_argument('--num_workers', type=int, default=4,
@@ -138,12 +129,10 @@ def setup_baseline_mode(args, vocab):
     print("Loading baseline dataset (masking positions)...")
     train_dataset = BaselineDataset(
         cfg_corpus_path=args.train_cfg,
-        dfg_corpus_path=args.train_dfg if args.enable_imd else None,
+        dfg_corpus_path=None,
         vocab=vocab,
         seq_len=args.seq_len,
         token_mask_prob=args.token_mask_prob,
-        instruction_mask_prob=args.instruction_mask_prob,
-        enable_imd=args.enable_imd,
         data_percentage=args.data_percentage,
     )
     
@@ -151,12 +140,10 @@ def setup_baseline_mode(args, vocab):
     if args.test_cfg and os.path.exists(args.test_cfg):
         test_dataset = BaselineDataset(
             cfg_corpus_path=args.test_cfg,
-            dfg_corpus_path=args.test_dfg if args.enable_imd else None,
+            dfg_corpus_path=None,
             vocab=vocab,
             seq_len=args.seq_len,
             token_mask_prob=args.token_mask_prob,
-            instruction_mask_prob=args.instruction_mask_prob,
-            enable_imd=args.enable_imd,
             data_percentage=args.data_percentage,
         )
     
@@ -230,22 +217,19 @@ def setup_address_aware_mode(args, vocab):
     print("  - Includes variable offset embeddings")
     print("="*80 + "\n")
     
-    # Import your address-aware components
-    sys.path.insert(0, '../../strupos')
-    from dataloader import InstructionMaskingDataset
-    from model import AddressAwareBERT
-    from train import AddressAwareTrainer
+    # Import address-aware components (copied from strupos)
+    from address_aware.dataloader_addressaware import InstructionMaskingDataset
+    from address_aware.model_addressaware import AddressAwareBERT
+    from address_aware.train_addressaware import AddressAwareTrainer
     
     # Create your address-aware dataset
     print("Loading address-aware dataset (using positions)...")
     train_dataset = InstructionMaskingDataset(
         cfg_corpus_path=args.train_cfg,
-        dfg_corpus_path=args.train_dfg if args.enable_imd else None,
+        dfg_corpus_path=None,
         vocab=vocab,
         seq_len=args.seq_len,
         token_mask_prob=args.token_mask_prob,
-        instruction_mask_prob=args.instruction_mask_prob,
-        enable_imd=args.enable_imd,
         data_percentage=args.data_percentage,
     )
     
@@ -253,12 +237,10 @@ def setup_address_aware_mode(args, vocab):
     if args.test_cfg and os.path.exists(args.test_cfg):
         test_dataset = InstructionMaskingDataset(
             cfg_corpus_path=args.test_cfg,
-            dfg_corpus_path=args.test_dfg if args.enable_imd else None,
+            dfg_corpus_path=None,
             vocab=vocab,
             seq_len=args.seq_len,
             token_mask_prob=args.token_mask_prob,
-            instruction_mask_prob=args.instruction_mask_prob,
-            enable_imd=args.enable_imd,
             data_percentage=args.data_percentage,
         )
     
@@ -287,8 +269,6 @@ def setup_address_aware_mode(args, vocab):
     print(f"  Hidden size: {args.hidden_size}")
     print(f"  Layers: {args.n_layers}")
     print(f"  Attention heads: {args.attn_heads}")
-    print(f"  Address embedding dim: {args.address_embed_dim}")
-    print(f"  Variable embedding dim: {args.var_embed_dim}")
     
     model = AddressAwareBERT(
         vocab_size=len(vocab),
@@ -296,8 +276,9 @@ def setup_address_aware_mode(args, vocab):
         n_layers=args.n_layers,
         attn_heads=args.attn_heads,
         dropout=args.dropout,
-        address_embed_dim=args.address_embed_dim,
-        var_embed_dim=args.var_embed_dim,
+        max_len=args.seq_len,
+        use_address_embedding=True,
+        use_var_embedding=True,
     )
     
     # Create your trainer
@@ -329,7 +310,6 @@ def main():
     print("="*80)
     print(f"Mode: {args.mode.upper()}")
     print(f"CFG Train: {args.train_cfg}")
-    print(f"DFG Train: {args.train_dfg if args.enable_imd else 'Not used'}")
     print(f"Vocab: {args.vocab_path}")
     print("="*80 + "\n")
     
@@ -346,38 +326,66 @@ def main():
         if vocab_dir and not os.path.exists(vocab_dir):
             os.makedirs(vocab_dir)
         
-        # Preprocessing wrapper for baseline vocab (same as baseline dataset preprocessing)
-        class PreprocessedFileWrapper:
-            """Preprocess lines to match baseline format during vocab creation"""
-            def __init__(self, file_handle):
-                self.file_handle = file_handle
-                self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
-                self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
-                self.daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
-                self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
+        if args.mode == 'baseline':
+            # Preprocessing wrapper for baseline vocab (same as baseline dataset preprocessing)
+            class BaselinePreprocessedFileWrapper:
+                """Preprocess lines to match baseline format during vocab creation"""
+                def __init__(self, file_handle):
+                    self.file_handle = file_handle
+                    self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+                    self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+                    self.daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+                    self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
+                
+                def __iter__(self):
+                    for line in self.file_handle:
+                        # Preprocess line same as baseline dataset
+                        # 1. daddr(...) -> address
+                        line = self.daddr_pattern.sub('address', line)
+                        # 2. address(...) -> address
+                        line = self.nested_addr_pattern.sub('address', line)
+                        # 3. opcode(...) -> opcode
+                        line = self.addr_pattern.sub(r'\1', line)
+                        # 4. var(0xOFFSET) -> var_0xOFFSET
+                        line = self.var_pattern.sub(r'var_\1', line)
+                        # Return tokens
+                        yield line.split()
             
-            def __iter__(self):
-                for line in self.file_handle:
-                    # Preprocess line same as baseline dataset
-                    # 1. daddr(...) -> address
-                    line = self.daddr_pattern.sub('address', line)
-                    # 2. address(...) -> address
-                    line = self.nested_addr_pattern.sub('address', line)
-                    # 3. opcode(...) -> opcode
-                    line = self.addr_pattern.sub(r'\1', line)
-                    # 4. var(0xOFFSET) -> var_0xOFFSET
-                    line = self.var_pattern.sub(r'var_\1', line)
-                    # Return tokens
-                    yield line.split()
+            # Build vocabulary from training files with baseline preprocessing
+            with open(args.train_cfg, "r", encoding="utf-8") as f1:
+                if args.train_dfg:
+                    with open(args.train_dfg, "r", encoding="utf-8") as f2:
+                        vocab = WordVocab([BaselinePreprocessedFileWrapper(f1), BaselinePreprocessedFileWrapper(f2)], 
+                                         max_size=5000, min_freq=2)
+                else:
+                    vocab = WordVocab([BaselinePreprocessedFileWrapper(f1)], max_size=5000, min_freq=2)
         
-        # Build vocabulary from training files with preprocessing
-        with open(args.train_cfg, "r", encoding="utf-8") as f1:
-            if args.train_dfg:
-                with open(args.train_dfg, "r", encoding="utf-8") as f2:
-                    vocab = WordVocab([PreprocessedFileWrapper(f1), PreprocessedFileWrapper(f2)], 
-                                     max_size=5000, min_freq=2)
-            else:
-                vocab = WordVocab([PreprocessedFileWrapper(f1)], max_size=5000, min_freq=2)
+        else:  # address_aware
+            # Preprocessing for address-aware vocab (from create_vocab.py)
+            # Remove address info in parentheses but keep token structure
+            class AddressAwarePreprocessedFile:
+                """Remove all address information in parentheses during vocab creation"""
+                def __init__(self, file_handle):
+                    self.file_handle = file_handle
+                
+                def __iter__(self):
+                    for line in self.file_handle:
+                        # Remove all patterns like (0xADDR:pos1:pos2:pos3) - address positions
+                        cleaned = re.sub(r'\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)', '', line)
+                        # Remove all patterns like (0xADDR) - var offsets
+                        cleaned = re.sub(r'\(0x[0-9a-fA-F]+\)', '', cleaned)
+                        # Split by whitespace and filter empty strings
+                        tokens = [tok for tok in cleaned.replace('\t', ' ').split() if tok]
+                        yield tokens
+            
+            # Build vocabulary from training files with address-aware preprocessing
+            with open(args.train_cfg, "r", encoding="utf-8") as f1:
+                if args.train_dfg:
+                    with open(args.train_dfg, "r", encoding="utf-8") as f2:
+                        vocab = WordVocab([AddressAwarePreprocessedFile(f1), AddressAwarePreprocessedFile(f2)], 
+                                         max_size=5000, min_freq=2)
+                else:
+                    vocab = WordVocab([AddressAwarePreprocessedFile(f1)], max_size=5000, min_freq=2)
         
         print(f"VOCAB SIZE: {len(vocab)}")
         vocab.save_vocab(args.vocab_path)
