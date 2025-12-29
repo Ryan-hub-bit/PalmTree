@@ -7,102 +7,95 @@ This dataset is for the baseline comparison where we:
 3. Flatten var(0xOFFSET) -> var_0xOFFSET (simple vocabulary tokens)
 4. Use standard BERT architecture (no address/position embeddings)
 
-Tasks implemented:
+Tasks implemented (same as original PalmTree):
 - CFG: MLM (Masked Language Modeling) + CWP (Control flow Walk Prediction via is_next)
-- DFG: DUP (Data Use Prediction via is_next) - NO IMD (no instruction masking for DFG)
+- DFG: MLM (Masked Language Modeling) + DUP (Data Use Prediction via is_next)
 
 Example transformation:
 Input:  call(0x401234:0.12:0.45:0.78) address(0x402000:0.23:0.56:0.89) daddr(0x600000:0.11:0.22:0.33) var(0x20)
 Output: call address address var_0x20
 
-This creates a clean baseline without any structural advantages from the new format.
+Structure: Identical to dataset.py, only difference is the _mask_positions() preprocessing.
 """
 
-import torch
 from torch.utils.data import Dataset
-import re
+import tqdm
+import torch
 import random
-from tqdm import tqdm
+import pickle as pkl
+import re
 
 
 class BaselineDataset(Dataset):
-    """
-    Baseline dataset that masks position numbers but keeps token structure.
-    
-    This allows fair comparison by:
-    - Using same data format
-    - Masking position information (so model can't use it)
-    - Using standard BERT (no address embeddings)
-    """
-    
-    def __init__(
-        self,
-        cfg_corpus_path,
-        dfg_corpus_path,
-        vocab,
-        seq_len=20,
-        encoding="utf-8",
-        on_memory=True,
-        token_mask_prob=0.15,
-        instruction_mask_prob=0.25,
-        data_percentage=1.0,
-    ):
+    def __init__(self, dfg_corpus_path, cfg_corpus_path, vocab, seq_len, encoding="utf-8", corpus_lines=None, on_memory=True, token_mask_prob=0.15, data_percentage=1.0):
         self.vocab = vocab
         self.seq_len = seq_len
-        self.token_mask_prob = token_mask_prob
-        self.instruction_mask_prob = instruction_mask_prob
-        
-        # Special token IDs
-        self.pad_idx = vocab.stoi.get('<pad>', 0)
-        self.unk_idx = vocab.stoi.get('<unk>', 1)
-        self.eos_idx = vocab.stoi.get('<eos>', 2)
-        self.sos_idx = vocab.stoi.get('<sos>', 3)
-        self.mask_idx = vocab.stoi.get('<mask>', 4)
-        
-        # Regex patterns - same as address-aware version
+        self.token_mask_prob = token_mask_prob  # Masking probability for MLM
+        self.data_percentage = data_percentage  # Percentage of data to use
+
+        self.bb_len = 50
+
+        self.on_memory = on_memory
+        self.corpus_lines = corpus_lines
+        self.dfg_corpus_path = dfg_corpus_path
+        self.cfg_corpus_path = cfg_corpus_path
+        self.encoding = encoding
+
+        # Regex patterns for masking positions (BASELINE SPECIFIC)
         self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         self.daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
         self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
+
+        # load DFG sequences 
+        with open(dfg_corpus_path, "r", encoding=encoding) as f:
+            if self.corpus_lines is None and not on_memory:
+                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines):
+                    self.corpus_lines += 1
+
+            if on_memory:
+                self.dfg_lines = [line[:-1].split("\t")
+                              for line in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines)]
+                
+                self.corpus_lines = len(self.dfg_lines)
+       
+       # load CFG sequences 
+        with open(cfg_corpus_path, "r", encoding=encoding) as f:
+            if self.corpus_lines is None and not on_memory:
+                for _ in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines):
+                    self.corpus_lines += 1
+
+            if on_memory:
+                self.cfg_lines = [line[:-1].split("\t")
+                              for line in tqdm.tqdm(f, desc="Loading Dataset", total=corpus_lines)]
+                
+                if self.corpus_lines > len(self.cfg_lines):    
+                    self.corpus_lines = len(self.cfg_lines)
         
-        # Load CFG data
-        self.cfg_lines = []
-        if cfg_corpus_path:
-            print(f"Loading CFG corpus from {cfg_corpus_path}")
-            self.cfg_lines = self._load_corpus(cfg_corpus_path)
-            print(f"Loaded {len(self.cfg_lines)} CFG lines")
+        # Apply data_percentage sampling
+        if self.data_percentage < 1.0 and on_memory:
+            original_size = self.corpus_lines
+            self.corpus_lines = int(self.corpus_lines * self.data_percentage)
+            self.dfg_lines = self.dfg_lines[:self.corpus_lines]
+            self.cfg_lines = self.cfg_lines[:self.corpus_lines]
+            print(f"Using {self.data_percentage*100}% of data: {self.corpus_lines}/{original_size} samples")
         
-        # Load DFG data if enabled
-        self.dfg_lines = []
-        if dfg_corpus_path:
-            print(f"Loading DFG corpus from {dfg_corpus_path}")
-            self.dfg_lines = self._load_corpus(dfg_corpus_path)
-            print(f"Loaded {len(self.dfg_lines)} DFG lines")
-        
-        # Apply data percentage
-        if data_percentage < 1.0:
-            cfg_size = int(len(self.cfg_lines) * data_percentage)
-            self.cfg_lines = self.cfg_lines[:cfg_size]
-            if self.dfg_lines:
-                dfg_size = int(len(self.dfg_lines) * data_percentage)
-                self.dfg_lines = self.dfg_lines[:dfg_size]
-        
-        print(f"Baseline dataset size:")
-        print(f"  CFG lines: {len(self.cfg_lines)}")
-        if self.dfg_lines:
-            print(f"  DFG lines: {len(self.dfg_lines)}")
-        print(f"  Format: Simple tokens (no positions, daddr->address, var->var_0xOFFSET)")
-    
-    def _load_corpus(self, path):
-        """Load corpus file"""
-        lines = []
-        with open(path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line:
-                    lines.append(line)
-        return lines
-    
+        # Note: on_memory=False mode is not fully supported for dual CFG+DFG dataset
+        # The original implementation had a bug (corpus_path undefined)
+        # Keeping this for compatibility but it won't work correctly
+        if not on_memory:
+            # Bug: Should use self.cfg_corpus_path or self.dfg_corpus_path
+            # This mode is not recommended - use on_memory=True instead
+            self.file = open(self.cfg_corpus_path, "r", encoding=encoding)
+            self.random_file = open(self.cfg_corpus_path, "r", encoding=encoding)
+
+            for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
+                self.random_file.__next__()
+
+
+    def __len__(self):
+        return self.corpus_lines
+
     def _mask_positions(self, text):
         """
         Mask all position numbers and normalize format for baseline.
@@ -137,233 +130,180 @@ class BaselineDataset(Dataset):
         text = self.var_pattern.sub(replace_var, text)
         
         return text
-    
-    def _parse_instruction_baseline(self, inst_text):
-        """
-        Parse instruction for baseline model.
-        After _mask_positions(), the text is already simplified:
-        - No position info
-        - daddr -> address
-        - var(0xOFFSET) -> var_0xOFFSET
+
+    def __getitem__(self, item):
+        c1, c2, c_label, d1, d2, d_label = self.random_sent(item)
+
+        # Apply position masking to DFG sequences (BASELINE SPECIFIC)
+        d1 = self._mask_positions(d1)
+        d2 = self._mask_positions(d2)
+
+        d1_random, d1_label = self.random_word(d1)
+        d2_random, d2_label = self.random_word(d2)
+
+        d1 = [self.vocab.sos_index] + d1_random + [self.vocab.eos_index]
+        d2 = d2_random + [self.vocab.eos_index]
+
+        # Apply position masking to CFG sequences (BASELINE SPECIFIC)
+        c1 = self._mask_positions(c1)
+        c2 = self._mask_positions(c2)
+
+        c1 = [self.vocab.sos_index] + [self.vocab.stoi.get(c, self.vocab.unk_index) for c in c1.split()] + [self.vocab.eos_index]
+        c2 = [self.vocab.stoi.get(c, self.vocab.unk_index) for c in c2.split()] + [self.vocab.eos_index]
         
-        Just split into tokens.
-        """
-        # Apply transformations
-        inst_text = self._mask_positions(inst_text)
-        
-        # Simple split - everything is already normalized
-        return inst_text.split()
-    
-    def _parse_line(self, line):
-        """Parse a line into instructions"""
-        instructions = line.split('\t')
-        parsed_instructions = []
-        
-        for inst in instructions:
-            inst = inst.strip()
-            if not inst:
-                continue
-            
-            # Parse instruction tokens (positions masked)
-            tokens = self._parse_instruction_baseline(inst)
-            parsed_instructions.append(tokens)
-        
-        return parsed_instructions
-    
-    def _mask_instruction(self, tokens):
-        """Mask entire instruction (all tokens)"""
-        masked_tokens = [self.mask_idx] * len(tokens)
-        labels = tokens.copy()
-        return masked_tokens, labels
-    
-    def _mask_tokens_mlm(self, tokens):
-        """Standard MLM: mask individual tokens at token_mask_prob"""
-        masked_tokens = tokens.copy()
-        labels = [-100] * len(tokens)  # -100 = ignore in loss
-        
-        for i in range(len(tokens)):
-            if random.random() < self.token_mask_prob:
-                # Mask this token
-                labels[i] = tokens[i]
-                
-                # 80% mask, 10% random, 10% keep
-                rand = random.random()
-                if rand < 0.8:
-                    masked_tokens[i] = self.mask_idx
-                elif rand < 0.9:
-                    masked_tokens[i] = random.randint(5, len(self.vocab) - 1)
-                # else: keep original
-        
-        return masked_tokens, labels
-    
-    def _create_sequence(self, instructions, apply_masking=True):
-        """
-        Create sequence from instructions with optional masking
-        
-        Args:
-            instructions: List of instruction token lists
-            apply_masking: Whether to apply MLM/IMC masking (True for CFG, False for DFG)
-        """
-        all_tokens = []
-        all_labels = []
-        all_segments = []  # Segment labels: 1 for inst1, 2 for inst2, 3 for inst3, etc.
-        
-        # Add SOS token with segment 1 (belongs to first instruction)
-        all_tokens.append(self.sos_idx)
-        all_labels.append(-100)
-        all_segments.append(1)
-        
-        # Process each instruction with incrementing segment labels starting from 1
-        for inst_idx, inst_tokens in enumerate(instructions):
-            # Segment label starts from 1: 1, 2, 3, 4, ...
-            segment_label = inst_idx + 1
-            
-            # Convert tokens to IDs
-            token_ids = [self.vocab.stoi.get(t, self.unk_idx) for t in inst_tokens]
-            
-            if apply_masking:
-                # Apply masking for CFG (MLM + optional IMC)
-                # Decide whether to mask entire instruction
-                if random.random() < self.instruction_mask_prob:
-                    # Mask entire instruction (IMC task)
-                    masked_ids, labels = self._mask_instruction(token_ids)
+
+
+        d1_label = [self.vocab.pad_index] + d1_label + [self.vocab.pad_index]
+        d2_label = d2_label + [self.vocab.pad_index]
+
+        dfg_segment_label = ([1 for _ in range(len(d1))] + [2 for _ in range(len(d2))])[:self.seq_len]
+        cfg_segment_label = ([1 for _ in range(len(c1))] + [2 for _ in range(len(c2))])[:self.seq_len]
+        dfg_bert_input = (d1 + d2)[:self.seq_len]
+        dfg_bert_label = (d1_label + d2_label)[:self.seq_len]
+
+        cfg_bert_input = (c1 + c2)[:self.seq_len]
+
+        padding = [self.vocab.pad_index for _ in range(self.seq_len - len(dfg_bert_input))]
+        dfg_bert_input.extend(padding), dfg_bert_label.extend(padding), dfg_segment_label.extend(padding) #, comp_label.extend(padding)
+        cfg_padding = [self.vocab.pad_index for _ in range(self.seq_len - len(cfg_bert_input))]
+        cfg_bert_input.extend(cfg_padding), cfg_segment_label.extend(cfg_padding)
+
+        output = {"dfg_bert_input": dfg_bert_input,
+                  "dfg_bert_label": dfg_bert_label,
+                  "dfg_segment_label": dfg_segment_label,
+                  "dfg_is_next": d_label,
+                  "cfg_bert_input": cfg_bert_input,
+                  "cfg_segment_label": cfg_segment_label,
+                  "cfg_is_next": c_label
+                  }
+
+        return {key: torch.tensor(value) for key, value in output.items()}
+
+
+    def random_bb(self):
+        prob = random.random()
+        if prob > 0.5:
+            bb_pair = self.bb_pairs[random.choice(list(self.bb_pairs.keys()))]
+            return bb_pair, 1
+        else:
+            neg_keys = random.choices(list(self.bb_pairs.keys()), k=2)
+            bb_pair = (self.bb_pairs[neg_keys[0]][0], self.bb_pairs[neg_keys[1]][1])
+            return bb_pair, 0 
+
+
+    def get_index_bb(self, bb_pair):
+        tokens1 = [self.vocab.sos_index]
+        segment1 = [1]
+        i = 1
+        for ins in bb_pair[0].split(";")[-5:]:
+            if ins:
+                for token in ins.split():
+                    tokens1.append(self.vocab.stoi.get(token, self.vocab.unk_index))
+                    segment1.append(i)
+                tokens1.append(self.vocab.eos_index)
+                segment1.append(i)
+                i += 1
+         
+        tokens2 = [self.vocab.sos_index]
+        segment2 = [1]
+        j = 1
+        for ins in bb_pair[0].split(";")[-5:]:
+            if ins:
+                for token in ins.split():
+                    tokens2.append(self.vocab.stoi.get(token, self.vocab.unk_index))
+                    segment2.append(j)
+                tokens2.append(self.vocab.eos_index)
+                segment2.append(j)
+                j += 1
+
+        tokens1 = tokens1[:self.bb_len]
+        tokens2 = tokens2[:self.bb_len]
+
+        segment1 = segment1[:self.bb_len]
+        segment2 = segment2[:self.bb_len]
+
+        padding1 = [self.vocab.pad_index for _ in range(self.bb_len - len(tokens1))]
+        padding2 = [self.vocab.pad_index for _ in range(self.bb_len - len(tokens2))]
+
+        tokens1.extend(padding1)
+        tokens2.extend(padding2)
+
+        segment1.extend(padding1)
+        segment2.extend(padding2)
+
+        return tokens1, tokens2, segment1, segment2
+     
+
+    def random_word(self, sentence):
+        tokens = sentence.split()
+        output_label = []
+
+        for i, token in enumerate(tokens):
+            prob = random.random()
+            if prob < self.token_mask_prob:
+                prob /= self.token_mask_prob
+
+                # 80% randomly change token to mask token
+                if prob < 0.8:
+                    tokens[i] = self.vocab.mask_index
+
+                # 10% randomly change token to random token
+                elif prob < 0.9:
+                    tokens[i] = random.randrange(len(self.vocab))
+
+                # 10% randomly change token to current token
                 else:
-                    # Apply standard MLM masking
-                    masked_ids, labels = self._mask_tokens_mlm(token_ids)
+                    tokens[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
+
+                output_label.append(self.vocab.stoi.get(token, self.vocab.unk_index))
+
             else:
-                # No masking for DFG (DUP task only)
-                masked_ids = token_ids
-                labels = [-100] * len(token_ids)
-            
-            # All tokens in this instruction get the same segment label
-            all_tokens.extend(masked_ids)
-            all_labels.extend(labels)
-            all_segments.extend([segment_label] * len(masked_ids))
-            
-            # Add EOS token after each instruction with same segment
-            all_tokens.append(self.eos_idx)
-            all_labels.append(-100)
-            all_segments.append(segment_label)
+                tokens[i] = self.vocab.stoi.get(token, self.vocab.unk_index)
+                output_label.append(0)
         
-        # Truncate or pad to seq_len
-        if len(all_tokens) > self.seq_len:
-            all_tokens = all_tokens[:self.seq_len]
-            all_labels = all_labels[:self.seq_len]
-            all_segments = all_segments[:self.seq_len]
-        else:
-            padding_len = self.seq_len - len(all_tokens)
-            all_tokens.extend([self.pad_idx] * padding_len)
-            all_labels.extend([-100] * padding_len)
-            all_segments.extend([0] * padding_len)
-        
-        return all_tokens, all_labels, all_segments
-    
-    def __len__(self):
-        return len(self.cfg_lines)
-    
-    def _get_random_cfg_line(self):
-        """Get a random CFG line for negative sampling"""
-        idx = random.randrange(len(self.cfg_lines))
-        return self.cfg_lines[idx]
-    
-    def _get_random_dfg_line(self):
-        """Get a random DFG line for negative sampling"""
-        if not self.dfg_lines:
-            return None
-        idx = random.randrange(len(self.dfg_lines))
-        return self.dfg_lines[idx]
-    
-    def __getitem__(self, idx):
-        # Get CFG line
-        cfg_line = self.cfg_lines[idx]
-        
-        # For CFG: Implement CWP (Control flow Walk Prediction)
-        # 50% chance: keep consecutive instructions (is_next=1)
-        # 50% chance: replace with random line (is_next=0)
-        dice_cfg = random.random()
-        if dice_cfg > 0.5:
-            # Use original consecutive line
-            cfg_instructions = self._parse_line(cfg_line)
-            cfg_is_next = 1
-        else:
-            # Use random line
-            random_cfg_line = self._get_random_cfg_line()
-            cfg_instructions = self._parse_line(random_cfg_line)
-            cfg_is_next = 0
-        
-        cfg_tokens, cfg_labels, cfg_segments = self._create_sequence(cfg_instructions, apply_masking=True)
-        
-        output = {
-            'bert_input': torch.tensor(cfg_tokens, dtype=torch.long),
-            'bert_label': torch.tensor(cfg_labels, dtype=torch.long),
-            'cfg_bert_input': torch.tensor(cfg_tokens, dtype=torch.long),
-            'cfg_segment_label': torch.tensor(cfg_segments, dtype=torch.long),
-            'cfg_is_next': torch.tensor(cfg_is_next, dtype=torch.long),
-        }
-        
-        # Add DFG if available (DFG loaded based on dfg_corpus_path, not enable_imd)
-        if self.dfg_lines:
-            # For DFG: Implement DUP (Data Use Prediction)
-            # 50% chance: keep consecutive instructions (is_next=1)
-            # 50% chance: replace with random line (is_next=0)
-            dfg_idx = idx % len(self.dfg_lines)
-            dfg_line = self.dfg_lines[dfg_idx]
-            
-            dice_dfg = random.random()
-            if dice_dfg > 0.5:
-                # Use original consecutive line
-                dfg_instructions = self._parse_line(dfg_line)
-                dfg_is_next = 1
-            else:
-                # Use random line
-                random_dfg_line = self._get_random_dfg_line()
-                dfg_instructions = self._parse_line(random_dfg_line)
-                dfg_is_next = 0
-            
-            # DFG: NO masking (apply_masking=False) - only DUP task
-            dfg_tokens, dfg_labels, dfg_segments = self._create_sequence(dfg_instructions, apply_masking=False)
-            
-            output['dfg_bert_input'] = torch.tensor(dfg_tokens, dtype=torch.long)
-            output['dfg_bert_label'] = torch.tensor(dfg_labels, dtype=torch.long)
-            output['dfg_segment_label'] = torch.tensor(dfg_segments, dtype=torch.long)
-            output['dfg_is_next'] = torch.tensor(dfg_is_next, dtype=torch.long)
-        
-        return output
+        return tokens, output_label
 
 
-if __name__ == "__main__":
-    # Test the dataset
-    import pickle
-    
-    print("Testing BaselineDataset...")
-    
-    # Load vocab
-    vocab_path = './vocab.pkl'
-    with open(vocab_path, 'rb') as f:
-        vocab = pickle.load(f)
-    
-    # Create dataset
-    dataset = BaselineDataset(
-        cfg_corpus_path='/data/kun/palmtreedata/cfg_train_2.txt',
-        dfg_corpus_path='/data/kun/palmtreedata/dfg_train_2.txt',
-        vocab=vocab,
-        seq_len=20,
-        data_percentage=0.01,  # Use 1% for testing
-    )
-    
-    # Test one sample
-    sample = dataset[0]
-    print(f"\nSample keys: {sample.keys()}")
-    print(f"Input shape: {sample['bert_input'].shape}")
-    print(f"Label shape: {sample['bert_label'].shape}")
-    print(f"Input tokens (first 20): {sample['bert_input'][:20]}")
-    print(f"Labels (first 20): {sample['bert_label'][:20]}")
-    
-    # Decode some tokens
-    print("\nDecoded tokens (first 10):")
-    for i in range(10):
-        token_id = sample['bert_input'][i].item()
-        if token_id < len(vocab.itos):
-            print(f"  {i}: {vocab.itos[token_id]}")
-    
-    print("\nBaseline dataset test complete!")
+    def random_sent(self, index):
+        c1, c2, d1, d2 = self.get_corpus_line(index)
+        dice = random.random() # TODO: should throw the dice twice here. 
+        if dice < 0.25:
+            return c1, c2, 1, d1, d2, 1
+        elif 0.25 <= dice < 0.5:
+            return c1, self.get_random_line(), 0, d1, d2, 1
+        elif 0.5 <= dice < 0.75:
+            return c1, c2, 1, d2, d1, 0
+        else:
+            return c1, self.get_random_line(), 0, d2, d1, 0
+
+
+    def get_corpus_line(self, item):
+        if self.on_memory:
+            return self.cfg_lines[item][0], self.cfg_lines[item][1], self.dfg_lines[item][0], self.dfg_lines[item][1]
+
+        # now only on_memory copurs are supported
+        # else:
+        #     line = self.file.__next__()
+        #     if line is None:
+        #         self.file.close()
+        #         self.file = open(self.corpus_path, "r", encoding=self.encoding)
+        #         line = self.file.__next__()
+
+        #     t1, t2 = line[:-1].split("\t")
+        #     return t1, t2 
+
+
+    def get_random_line(self):
+        if self.on_memory:
+            l = self.cfg_lines[random.randrange(len(self.cfg_lines))]
+            return l[1]
+
+        # now only on_memory copurs are supported
+        # line = self.file.__next__()
+        # if line is None:
+        #     self.file.close()
+        #     self.file = open(self.corpus_path, "r", encoding=self.encoding)
+        #     for _ in range(random.randint(self.corpus_lines if self.corpus_lines < 1000 else 1000)):
+        #         self.random_file.__next__()
+        #     line = self.random_file.__next__()
+        # return line[:-1].split("\t")[1] 

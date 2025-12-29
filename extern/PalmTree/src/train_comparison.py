@@ -92,7 +92,7 @@ def parse_args():
     
     # Task configuration
     parser.add_argument('--token_mask_prob', type=float, default=0.15,
-                        help='Token masking probability (MLM)')
+                        help='Token masking probability (MLM) - used by both modes')
     
     # Training settings
     parser.add_argument('--num_workers', type=int, default=4,
@@ -104,7 +104,7 @@ def parse_args():
     parser.add_argument('--cuda_devices', type=int, nargs='+', default=[0],
                         help='CUDA device IDs')
     parser.add_argument('--data_percentage', type=float, default=1.0,
-                        help='Percentage of data to use (for quick testing)')
+                        help='Percentage of data to use (for quick testing) - used by both modes')
     
     return parser.parse_args()
 
@@ -125,29 +125,37 @@ def setup_baseline_mode(args, vocab):
     print("  - Masks position numbers in address() tokens")
     print("  - Does NOT use address embeddings")
     print("  - Uses standard BERT architecture")
+    print(f"  - Token masking probability: {args.token_mask_prob}")
+    print(f"  - Data percentage: {args.data_percentage*100}%")
     print("="*80 + "\n")
     
     
     # Create dataset with position masking
     print("Loading baseline dataset (masking positions)...")
     train_dataset = BaselineDataset(
-        cfg_corpus_path=args.train_cfg,
         dfg_corpus_path=args.train_dfg,
+        cfg_corpus_path=args.train_cfg,
         vocab=vocab,
         seq_len=args.seq_len,
+        encoding="utf-8",
+        corpus_lines=None,
+        on_memory=True,
         token_mask_prob=args.token_mask_prob,
-        data_percentage=args.data_percentage,
+        data_percentage=args.data_percentage
     )
     
     test_dataset = None
     if args.test_cfg and os.path.exists(args.test_cfg):
         test_dataset = BaselineDataset(
-            cfg_corpus_path=args.test_cfg,
             dfg_corpus_path=args.test_dfg,
+            cfg_corpus_path=args.test_cfg,
             vocab=vocab,
             seq_len=args.seq_len,
+            encoding="utf-8",
+            corpus_lines=None,
+            on_memory=True,
             token_mask_prob=args.token_mask_prob,
-            data_percentage=args.data_percentage,
+            data_percentage=args.data_percentage
         )
     
     # Create dataloaders
