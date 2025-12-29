@@ -1,3 +1,3 @@
 from .dataset import BERTDataset
-from ...address_aware.dataset_addressaware import BERTDatasetAddressAware
+# Note: BERTDatasetAddressAware is in address_aware module, imported separately when needed
 from .vocab import WordVocab

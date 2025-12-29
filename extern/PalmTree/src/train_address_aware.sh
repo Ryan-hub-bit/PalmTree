@@ -36,23 +36,23 @@ ADDRESS_EMBED_DIM=128
 VAR_EMBED_DIM=32
 
 # Training hyperparameters
-BATCH_SIZE=16
+BATCH_SIZE=256
 LEARNING_RATE=1e-4
 NUM_EPOCHS=20
 WARMUP_STEPS=10000
-SEQ_LEN=512
+SEQ_LEN=20
 
 # Task configuration
 INSTRUCTION_MASK_PROB=0.25
 TOKEN_MASK_PROB=0.15
 
 # Output
-OUTPUT_DIR="./output_comparison/"
+OUTPUT_DIR="./output"
 mkdir -p ${OUTPUT_DIR}
 
 # CUDA settings
-export CUDA_VISIBLE_DEVICES=1
-CUDA_DEVICES=(1)
+export CUDA_VISIBLE_DEVICES=0
+CUDA_DEVICES=(0)
 
 # Data percentage (use 1.0 for full data, smaller for testing)
 DATA_PERCENTAGE=1.0

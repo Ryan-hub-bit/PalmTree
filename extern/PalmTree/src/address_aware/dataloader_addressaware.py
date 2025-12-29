@@ -364,18 +364,18 @@ class InstructionMaskingDataset(Dataset):
     def _process_line_for_token_masking(self, line):
         """
         Process a full line and apply token-level MLM masking.
-        Format: [SOS] inst1 [EOS] inst2 [EOS] inst3 [EOS] ...
-        Segment labels: [SOS] gets segment 1, inst1 tokens get 1, [EOS] gets 1, 
-                        inst2 tokens get 2, [EOS] gets 2, etc.
+        Format: <sos> inst1 inst2 inst3 ... <eos>
+        NO separators between instructions, just <sos> at start and <eos> at end.
+        Segment labels: <sos> gets segment 1, inst1 tokens get 1, inst2 tokens get 2, etc.
         
         Returns:
             bert_input: Token IDs with token-level masking
             bert_label: Labels for masked tokens (-1 for unmasked)
             segment_label: Instruction ID (1 for inst1, 2 for inst2, ...)
             binary_pos, function_pos, bb_pos: Position embeddings
-            var_offsets: Var offset values (0 for non-var tokens)
+            var_offsets: Var offset values (-1 for non-var tokens)
         """
-        instructions = line.split('\t')
+        instructions = [inst.strip() for inst in line.split('\t') if inst.strip()]
         
         all_tokens = []
         all_positions = []
@@ -384,7 +384,7 @@ class InstructionMaskingDataset(Dataset):
         all_var_offsets = []
         all_is_daddr = []
         
-        # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
+        # Add <sos> at the beginning (segment 1)
         all_tokens.append(self.sos_idx)
         all_positions.append((-1.0, -1.0, -1.0))
         all_labels.append(-1)
@@ -393,10 +393,6 @@ class InstructionMaskingDataset(Dataset):
         all_is_daddr.append(0)  # SOS is not a daddr
         
         for inst_idx, inst_text in enumerate(instructions):
-            inst_text = inst_text.strip()
-            if not inst_text:
-                continue
-            
             tokens, positions, var_offsets, is_daddr = self._parse_instruction(inst_text)
             
             # Apply token-level masking
@@ -411,13 +407,16 @@ class InstructionMaskingDataset(Dataset):
             all_var_offsets.extend(var_offsets)
             all_is_daddr.extend(is_daddr)
             
-            # Add [EOS] after each instruction (same segment as the instruction)
-            all_tokens.append(self.eos_idx)
-            all_positions.append((-1.0, -1.0, -1.0))
-            all_labels.append(-1)
-            all_segments.append(inst_segment)
-            all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
-            all_is_daddr.append(0)  # EOS is not a daddr
+            # NO <eos> after each instruction - we'll add it only at the very end
+        
+        # Add <eos> at the end (use last instruction's segment)
+        last_segment = len(instructions)
+        all_tokens.append(self.eos_idx)
+        all_positions.append((-1.0, -1.0, -1.0))
+        all_labels.append(-1)
+        all_segments.append(last_segment)
+        all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
+        all_is_daddr.append(0)  # EOS is not a daddr
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:

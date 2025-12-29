@@ -43,11 +43,11 @@ INSTRUCTION_MASK_PROB=0.25
 TOKEN_MASK_PROB=0.15
 
 # Output
-OUTPUT_DIR="./output_comparison"
+OUTPUT_DIR="./output"
 mkdir -p ${OUTPUT_DIR}
 
 # CUDA settings
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 # Data percentage (use 1.0 for full data, smaller for testing)
 DATA_PERCENTAGE=1.0
@@ -82,7 +82,6 @@ python3 train_comparison.py \
   --num_epochs ${NUM_EPOCHS} \
   --warmup_steps ${WARMUP_STEPS} \
   --seq_len ${SEQ_LEN} \
-  --instruction_mask_prob ${INSTRUCTION_MASK_PROB} \
   --token_mask_prob ${TOKEN_MASK_PROB} \
   --output_dir ${OUTPUT_DIR} \
   --cuda_devices 1 \

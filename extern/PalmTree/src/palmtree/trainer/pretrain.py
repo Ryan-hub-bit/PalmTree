@@ -71,10 +71,10 @@ class BERTTrainer:
         print("Total Parameters:", sum([p.nelement() for p in self.model.parameters()]))
 
     def train(self, epoch):
-        self.iteration(epoch, self.train_data)
+        return self.iteration(epoch, self.train_data)
 
     def test(self, epoch):
-        self.iteration(epoch, self.test_data, train=False)
+        return self.iteration(epoch, self.test_data, train=False)
 
     def iteration(self, epoch, data_loader, train=True):
         """
@@ -85,7 +85,7 @@ class BERTTrainer:
         :param epoch: current epoch index
         :param data_loader: torch.utils.data.DataLoader for iteration
         :param train: boolean value of is train or test
-        :return: None
+        :return: average loss for the epoch
         """
         str_code = "train" if train else "test"
 
@@ -129,9 +129,13 @@ class BERTTrainer:
                 loss.backward()
                 self.optim_schedule.step_and_update_lr()
 
+            # Track average loss
+            avg_loss += loss.item()
+
             post_fix = {
                 "epoch": epoch,
                 "iter": i,
+                "avg_loss": avg_loss / (i + 1),
                 "CWP:": cfg_next_loss.item(),
                 "DUP:": dfg_next_loss.item(),
                 "MLM:": mask_loss.item(),
@@ -139,6 +143,9 @@ class BERTTrainer:
 
             if i % self.log_freq == 0:
                 data_iter.write(str(post_fix))
+        
+        # Return average loss
+        return avg_loss / len(data_loader)
 
 
     def save(self, epoch, file_path="output/bert_trained.model"):
@@ -146,10 +153,10 @@ class BERTTrainer:
         Saving the current BERT model on file_path
 
         :param epoch: current epoch number
-        :param file_path: model output path which gonna be file_path+"ep%d" % epoch
+        :param file_path: model output path (used as-is, no epoch suffix added)
         :return: final_output_path
         """
-        output_path = file_path + ".ep%d" % epoch
+        output_path = file_path
         torch.save(self.bert.cpu(), output_path)
         self.bert.to(self.device)
         print("EP:%d Model Saved on:" % epoch, output_path)

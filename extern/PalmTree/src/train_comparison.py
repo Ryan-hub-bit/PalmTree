@@ -20,6 +20,13 @@ import argparse
 import sys
 import os
 from pathlib import Path
+# Import baseline components
+from palmtree.dataset.dataset_baseline import BaselineDataset
+from palmtree.model import BERT
+from palmtree.trainer import BERTTrainer
+
+# Import regex for preprocessing
+import re
 
 # Add paths
 sys.path.insert(0, 'src')
@@ -120,16 +127,12 @@ def setup_baseline_mode(args, vocab):
     print("  - Uses standard BERT architecture")
     print("="*80 + "\n")
     
-    # Import baseline components
-    from palmtree.dataset.dataset_baseline import BaselineDataset
-    from palmtree.model import BERT
-    from palmtree.trainer import BERTTrainer
     
     # Create dataset with position masking
     print("Loading baseline dataset (masking positions)...")
     train_dataset = BaselineDataset(
         cfg_corpus_path=args.train_cfg,
-        dfg_corpus_path=None,
+        dfg_corpus_path=args.train_dfg,
         vocab=vocab,
         seq_len=args.seq_len,
         token_mask_prob=args.token_mask_prob,
@@ -140,7 +143,7 @@ def setup_baseline_mode(args, vocab):
     if args.test_cfg and os.path.exists(args.test_cfg):
         test_dataset = BaselineDataset(
             cfg_corpus_path=args.test_cfg,
-            dfg_corpus_path=None,
+            dfg_corpus_path=args.test_dfg,
             vocab=vocab,
             seq_len=args.seq_len,
             token_mask_prob=args.token_mask_prob,
@@ -196,7 +199,7 @@ def setup_baseline_mode(args, vocab):
         log_freq=args.log_freq
     )
     
-    return trainer, train_dataset, test_dataset
+    return trainer
 
 
 # ============================================================================
@@ -296,7 +299,7 @@ def setup_address_aware_mode(args, vocab):
         log_freq=args.log_freq,
     )
     
-    return trainer, train_dataset, test_dataset
+    return trainer
 
 
 # ============================================================================
@@ -318,8 +321,6 @@ def main():
         print(f"Vocabulary file not found at {args.vocab_path}")
         print("Building vocabulary from training data...")
         
-        # Import regex for preprocessing
-        import re
         
         # Create vocab directory if needed
         vocab_dir = os.path.dirname(args.vocab_path)
@@ -398,9 +399,9 @@ def main():
     
     # Setup based on mode
     if args.mode == 'baseline':
-        trainer, train_dataset, test_dataset = setup_baseline_mode(args, vocab)
+        trainer = setup_baseline_mode(args, vocab)
     else:  # address_aware
-        trainer, train_dataset, test_dataset = setup_address_aware_mode(args, vocab)
+        trainer = setup_address_aware_mode(args, vocab)
     
     # Create output directory
     output_dir = Path(args.output_dir) / args.mode
@@ -423,21 +424,21 @@ def main():
         
         # Test
         test_loss = None
-        if test_dataset is not None:
+        if trainer.test_data is not None:
             print("\nRunning test evaluation...")
             test_loss = trainer.test(epoch)
         
-        # Save checkpoint
+        # Save epoch checkpoint
         checkpoint_path = output_dir / f"epoch_{epoch}.pt"
-        trainer.save(epoch, str(output_dir))
-        print(f"Model saved to {checkpoint_path}")
+        trainer.save(epoch, str(checkpoint_path))
+        print(f"Checkpoint saved to {checkpoint_path}")
         
-        # Save best model
+        # Save best model (only best_model.pt, no epoch number)
         current_loss = test_loss if test_loss is not None else train_loss
         if current_loss < best_loss:
             best_loss = current_loss
             best_path = output_dir / "best_model.pt"
-            trainer.save(epoch, str(output_dir), save_path="best_model.pt")
+            trainer.save(epoch, str(best_path))
             print(f"Best model updated! Loss: {best_loss:.4f}")
     
     print("\n" + "="*80)
