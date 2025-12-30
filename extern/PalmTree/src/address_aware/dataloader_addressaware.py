@@ -74,9 +74,11 @@ class InstructionMaskingDataset(Dataset):
             self.cfg_lines = self._load_corpus(cfg_corpus_path)
             print(f"Loaded {len(self.cfg_lines)} CFG lines")
         
-        # Load DFG data if enabled and path provided
+        # Load DFG data if path provided (for DUP task)
+        # Note: enable_imd controls whether DFG is used for instruction masking (IMD task)
+        # But we always load DFG if path is provided, for DFG next sentence prediction (DUP)
         self.dfg_lines = []
-        if self.enable_imd and dfg_corpus_path:
+        if dfg_corpus_path:
             print(f"Loading DFG corpus from {dfg_corpus_path}")
             self.dfg_lines = self._load_corpus(dfg_corpus_path)
             print(f"Loaded {len(self.dfg_lines)} DFG lines")
@@ -107,7 +109,10 @@ class InstructionMaskingDataset(Dataset):
         print(f"Dataset size:")
         print(f"  CFG lines (for IMC+MLM): {len(self.cfg_lines)}")
         if self.dfg_lines:
-            print(f"  DFG lines (for IMD): {len(self.dfg_lines)}")
+            if self.enable_imd:
+                print(f"  DFG lines (for DUP+IMD): {len(self.dfg_lines)}")
+            else:
+                print(f"  DFG lines (for DUP only): {len(self.dfg_lines)}")
         print(f"  Instruction mask rate: {instruction_mask_prob}")
         print(f"  Token mask rate: {token_mask_prob}")
     

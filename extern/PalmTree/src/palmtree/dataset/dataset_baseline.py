@@ -134,47 +134,48 @@ class BaselineDataset(Dataset):
     def __getitem__(self, item):
         c1, c2, c_label, d1, d2, d_label = self.random_sent(item)
 
-        # Apply position masking to DFG sequences (BASELINE SPECIFIC)
-        d1 = self._mask_positions(d1)
-        d2 = self._mask_positions(d2)
-
-        d1_random, d1_label = self.random_word(d1)
-        d2_random, d2_label = self.random_word(d2)
-
-        d1 = [self.vocab.sos_index] + d1_random + [self.vocab.eos_index]
-        d2 = d2_random + [self.vocab.eos_index]
-
         # Apply position masking to CFG sequences (BASELINE SPECIFIC)
         c1 = self._mask_positions(c1)
         c2 = self._mask_positions(c2)
 
-        c1 = [self.vocab.sos_index] + [self.vocab.stoi.get(c, self.vocab.unk_index) for c in c1.split()] + [self.vocab.eos_index]
-        c2 = [self.vocab.stoi.get(c, self.vocab.unk_index) for c in c2.split()] + [self.vocab.eos_index]
-        
+        # Apply MLM masking to CFG (for MLM task)
+        c1_random, c1_label = self.random_word(c1)
+        c2_random, c2_label = self.random_word(c2)
 
+        c1 = [self.vocab.sos_index] + c1_random + [self.vocab.eos_index]
+        c2 = c2_random + [self.vocab.eos_index]
 
-        d1_label = [self.vocab.pad_index] + d1_label + [self.vocab.pad_index]
-        d2_label = d2_label + [self.vocab.pad_index]
+        # Apply position masking to DFG sequences (BASELINE SPECIFIC)
+        d1 = self._mask_positions(d1)
+        d2 = self._mask_positions(d2)
 
-        dfg_segment_label = ([1 for _ in range(len(d1))] + [2 for _ in range(len(d2))])[:self.seq_len]
+        # DFG: NO masking, only for DUP (next sentence prediction)
+        d1 = [self.vocab.sos_index] + [self.vocab.stoi.get(token, self.vocab.unk_index) for token in d1.split()] + [self.vocab.eos_index]
+        d2 = [self.vocab.stoi.get(token, self.vocab.unk_index) for token in d2.split()] + [self.vocab.eos_index]
+
+        # CFG labels for MLM
+        c1_label = [self.vocab.pad_index] + c1_label + [self.vocab.pad_index]
+        c2_label = c2_label + [self.vocab.pad_index]
+
         cfg_segment_label = ([1 for _ in range(len(c1))] + [2 for _ in range(len(c2))])[:self.seq_len]
-        dfg_bert_input = (d1 + d2)[:self.seq_len]
-        dfg_bert_label = (d1_label + d2_label)[:self.seq_len]
-
+        dfg_segment_label = ([1 for _ in range(len(d1))] + [2 for _ in range(len(d2))])[:self.seq_len]
         cfg_bert_input = (c1 + c2)[:self.seq_len]
+        cfg_bert_label = (c1_label + c2_label)[:self.seq_len]
 
-        padding = [self.vocab.pad_index for _ in range(self.seq_len - len(dfg_bert_input))]
-        dfg_bert_input.extend(padding), dfg_bert_label.extend(padding), dfg_segment_label.extend(padding) #, comp_label.extend(padding)
+        dfg_bert_input = (d1 + d2)[:self.seq_len]
+
         cfg_padding = [self.vocab.pad_index for _ in range(self.seq_len - len(cfg_bert_input))]
-        cfg_bert_input.extend(cfg_padding), cfg_segment_label.extend(cfg_padding)
+        cfg_bert_input.extend(cfg_padding), cfg_bert_label.extend(cfg_padding), cfg_segment_label.extend(cfg_padding)
+        dfg_padding = [self.vocab.pad_index for _ in range(self.seq_len - len(dfg_bert_input))]
+        dfg_bert_input.extend(dfg_padding), dfg_segment_label.extend(dfg_padding)
 
-        output = {"dfg_bert_input": dfg_bert_input,
-                  "dfg_bert_label": dfg_bert_label,
-                  "dfg_segment_label": dfg_segment_label,
-                  "dfg_is_next": d_label,
-                  "cfg_bert_input": cfg_bert_input,
+        output = {"cfg_bert_input": cfg_bert_input,
+                  "cfg_bert_label": cfg_bert_label,
                   "cfg_segment_label": cfg_segment_label,
-                  "cfg_is_next": c_label
+                  "cfg_is_next": c_label,
+                  "dfg_bert_input": dfg_bert_input,
+                  "dfg_segment_label": dfg_segment_label,
+                  "dfg_is_next": d_label
                   }
 
         return {key: torch.tensor(value) for key, value in output.items()}

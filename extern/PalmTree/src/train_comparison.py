@@ -93,6 +93,12 @@ def parse_args():
     # Task configuration
     parser.add_argument('--token_mask_prob', type=float, default=0.15,
                         help='Token masking probability (MLM) - used by both modes')
+    parser.add_argument('--instruction_mask_prob', type=float, default=0.25,
+                        help='Instruction masking probability (IMC) - only used by address-aware mode')
+    parser.add_argument('--enable_imc', action='store_true',
+                        help='Enable Instruction Masking Classification task - only used by address-aware mode')
+    parser.add_argument('--enable_mlm', action='store_true',
+                        help='Enable Masked Language Modeling task - only used by address-aware mode')
     
     # Training settings
     parser.add_argument('--num_workers', type=int, default=4,
@@ -237,22 +243,26 @@ def setup_address_aware_mode(args, vocab):
     print("Loading address-aware dataset (using positions)...")
     train_dataset = InstructionMaskingDataset(
         cfg_corpus_path=args.train_cfg,
-        dfg_corpus_path=None,
+        dfg_corpus_path=args.train_dfg,
         vocab=vocab,
         seq_len=args.seq_len,
         token_mask_prob=args.token_mask_prob,
+        instruction_mask_prob=args.instruction_mask_prob,
         data_percentage=args.data_percentage,
+        enable_imd=False,  # DFG only for DUP task, not for instruction masking
     )
     
     test_dataset = None
     if args.test_cfg and os.path.exists(args.test_cfg):
         test_dataset = InstructionMaskingDataset(
             cfg_corpus_path=args.test_cfg,
-            dfg_corpus_path=None,
+            dfg_corpus_path=args.test_dfg,
             vocab=vocab,
             seq_len=args.seq_len,
             token_mask_prob=args.token_mask_prob,
+            instruction_mask_prob=args.instruction_mask_prob,
             data_percentage=args.data_percentage,
+            enable_imd=False,  # DFG only for DUP task, not for instruction masking
         )
     
     # Create dataloaders

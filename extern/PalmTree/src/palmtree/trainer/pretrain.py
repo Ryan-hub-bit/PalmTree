@@ -111,9 +111,10 @@ class BERTTrainer:
             cfg_next_loss = self.cfg_next_criterion(cfg_next_sent_output, data["cfg_is_next"])
 
 
-            # 2-2. NLLLoss of predicting masked token word (CFG only, not DFG)
-            # Note: dataset returns 'bert_label' not 'cfg_bert_label'
-            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["bert_label"])
+            # 2-2. NLLLoss of predicting masked token word (CFG only for MLM+CWP)
+            # Note: dataset returns 'cfg_bert_label' for CFG masking labels
+            # DFG is only used for DUP (next sentence prediction), not for MLM
+            mask_loss = self.masked_criterion(mask_lm_output.transpose(1, 2), data["cfg_bert_label"])
 
             # 2-3 NLLloss of instruction component prediction
             #comp_loss = self.comp_criterion(inst_comp_output.transpose(1, 2), data["component"])
