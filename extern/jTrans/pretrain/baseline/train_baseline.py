@@ -33,8 +33,8 @@ import json
 # Add parent directory for jTrans imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
-from baseline.model_baseline import create_baseline_model
-from baseline.dataloader_baseline import create_baseline_dataloaders
+from model_baseline import create_baseline_model
+from dataloader_baseline import create_baseline_dataloaders
 
 
 def setup_logging(output_dir):

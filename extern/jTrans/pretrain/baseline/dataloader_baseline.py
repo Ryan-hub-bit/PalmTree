@@ -62,6 +62,7 @@ class BaselinePretrainingDataset(Dataset):
         self.cls_token_id = tokenizer.cls_token_id
         self.sep_token_id = tokenizer.sep_token_id
         self.mask_token_id = tokenizer.mask_token_id
+        self.unk_token_id = tokenizer.unk_token_id
         
         # Load data
         if on_memory:
