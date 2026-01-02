@@ -3,20 +3,20 @@
 # Baseline jTrans Pretraining Script
 # Pure MLM + JTP (Jump-Target Prediction) without address-aware features
 
-export CUDA_VISIBLE_DEVICES=1
+# export CUDA_VISIBLE_DEVICES=1
 
 # Activate conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate jtrans
 
 python train_baseline.py \
-    --train_path /data/kun/jtransdata/pretrain_train.txt \
-    --test_path /data/kun/jtransdata/pretrain_test.txt \
-    --tokenizer_path /home/kun/Document/AAE/extern/jTrans/pretrain/baseline \
-    --output_dir /home/kun/Document/AAE/output/baseline_pretrain \
-    --batch_size 32 \
+    --train_path /work/kliu14/jtransdata/pretrain_train.txt \
+    --test_path /work/kliu14/jtransdata/pretrain_test.txt \
+    --tokenizer_path /home/kliu14/PalmTree/extern/jTrans/pretrain/baseline \
+    --output_dir /work/kliu14/jtransoutput/baseline_pretrain \
+    --batch_size 256 \
     --learning_rate 1e-4 \
-    --num_epochs 10 \
+    --num_epochs 6 \
     --warmup_steps 10000 \
     --max_len 512 \
     --mlm_probability 0.15 \
