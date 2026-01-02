@@ -1,0 +1,157 @@
+================================================================================
+HOW MLM MASKING WORKS: WHAT THE MODEL KNOWS VS DOESN'T KNOW
+================================================================================
+
+ORIGINAL SEQUENCE:
+┌─────┬─────┬─────┬─────┬─────┬─────┬─────┐
+│push │ rbp │ mov │ rbp │ rsp │ lea │ rbp │
+└─────┴─────┴─────┴─────┴─────┴─────┴─────┘
+
+AFTER MASKING (15% selected):
+┌─────┬───────┬─────┬───────┬─────┬─────┬─────┐
+│push │[MASK] │ mov │movsq  │ rsp │ lea │ rbp │  ← MODEL INPUT
+└─────┴───────┴─────┴───────┴─────┴─────┴─────┘
+         ▲              ▲                    ▲
+         │              │                    │
+       [MASK]        random              kept original
+        80%            10%                  10%
+
+LABELS (what to predict):
+┌──────┬──────┬──────┬──────┬──────┬──────┬──────┐
+│ -100 │ 535  │ -100 │ 535  │ -100 │ -100 │ 535  │  ← LOSS LABELS
+└──────┴──────┴──────┴──────┴──────┴──────┴──────┘
+          ▼              ▼                    ▼
+       compute        compute             compute
+        loss           loss                loss
+
+
+================================================================================
+WHAT THE MODEL SEES (FORWARD PASS)
+================================================================================
+
+Input IDs:  [530, 4, 522, 2859, 520, 551, 535]
+            (push, [MASK], mov, movsq, rsp, lea, rbp)
+
+┌─────────────────────────────────────────────────┐
+│                                                 │
+│        TRANSFORMER MODEL (12 layers)            │
+│                                                 │
+│  Processes ALL tokens                           │
+│  Outputs predictions for ALL positions          │
+│  Does NOT know which are masked!                │
+│                                                 │
+└─────────────────────────────────────────────────┘
+                      │
+                      ▼
+    Model Output: [pred_0, pred_1, pred_2, ..., pred_6]
+                   (2902-dim probability vectors)
+
+
+================================================================================
+WHAT THE LOSS FUNCTION SEES
+================================================================================
+
+MLM Labels: [-100, 535, -100, 535, -100, -100, 535]
+
+CrossEntropyLoss(ignore_index=-100):
+
+Position 0: input='push'   label=-100  → IGNORE (no gradient)
+Position 1: input='[MASK]' label=535   → COMPUTE LOSS, predict 'rbp'
+Position 2: input='mov'    label=-100  → IGNORE
+Position 3: input='movsq'  label=535   → COMPUTE LOSS, predict 'rbp'
+Position 4: input='rsp'    label=-100  → IGNORE
+Position 5: input='lea'    label=-100  → IGNORE
+Position 6: input='rbp'    label=535   → COMPUTE LOSS, predict 'rbp'
+                                          (even though input==label!)
+
+Total Loss = (loss_pos1 + loss_pos3 + loss_pos6) / 3
+
+
+================================================================================
+WHY THE MODEL CAN'T TELL WHICH IS WHICH
+================================================================================
+
+Case 1: [MASK] token (80%)
+  Input: [MASK] (ID 4)
+  Model sees: Special token, needs to predict from context
+  Model doesn't know: "This was originally 'rbp'"
+
+Case 2: Random token (10%)
+  Input: movsq (ID 2859)
+  Model sees: Regular token 'movsq'
+  Model doesn't know: "This is wrong, should be 'rbp'"
+  Model must learn: From context, this should be 'rbp' not 'movsq'
+
+Case 3: Keep original (10%)
+  Input: rbp (ID 535)
+  Label: rbp (ID 535)
+  Model sees: Regular token 'rbp'
+  Model doesn't know: "This is a masked position" vs "This is unmasked"
+  Model must learn: Always output good representations
+
+
+================================================================================
+TRAINING DYNAMICS
+================================================================================
+
+Step 1: Forward Pass
+  • Model processes ALL tokens
+  • Generates predictions for ALL positions
+  • Time: O(sequence_length)
+
+Step 2: Loss Computation
+  • Only positions with label != -100 contribute to loss
+  • In your example: 3 out of 7 positions
+  • Loss = average of these 3 positions
+
+Step 3: Backward Pass
+  • Gradients ONLY flow from masked positions
+  • Model learns to predict masked tokens from context
+  • Unmasked positions get NO gradient signal for MLM task
+
+
+================================================================================
+INFERENCE (AFTER TRAINING)
+================================================================================
+
+Input: [push, rbp, mov, rbp, rsp, lea, rbp]  ← No [MASK] tokens!
+
+Model:
+  • Processes normally (no masking)
+  • Outputs embeddings for all tokens
+  • Works because it learned to handle real tokens (10% + random)
+
+
+================================================================================
+KEY TAKEAWAYS
+================================================================================
+
+✓ Model sees ALL tokens (masked and unmasked) in input
+✓ Model predicts ALL positions in forward pass
+✓ Loss computed ONLY at masked positions (label != -100)
+✓ Gradients ONLY flow from masked positions
+✗ Model does NOT know which positions are masked
+✗ Model does NOT know which tokens are original vs [MASK] vs random
+✗ Model does NOT have special "masking indicator" input
+
+This design ensures:
+  1. Model learns from context (not from [MASK] indicator)
+  2. Model handles real tokens (10% + random)
+  3. Model works at inference (no [MASK] tokens)
+  4. Model doesn't overfit to [MASK] → token pattern
+
+
+================================================================================
+YOUR DATALOADER OUTPUT STRUCTURE
+================================================================================
+
+return {
+    'input_ids': [530, 4, 522, 2859, 520, 551, 535],  # What model sees
+    'attention_mask': [1, 1, 1, 1, 1, 1, 1],          # All valid tokens
+    'mlm_labels': [-100, 535, -100, 535, -100, -100, 535],  # Loss targets
+    'jtp_labels': [-100, -100, -100, -100, -100, -100, -100]  # Jump targets
+}
+
+Model never sees mlm_labels during forward pass!
+Labels only used in loss computation.
+

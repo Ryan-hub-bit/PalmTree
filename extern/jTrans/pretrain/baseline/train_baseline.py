@@ -18,6 +18,19 @@ Usage:
         --num_epochs 10
 """
 
+import os
+import sys
+
+# GPU MUST be set BEFORE importing torch
+# This script respects CUDA_VISIBLE_DEVICES from the shell script
+if 'CUDA_VISIBLE_DEVICES' in os.environ:
+    print(f"[INFO] Using GPU(s): {os.environ['CUDA_VISIBLE_DEVICES']}")
+else:
+    print("[WARNING] CUDA_VISIBLE_DEVICES not set!")
+    print("[WARNING] Please run this script via the shell script that sets the GPU.")
+    print("[WARNING] Example: bash run_baseline_pretrain.sh")
+    sys.exit(1)
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -25,7 +38,6 @@ from transformers import BertTokenizer, AdamW, get_linear_schedule_with_warmup
 import argparse
 import logging
 import sys
-import os
 from tqdm import tqdm
 from datetime import datetime
 import json
@@ -247,9 +259,20 @@ def main():
     
     args = parser.parse_args()
     
-    # Setup
+    # Setup device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger = setup_logging(args.output_dir)
+    
+    # Log GPU information
+    if torch.cuda.is_available():
+        logger.info("=" * 80)
+        logger.info("GPU INFORMATION")
+        logger.info("=" * 80)
+        logger.info(f"CUDA_VISIBLE_DEVICES: {os.environ.get('CUDA_VISIBLE_DEVICES', 'Not set')}")
+        logger.info(f"Number of visible GPUs: {torch.cuda.device_count()}")
+        logger.info(f"Current device: {torch.cuda.current_device()}")
+        logger.info(f"Device name: {torch.cuda.get_device_name(0)}")
+        logger.info(f"PyTorch device: {device}")
     
     # Log configuration
     logger.info("=" * 80)

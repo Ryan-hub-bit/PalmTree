@@ -1,0 +1,4706 @@
+========================================================================================================================
+TOKEN PROCESSING LINE BY LINE (PalmTree Test Format)
+========================================================================================================================
+
+Dataset: /tmp/test_recursive.txt (first function)
+Total tokens after truncation: 512
+
+Position 0
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [CLS]
+  Token ID:        2
+  Vocab[2]:      [CLS]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [CLS] (ID 2)
+  Status:          NOT MASKED
+
+Position 1
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  endbr64
+  Token ID:        518
+  Vocab[518]:      endbr64
+  Vocab Match:     ✓ CORRECT
+  After Masking:   endbr64 (ID 518)
+  Status:          NOT MASKED
+
+Position 2
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  push
+  Token ID:        530
+  Vocab[530]:      push
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: push, ID 530)
+                   → Replaced with [MASK]
+
+Position 3
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r15
+  Token ID:        544
+  Vocab[544]:      r15
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r15 (ID 544)
+  Status:          NOT MASKED
+
+Position 4
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 5
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ecx
+  Token ID:        628
+  Vocab[628]:      ecx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ecx (ID 628)
+  Status:          NOT MASKED
+
+Position 6
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 7
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  push
+  Token ID:        530
+  Vocab[530]:      push
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: push, ID 530)
+                   → Replaced with [MASK]
+
+Position 8
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r14
+  Token ID:        571
+  Vocab[571]:      r14
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: r14, ID 571)
+                   → Replaced with [MASK]
+
+Position 9
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  push
+  Token ID:        530
+  Vocab[530]:      push
+  Vocab Match:     ✓ CORRECT
+  After Masking:   push (ID 530)
+  Status:          NOT MASKED
+
+Position 10
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r13
+  Token ID:        568
+  Vocab[568]:      r13
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: r13, ID 568)
+                   → Replaced with [MASK]
+
+Position 11
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  push
+  Token ID:        530
+  Vocab[530]:      push
+  Vocab Match:     ✓ CORRECT
+  After Masking:   push (ID 530)
+  Status:          NOT MASKED
+
+Position 12
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12
+  Token ID:        545
+  Vocab[545]:      r12
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12 (ID 545)
+  Status:          NOT MASKED
+
+Position 13
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  push
+  Token ID:        530
+  Vocab[530]:      push
+  Vocab Match:     ✓ CORRECT
+  After Masking:   push (ID 530)
+  Status:          NOT MASKED
+
+Position 14
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 15
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 16
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   movsq (ID 2859)
+  MLM:             MASKED (label: rbp, ID 535)
+                   → Replaced with random token: movsq
+
+Position 17
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 18
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  push
+  Token ID:        530
+  Vocab[530]:      push
+  Vocab Match:     ✓ CORRECT
+  After Masking:   push (ID 530)
+  Status:          NOT MASKED
+
+Position 19
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbx
+  Token ID:        546
+  Vocab[546]:      rbx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbx (ID 546)
+  Status:          NOT MASKED
+
+Position 20
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  sub
+  Token ID:        519
+  Vocab[519]:      sub
+  Vocab Match:     ✓ CORRECT
+  After Masking:   sub (ID 519)
+  Status:          NOT MASKED
+
+Position 21
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsp
+  Token ID:        520
+  Vocab[520]:      rsp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rsp, ID 520)
+                   → Replaced with [MASK]
+
+Position 22
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 23
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 24
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 25
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edi
+  Token ID:        567
+  Vocab[567]:      edi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: edi, ID 567)
+                   → Replaced with [MASK]
+
+Position 26
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  MLM:             MASKED (label: lea, ID 551)
+                   → Kept original (10% strategy)
+
+Position 27
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rdi, ID 532)
+                   → Replaced with [MASK]
+
+Position 28
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 29
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 30
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r13
+  Token ID:        568
+  Vocab[568]:      r13
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r13 (ID 568)
+  Status:          NOT MASKED
+
+Position 31
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 32
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 33
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 34
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 35
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 36
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 37
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 38
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 39
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 40
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  fs:xxx
+  Token ID:        547
+  Vocab[547]:      fs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   fs:xxx (ID 547)
+  Status:          NOT MASKED
+
+Position 41
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 42
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 43
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 44
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 45
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: eax, ID 550)
+                   → Replaced with [MASK]
+
+Position 46
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 47
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 48
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 49
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+... (output continues for all 512 tokens) ...
+
+Position 50
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 51
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 52
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 53
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 54
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 55
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [r8+r9] (ID 1292)
+  MLM:             MASKED (label: CONST, ID 521)
+                   → Replaced with random token: [r8+r9]
+
+Position 56
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 57
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Kept original (10% strategy)
+
+Position 58
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 59
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 60
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 61
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 62
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 63
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 64
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: CONST, ID 521)
+                   → Replaced with [MASK]
+
+Position 65
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rep
+  Token ID:        561
+  Vocab[561]:      rep
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rep (ID 561)
+  Status:          NOT MASKED
+
+Position 66
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 67
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 68
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 69
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 70
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 71
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 72
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rbp, ID 535)
+                   → Replaced with [MASK]
+
+Position 73
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 74
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 75
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 76
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 77
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 78
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 79
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 80
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 81
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 82
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 83
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 84
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 85
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 86
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+rdx+CONST+var_xxx] (ID 1092)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with random token: [rsp+rdx+CONST+var_xxx]
+
+Position 87
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 88
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 89
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 90
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 91
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rdi, ID 532)
+                   → Replaced with [MASK]
+
+Position 92
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 93
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 94
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 95
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 96
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 97
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 98
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 99
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 100
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 101
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 102
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 103
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 104
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 105
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 106
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 107
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 108
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 109
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 110
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 111
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 112
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 113
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 114
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 115
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 116
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 117
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rdi, ID 532)
+                   → Replaced with [MASK]
+
+Position 118
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 119
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 120
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 121
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 122
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 123
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 124
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 125
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 126
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 127
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 128
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 129
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 130
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 131
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 132
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 133
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 134
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 135
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 136
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with [MASK]
+
+Position 137
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 138
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with [MASK]
+
+Position 139
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 140
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 141
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 142
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 143
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 144
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 145
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 146
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 147
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 148
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 149
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with [MASK]
+
+Position 150
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 151
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 152
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 153
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 154
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 155
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 156
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 157
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 158
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 159
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 160
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 161
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 162
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   zmm8 (ID 2254)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with random token: zmm8
+
+Position 163
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 164
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 165
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 166
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 167
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 168
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 169
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 170
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 171
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 172
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 173
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: GLOBAL_VAR, ID 564)
+                   → Replaced with [MASK]
+
+Position 174
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 175
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 176
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 177
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 178
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 179
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 180
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 181
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 182
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 183
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 184
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 185
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: GLOBAL_VAR, ID 564)
+                   → Replaced with [MASK]
+
+Position 186
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 187
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 188
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 189
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: call, ID 527)
+                   → Replaced with [MASK]
+
+Position 190
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 191
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 192
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 193
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 194
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 195
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 196
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 197
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 198
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 199
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 200
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 201
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 202
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 203
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 204
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 205
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: GLOBAL_VAR, ID 564)
+                   → Replaced with [MASK]
+
+Position 206
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 207
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 208
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 209
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: lea, ID 551)
+                   → Replaced with [MASK]
+
+Position 210
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 211
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with [MASK]
+
+Position 212
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 213
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with [MASK]
+
+Position 214
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: CONST, ID 521)
+                   → Replaced with [MASK]
+
+Position 215
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 216
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 217
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 218
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 219
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 220
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 221
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 222
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 223
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 224
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edi
+  Token ID:        567
+  Vocab[567]:      edi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edi (ID 567)
+  Status:          NOT MASKED
+
+Position 225
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rbp+r14*8+CONST] (ID 1083)
+  MLM:             MASKED (label: CONST, ID 521)
+                   → Replaced with random token: [rbp+r14*8+CONST]
+
+Position 226
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 227
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 228
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 229
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 230
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 231
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 232
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 233
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 234
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 235
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 236
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 237
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 238
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 239
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 240
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 241
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 242
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 243
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 244
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 245
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 246
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 247
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 248
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 249
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 250
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 251
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: cs:xxx, ID 524)
+                   → Replaced with [MASK]
+
+Position 252
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 253
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 254
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 255
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 256
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 257
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 258
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edx
+  Token ID:        556
+  Vocab[556]:      edx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edx (ID 556)
+  Status:          NOT MASKED
+
+Position 259
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edx
+  Token ID:        556
+  Vocab[556]:      edx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: edx, ID 556)
+                   → Replaced with [MASK]
+
+Position 260
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 261
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 262
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 263
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 264
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 265
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 266
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 267
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 268
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 269
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: call, ID 527)
+                   → Replaced with [MASK]
+
+Position 270
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 271
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 272
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ecx
+  Token ID:        628
+  Vocab[628]:      ecx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ecx (ID 628)
+  Status:          NOT MASKED
+
+Position 273
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ecx
+  Token ID:        628
+  Vocab[628]:      ecx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ecx (ID 628)
+  Status:          NOT MASKED
+
+Position 274
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 275
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdx
+  Token ID:        562
+  Vocab[562]:      rdx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdx (ID 562)
+  Status:          NOT MASKED
+
+Position 276
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 277
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [r12+r10*8] (ID 1927)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with random token: [r12+r10*8]
+
+Position 278
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 279
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 280
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 281
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 282
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 283
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 284
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: cs:xxx, ID 524)
+                   → Replaced with [MASK]
+
+Position 285
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 286
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 287
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 288
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 289
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 290
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 291
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  esi
+  Token ID:        595
+  Vocab[595]:      esi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   esi (ID 595)
+  Status:          NOT MASKED
+
+Position 292
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  esi
+  Token ID:        595
+  Vocab[595]:      esi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   esi (ID 595)
+  Status:          NOT MASKED
+
+Position 293
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 294
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edi
+  Token ID:        567
+  Vocab[567]:      edi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edi (ID 567)
+  MLM:             MASKED (label: edi, ID 567)
+                   → Kept original (10% strategy)
+
+Position 295
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edi
+  Token ID:        567
+  Vocab[567]:      edi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edi (ID 567)
+  Status:          NOT MASKED
+
+Position 296
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 297
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 298
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: xor, ID 549)
+                   → Replaced with [MASK]
+
+Position 299
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edi
+  Token ID:        567
+  Vocab[567]:      edi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edi (ID 567)
+  Status:          NOT MASKED
+
+Position 300
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edi
+  Token ID:        567
+  Vocab[567]:      edi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edi (ID 567)
+  Status:          NOT MASKED
+
+Position 301
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 302
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 303
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r13
+  Token ID:        568
+  Vocab[568]:      r13
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r13 (ID 568)
+  Status:          NOT MASKED
+
+Position 304
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 305
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 306
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 307
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  MLM:             MASKED (label: call, ID 527)
+                   → Kept original (10% strategy)
+
+Position 308
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 309
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  test
+  Token ID:        525
+  Vocab[525]:      test
+  Vocab Match:     ✓ CORRECT
+  After Masking:   test (ID 525)
+  Status:          NOT MASKED
+
+Position 310
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 311
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 312
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jz
+  Token ID:        526
+  Vocab[526]:      jz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jz (ID 526)
+  Status:          NOT MASKED
+
+Position 313
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_346
+  Token ID:        351
+  Vocab[351]:      JUMP_ADDR_346
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_346 (ID 351)
+  Status:          NOT MASKED
+
+Position 314
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 315
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12d
+  Token ID:        692
+  Vocab[692]:      r12d
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12d (ID 692)
+  Status:          NOT MASKED
+
+Position 316
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 317
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 318
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 319
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 320
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  test
+  Token ID:        525
+  Vocab[525]:      test
+  Vocab Match:     ✓ CORRECT
+  After Masking:   test (ID 525)
+  Status:          NOT MASKED
+
+Position 321
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12d
+  Token ID:        692
+  Vocab[692]:      r12d
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12d (ID 692)
+  Status:          NOT MASKED
+
+Position 322
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12d
+  Token ID:        692
+  Vocab[692]:      r12d
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12d (ID 692)
+  Status:          NOT MASKED
+
+Position 323
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jnz
+  Token ID:        536
+  Vocab[536]:      jnz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jnz (ID 536)
+  Status:          NOT MASKED
+
+Position 324
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_221
+  Token ID:        226
+  Vocab[226]:      JUMP_ADDR_221
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_221 (ID 226)
+  Status:          NOT MASKED
+
+Position 325
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 326
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edx
+  Token ID:        556
+  Vocab[556]:      edx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edx (ID 556)
+  Status:          NOT MASKED
+
+Position 327
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 328
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  test
+  Token ID:        525
+  Vocab[525]:      test
+  Vocab Match:     ✓ CORRECT
+  After Masking:   test (ID 525)
+  Status:          NOT MASKED
+
+Position 329
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edx
+  Token ID:        556
+  Vocab[556]:      edx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edx (ID 556)
+  Status:          NOT MASKED
+
+Position 330
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  edx
+  Token ID:        556
+  Vocab[556]:      edx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   edx (ID 556)
+  Status:          NOT MASKED
+
+Position 331
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jnz
+  Token ID:        536
+  Vocab[536]:      jnz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jnz (ID 536)
+  Status:          NOT MASKED
+
+Position 332
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_236
+  Token ID:        241
+  Vocab[241]:      JUMP_ADDR_236
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_236 (ID 241)
+  Status:          NOT MASKED
+
+Position 333
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 334
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 335
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 336
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  or
+  Token ID:        596
+  Vocab[596]:      or
+  Vocab Match:     ✓ CORRECT
+  After Masking:   or (ID 596)
+  Status:          NOT MASKED
+
+Position 337
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 338
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 339
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jz
+  Token ID:        526
+  Vocab[526]:      jz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jz (ID 526)
+  Status:          NOT MASKED
+
+Position 340
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_208
+  Token ID:        213
+  Vocab[213]:      JUMP_ADDR_208
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_208 (ID 213)
+  Status:          NOT MASKED
+
+Position 341
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 342
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 343
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 344
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 345
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: cs:xxx, ID 524)
+                   → Replaced with [MASK]
+
+Position 346
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 347
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r14
+  Token ID:        571
+  Vocab[571]:      r14
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r14 (ID 571)
+  Status:          NOT MASKED
+
+Position 348
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 349
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  test
+  Token ID:        525
+  Vocab[525]:      test
+  Vocab Match:     ✓ CORRECT
+  After Masking:   test (ID 525)
+  Status:          NOT MASKED
+
+Position 350
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 351
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 352
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jz
+  Token ID:        526
+  Vocab[526]:      jz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jz (ID 526)
+  Status:          NOT MASKED
+
+Position 353
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_391
+  Token ID:        396
+  Vocab[396]:      JUMP_ADDR_391
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_391 (ID 396)
+  Status:          NOT MASKED
+
+Position 354
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: xor, ID 549)
+                   → Replaced with [MASK]
+
+Position 355
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ebx
+  Token ID:        585
+  Vocab[585]:      ebx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ebx (ID 585)
+  Status:          NOT MASKED
+
+Position 356
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ebx
+  Token ID:        585
+  Vocab[585]:      ebx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ebx (ID 585)
+  Status:          NOT MASKED
+
+Position 357
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cmp
+  Token ID:        543
+  Vocab[543]:      cmp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: cmp, ID 543)
+                   → Replaced with [MASK]
+
+Position 358
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rax+CONST]
+  Token ID:        569
+  Vocab[569]:      [rax+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rax+CONST] (ID 569)
+  Status:          NOT MASKED
+
+Position 359
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 360
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 361
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12
+  Token ID:        545
+  Vocab[545]:      r12
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12 (ID 545)
+  Status:          NOT MASKED
+
+Position 362
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 363
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 364
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r13
+  Token ID:        568
+  Vocab[568]:      r13
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: r13, ID 568)
+                   → Replaced with [MASK]
+
+Position 365
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 366
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jnz
+  Token ID:        536
+  Vocab[536]:      jnz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: jnz, ID 536)
+                   → Replaced with [MASK]
+
+Position 367
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_141
+  Token ID:        146
+  Vocab[146]:      JUMP_ADDR_141
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_141 (ID 146)
+  Status:          NOT MASKED
+
+Position 368
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jmp
+  Token ID:        531
+  Vocab[531]:      jmp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jmp (ID 531)
+  Status:          NOT MASKED
+
+Position 369
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_165
+  Token ID:        170
+  Vocab[170]:      JUMP_ADDR_165
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_165 (ID 170)
+  Status:          NOT MASKED
+
+Position 370
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 371
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 372
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  add
+  Token ID:        528
+  Vocab[528]:      add
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: add, ID 528)
+                   → Replaced with [MASK]
+
+Position 373
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ebx
+  Token ID:        585
+  Vocab[585]:      ebx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ebx (ID 585)
+  Status:          NOT MASKED
+
+Position 374
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 375
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 376
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 377
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12
+  Token ID:        545
+  Vocab[545]:      r12
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12 (ID 545)
+  Status:          NOT MASKED
+
+Position 378
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 379
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 380
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 381
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 382
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 383
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 384
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 385
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 386
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cmp
+  Token ID:        543
+  Vocab[543]:      cmp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cmp (ID 543)
+  Status:          NOT MASKED
+
+Position 387
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [r14+CONST]
+  Token ID:        587
+  Vocab[587]:      [r14+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [r14+CONST] (ID 587)
+  Status:          NOT MASKED
+
+Position 388
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ebx
+  Token ID:        585
+  Vocab[585]:      ebx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ebx (ID 585)
+  Status:          NOT MASKED
+
+Position 389
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jbe
+  Token ID:        555
+  Vocab[555]:      jbe
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jbe (ID 555)
+  Status:          NOT MASKED
+
+Position 390
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_165
+  Token ID:        170
+  Vocab[170]:      JUMP_ADDR_165
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_165 (ID 170)
+  Status:          NOT MASKED
+
+Position 391
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 392
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdx
+  Token ID:        562
+  Vocab[562]:      rdx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdx (ID 562)
+  Status:          NOT MASKED
+
+Position 393
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [r14]
+  Token ID:        577
+  Vocab[577]:      [r14]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [r14] (ID 577)
+  Status:          NOT MASKED
+
+Position 394
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 395
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 396
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ebx
+  Token ID:        585
+  Vocab[585]:      ebx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ebx (ID 585)
+  Status:          NOT MASKED
+
+Position 397
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 398
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r15
+  Token ID:        544
+  Vocab[544]:      r15
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r15 (ID 544)
+  Status:          NOT MASKED
+
+Position 399
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rdx+rax*8]
+  Token ID:        751
+  Vocab[751]:      [rdx+rax*8]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rdx+rax*8] (ID 751)
+  Status:          NOT MASKED
+
+Position 400
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 401
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: eax, ID 550)
+                   → Replaced with [MASK]
+
+Position 402
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [rsp+CONST] (ID 572)
+  Status:          NOT MASKED
+
+Position 403
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 404
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rdi, ID 532)
+                   → Replaced with [MASK]
+
+Position 405
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r15
+  Token ID:        544
+  Vocab[544]:      r15
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r15 (ID 544)
+  Status:          NOT MASKED
+
+Position 406
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  test
+  Token ID:        525
+  Vocab[525]:      test
+  Vocab Match:     ✓ CORRECT
+  After Masking:   test (ID 525)
+  Status:          NOT MASKED
+
+Position 407
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 408
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 409
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jnz
+  Token ID:        536
+  Vocab[536]:      jnz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jnz (ID 536)
+  Status:          NOT MASKED
+
+Position 410
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_148
+  Token ID:        153
+  Vocab[153]:      JUMP_ADDR_148
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  JTP:             MASKED (target position: 148)
+                   → Jump target: mov at position 148
+                   → Replaced with [MASK]
+
+Position 411
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 412
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 413
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 414
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 415
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r13
+  Token ID:        568
+  Vocab[568]:      r13
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r13 (ID 568)
+  Status:          NOT MASKED
+
+Position 416
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  add
+  Token ID:        528
+  Vocab[528]:      add
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: add, ID 528)
+                   → Replaced with [MASK]
+
+Position 417
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ebx
+  Token ID:        585
+  Vocab[585]:      ebx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ebx (ID 585)
+  Status:          NOT MASKED
+
+Position 418
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 419
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 420
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 421
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 422
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 423
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 424
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 425
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 426
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 427
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 428
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 429
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r15
+  Token ID:        544
+  Vocab[544]:      r15
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r15 (ID 544)
+  Status:          NOT MASKED
+
+Position 430
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 431
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 432
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 433
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rdi, ID 532)
+                   → Replaced with [MASK]
+
+Position 434
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12
+  Token ID:        545
+  Vocab[545]:      r12
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12 (ID 545)
+  Status:          NOT MASKED
+
+Position 435
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 436
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r15
+  Token ID:        544
+  Vocab[544]:      r15
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: r15, ID 544)
+                   → Replaced with [MASK]
+
+Position 437
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rax, ID 523)
+                   → Replaced with [MASK]
+
+Position 438
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 439
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 440
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 441
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 442
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 443
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 444
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 445
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: cs:xxx, ID 524)
+                   → Replaced with [MASK]
+
+Position 446
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 447
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 448
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r15
+  Token ID:        544
+  Vocab[544]:      r15
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r15 (ID 544)
+  Status:          NOT MASKED
+
+Position 449
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 450
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 451
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cmp
+  Token ID:        543
+  Vocab[543]:      cmp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cmp (ID 543)
+  Status:          NOT MASKED
+
+Position 452
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [r14+CONST]
+  Token ID:        587
+  Vocab[587]:      [r14+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [r14+CONST] (ID 587)
+  Status:          NOT MASKED
+
+Position 453
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ebx
+  Token ID:        585
+  Vocab[585]:      ebx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ebx (ID 585)
+  Status:          NOT MASKED
+
+Position 454
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  ja
+  Token ID:        589
+  Vocab[589]:      ja
+  Vocab Match:     ✓ CORRECT
+  After Masking:   ja (ID 589)
+  Status:          NOT MASKED
+
+Position 455
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_165
+  Token ID:        170
+  Vocab[170]:      JUMP_ADDR_165
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_165 (ID 170)
+  Status:          NOT MASKED
+
+Position 456
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 457
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: rdi, ID 532)
+                   → Replaced with [MASK]
+
+Position 458
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r14
+  Token ID:        571
+  Vocab[571]:      r14
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r14 (ID 571)
+  Status:          NOT MASKED
+
+Position 459
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 460
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 461
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 462
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 463
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rbp
+  Token ID:        535
+  Vocab[535]:      rbp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rbp (ID 535)
+  Status:          NOT MASKED
+
+Position 464
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 465
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   setnp (ID 1274)
+  MLM:             MASKED (label: cs:xxx, ID 524)
+                   → Replaced with random token: setnp
+
+Position 466
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: mov, ID 522)
+                   → Replaced with [MASK]
+
+Position 467
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12
+  Token ID:        545
+  Vocab[545]:      r12
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12 (ID 545)
+  Status:          NOT MASKED
+
+Position 468
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 469
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  test
+  Token ID:        525
+  Vocab[525]:      test
+  Vocab Match:     ✓ CORRECT
+  After Masking:   test (ID 525)
+  Status:          NOT MASKED
+
+Position 470
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 471
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 472
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jz
+  Token ID:        526
+  Vocab[526]:      jz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: jz, ID 526)
+                   → Replaced with [MASK]
+
+Position 473
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_364
+  Token ID:        369
+  Vocab[369]:      JUMP_ADDR_364
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_364 (ID 369)
+  Status:          NOT MASKED
+
+Position 474
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cmp
+  Token ID:        543
+  Vocab[543]:      cmp
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cmp (ID 543)
+  Status:          NOT MASKED
+
+Position 475
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [rsp+CONST]
+  Token ID:        572
+  Vocab[572]:      [rsp+CONST]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [MASK] (ID 4)
+  MLM:             MASKED (label: [rsp+CONST], ID 572)
+                   → Replaced with [MASK]
+
+Position 476
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  CONST
+  Token ID:        521
+  Vocab[521]:      CONST
+  Vocab Match:     ✓ CORRECT
+  After Masking:   CONST (ID 521)
+  Status:          NOT MASKED
+
+Position 477
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 478
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  MLM:             MASKED (label: rdi, ID 532)
+                   → Kept original (10% strategy)
+
+Position 479
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 480
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  jnz
+  Token ID:        536
+  Vocab[536]:      jnz
+  Vocab Match:     ✓ CORRECT
+  After Masking:   jnz (ID 536)
+  Status:          NOT MASKED
+
+Position 481
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  JUMP_ADDR_215
+  Token ID:        220
+  Vocab[220]:      JUMP_ADDR_215
+  Vocab Match:     ✓ CORRECT
+  After Masking:   JUMP_ADDR_215 (ID 220)
+  Status:          NOT MASKED
+
+Position 482
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 483
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 484
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 485
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 486
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 487
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 488
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  MLM:             MASKED (label: rsi, ID 554)
+                   → Kept original (10% strategy)
+
+Position 489
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 490
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 491
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 492
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 493
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 494
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 495
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 496
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 497
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r12
+  Token ID:        545
+  Vocab[545]:      r12
+  Vocab Match:     ✓ CORRECT
+  After Masking:   r12 (ID 545)
+  Status:          NOT MASKED
+
+Position 498
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  call
+  Token ID:        527
+  Vocab[527]:      call
+  Vocab Match:     ✓ CORRECT
+  After Masking:   call (ID 527)
+  Status:          NOT MASKED
+
+Position 499
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  cs:xxx
+  Token ID:        524
+  Vocab[524]:      cs:xxx
+  Vocab Match:     ✓ CORRECT
+  After Masking:   cs:xxx (ID 524)
+  Status:          NOT MASKED
+
+Position 500
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  lea
+  Token ID:        551
+  Vocab[551]:      lea
+  Vocab Match:     ✓ CORRECT
+  After Masking:   lea (ID 551)
+  Status:          NOT MASKED
+
+Position 501
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rdi
+  Token ID:        532
+  Vocab[532]:      rdi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rdi (ID 532)
+  Status:          NOT MASKED
+
+Position 502
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  GLOBAL_VAR
+  Token ID:        564
+  Vocab[564]:      GLOBAL_VAR
+  Vocab Match:     ✓ CORRECT
+  After Masking:   GLOBAL_VAR (ID 564)
+  Status:          NOT MASKED
+
+Position 503
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 504
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  r13
+  Token ID:        568
+  Vocab[568]:      r13
+  Vocab Match:     ✓ CORRECT
+  After Masking:   maxss (ID 998)
+  MLM:             MASKED (label: r13, ID 568)
+                   → Replaced with random token: maxss
+
+Position 505
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 506
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  mov
+  Token ID:        522
+  Vocab[522]:      mov
+  Vocab Match:     ✓ CORRECT
+  After Masking:   mov (ID 522)
+  Status:          NOT MASKED
+
+Position 507
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rsi
+  Token ID:        554
+  Vocab[554]:      rsi
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rsi (ID 554)
+  Status:          NOT MASKED
+
+Position 508
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  rax
+  Token ID:        523
+  Vocab[523]:      rax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   rax (ID 523)
+  Status:          NOT MASKED
+
+Position 509
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  xor
+  Token ID:        549
+  Vocab[549]:      xor
+  Vocab Match:     ✓ CORRECT
+  After Masking:   xor (ID 549)
+  Status:          NOT MASKED
+
+Position 510
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  eax
+  Token ID:        550
+  Vocab[550]:      eax
+  Vocab Match:     ✓ CORRECT
+  After Masking:   eax (ID 550)
+  Status:          NOT MASKED
+
+Position 511
+------------------------------------------------------------------------------------------------------------------------
+  Original Token:  [SEP]
+  Token ID:        3
+  Vocab[3]:      [SEP]
+  Vocab Match:     ✓ CORRECT
+  After Masking:   [SEP] (ID 3)
+  Status:          NOT MASKED
+
