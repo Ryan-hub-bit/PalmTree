@@ -161,4 +161,12 @@ class BERTTrainer:
         torch.save(self.bert.cpu(), output_path)
         self.bert.to(self.device)
         print("EP:%d Model Saved on:" % epoch, output_path)
+        
+        # Also save just the BERT state dict for compatibility
+        if 'best_model.pt' in file_path or 'epoch_' in file_path:
+            bert_path = output_path.replace('.pt', '_bert.pt')
+            torch.save(self.bert.cpu().state_dict(), bert_path)
+            self.bert.to(self.device)
+            print("       BERT state dict saved:", bert_path)
+        
         return output_path

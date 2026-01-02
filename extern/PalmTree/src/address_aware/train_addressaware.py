@@ -931,28 +931,38 @@ class AddressAwareTrainer:
         
         return avg_loss
     
-    def save(self, epoch, output_dir, save_path=None):
-        """Save model checkpoint"""
-        os.makedirs(output_dir, exist_ok=True)
+    def save(self, epoch, file_path="output/bert_trained.model"):
+        """
+        Saving the current BERT model on file_path
         
-        if save_path is None:
-            save_path = f"checkpoint_epoch_{epoch}.pt"
+        :param epoch: current epoch number
+        :param file_path: model output path (used as-is, no epoch suffix added)
+        :return: final_output_path
+        """
+        output_path = file_path
         
-        checkpoint_path = os.path.join(output_dir, save_path)
+        # Create directory if it doesn't exist
+        output_dir = os.path.dirname(output_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
         
         # Get the actual model (unwrap DataParallel if needed)
         model_to_save = self.model.module if hasattr(self.model, 'module') else self.model
         
+        # Save full checkpoint with optimizer state
         torch.save({
             'epoch': epoch,
             'model_state_dict': model_to_save.state_dict(),
             'optimizer_state_dict': self.optim.state_dict(),
-        }, checkpoint_path)
+        }, output_path)
         
-        # Also save just the BERT part
+        # Also save just the BERT part (for compatibility)
         bert_state = model_to_save.bert.state_dict()
-        bert_path = os.path.join(output_dir, f"bert_epoch_{epoch}.pt")
+        bert_path = output_path.replace('.pt', '_bert.pt')
         torch.save(bert_state, bert_path)
+        
+        print("EP:%d Model Saved on:" % epoch, output_path)
+        return output_path
 
 
 if __name__ == '__main__':

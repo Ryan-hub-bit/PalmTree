@@ -14,7 +14,7 @@ python train_baseline.py \
     --test_path /work/kliu14/jtransdata/pretrain_test.txt \
     --tokenizer_path /home/kliu14/PalmTree/extern/jTrans/pretrain/baseline \
     --output_dir /work/kliu14/jtransoutput/baseline_pretrain \
-    --batch_size 256 \
+    --batch_size 128 \
     --learning_rate 1e-4 \
     --num_epochs 6 \
     --warmup_steps 10000 \
