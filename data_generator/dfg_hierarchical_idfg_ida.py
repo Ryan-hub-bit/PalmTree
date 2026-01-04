@@ -65,6 +65,8 @@ def clean_ida_disasm(ea):
     but replacing symbol names with hex addresses.
     Mark immediate values with 'imm' token.
     Mark displacement operands (o_displ) with 'disp_0xXX' prefix to prevent address() wrapping.
+    Global variable names -> resolved to hex addresses (e.g., wanted_samples -> 0x12340)
+      This ensures debug symbols for global variables are converted to daddr(0x...) format
     """
     # Get mnemonic
     mnem = idc.print_insn_mnem(ea)
@@ -78,6 +80,25 @@ def clean_ida_disasm(ea):
         if not op:
             break
         
+        # Get operand type and value first
+        op_type = idc.get_operand_type(ea, i)
+        op_value = idc.get_operand_value(ea, i)
+        
+        # Force stack variables to use var(0xXX) format instead of debug symbol names
+        # This prevents IDA debug symbols like i_0, f_0, delim_0 from appearing
+        if op_type == idc.o_displ:
+            # This is a displacement operand (stack variable or memory offset)
+            # Check if it contains a debug symbol name pattern (e.g., i_0, delim_0)
+            # Pattern: word characters followed by underscore and digit
+            if re.search(r'\b[a-zA-Z_][a-zA-Z0-9_]*_\d+\b', op):
+                # Replace debug symbol with var(0xXX) format using the offset value
+                # Extract base register and reconstruct with hex offset
+                base_reg_match = re.search(r'\[([a-z0-9]+)', op, re.IGNORECASE)
+                if base_reg_match:
+                    base_reg = base_reg_match.group(1)
+                    # Use var_ format with hex offset
+                    op = f"[{base_reg}+var_{op_value:X}h]" if op_value > 0 else f"[{base_reg}+var_0]"
+        
         # Clean up IDA's duplicate offsets in var format: [rsp+60h+var_60] -> [rsp+var_60]
         # This handles the common case where IDA shows both hex offset and var_ symbol
         if 'var_' in op:
@@ -87,10 +108,6 @@ def clean_ida_disasm(ea):
             op = re.sub(r'\+\s*\+', '+', op)
             op = re.sub(r'\[\s*\+', '[', op)
             op = re.sub(r'\+\s*\]', ']', op)
-        
-        # Get operand type and value
-        op_type = idc.get_operand_type(ea, i)
-        op_value = idc.get_operand_value(ea, i)
         
         # Check if it's an immediate value
         if op_type == idc.o_imm:
@@ -117,10 +134,24 @@ def clean_ida_disasm(ea):
         # For operands that reference code/data addresses (but NOT displacements)
         elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
             # var_ already cleaned above, just check if it needs address replacement
-            if 'var_' not in op and op_value != idaapi.BADADDR and op_value != 0:
-                # Check if it's a symbol name (not already a hex address)
-                if not op.startswith('0x') and not op.startswith('['):
-                    op = hex(op_value)
+            if 'var_' not in op:
+                # Try to get the address value
+                if op_value != idaapi.BADADDR and op_value != 0:
+                    # Valid address from get_operand_value
+                    if not op.startswith('0x') and not op.startswith('['):
+                        op = hex(op_value)
+                elif not op.startswith('0x') and not op.startswith('['):
+                    # Symbol name - try to resolve it
+                    # Remove any segment prefix first
+                    clean_op = op
+                    for seg_prefix in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']:
+                        if clean_op.startswith(seg_prefix):
+                            clean_op = clean_op[len(seg_prefix):]
+                            break
+                    # Try to get address by name
+                    sym_addr = idc.get_name_ea_simple(clean_op)
+                    if sym_addr != idaapi.BADADDR:
+                        op = hex(sym_addr)
         operands.append(op)
     
     # Build clean disassembly

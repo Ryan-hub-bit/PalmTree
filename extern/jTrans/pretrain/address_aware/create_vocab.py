@@ -1,5 +1,5 @@
 """
-Generate vocabulary from all CFG and DFG data (train, val, test)
+Generate vocabulary from address-aware training data
 
 Uses the WordVocab class for fast vocabulary creation.
 """
@@ -14,24 +14,62 @@ from vocab import WordVocab
 
 def preprocess_line(line):
     """
-    Remove all address information in parentheses from a line.
+    Remove all address information in parentheses from a line and normalize tokens.
+    
+    Token normalization rules:
+    - All var(0xXX) and var(0xsXX) -> "var" (single token for all stack variables)
+    - address(0xADDR:pos1:pos2:pos3) -> "address" (remove position info)
+    - daddr(0xADDR:pos1:pos2:pos3) -> "daddr" (remove position info)
+    - mov(0xADDR:pos1:pos2:pos3) -> "mov" (remove position info from opcodes)
+    - Filter out: jump table labels like (jpt_XXXX
+    - Filter out: Intel hex format like 4000h)
+    - Remove segment prefix: ds:dword_0 -> dword_0
+    - Intel hex XXXXh) -> "imm" (treat as immediate)
     
     Examples:
         mov(0x401000:0.5:0.3:0.2) eax ebx -> mov eax ebx
         address(0x123:0.5:0.3:0.2) -> address
-        var(0x10028) -> var
+        var(0x10) -> var
+        var(0xs28) -> var
+        ds:dword_0 -> dword_0
     
     Returns cleaned tokens as a list.
     """
     # Remove all patterns like (0xADDR:pos1:pos2:pos3) - address positions
     cleaned = re.sub(r'\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)', '', line)
-    # Normalize var(0xADDR) and var(0xsADDR) to 'var'
-    cleaned = re.sub(r'var\(0xs?[0-9a-fA-F]+\)', 'var', cleaned)
-    # Remove all patterns like (0xADDR) - just in case any remain
-    cleaned = re.sub(r'\(0x[0-9a-fA-F]+\)', '', cleaned)
-    # Split by whitespace and tab, filter out empty strings
+    
+    # Normalize var(0xXX) and var(0xsXX) to just "var"
+    # This handles both var(0x10) and var(0xs28) formats
+    cleaned = re.sub(r'var\(0x[s]?[0-9a-fA-F]+\)', 'var', cleaned)
+    
+    # Split by whitespace and tab
     tokens = [tok for tok in cleaned.replace('\t', ' ').split() if tok]
-    return tokens
+    
+    # Additional token-level filtering and normalization
+    normalized_tokens = []
+    for tok in tokens:
+        # Filter out jump table labels: (jpt_XXXX
+        if tok.startswith('(jpt_'):
+            continue
+        
+        # Convert Intel hex format with closing paren to imm: XXXXh)
+        if re.match(r'^[0-9A-Fa-f]+h\)$', tok):
+            normalized_tokens.append('imm')
+            continue
+        
+        # Remove segment prefixes: ds:dword_0 -> dword_0
+        if re.match(r'^[cdefgs]s:', tok):
+            tok = tok.split(':', 1)[1]  # Keep everything after the colon
+        
+        # Normalize .plt.plt to .plt (malformed double PLT)
+        if tok == '.plt.plt':
+            normalized_tokens.append('.plt')
+            continue
+        
+        # Keep the token
+        normalized_tokens.append(tok)
+    
+    return normalized_tokens
 
 
 class PreprocessedFile:
@@ -47,7 +85,7 @@ class PreprocessedFile:
             yield preprocess_line(line)
 
 
-def create_vocab(data_files, vocab_path, max_size=13000, min_freq=2, logger=None):
+def create_vocab(data_files, vocab_path, max_size=10000, min_freq=2, logger=None):
     """
     Create vocabulary from data files if it doesn't exist.
     
@@ -113,62 +151,59 @@ def create_vocab(data_files, vocab_path, max_size=13000, min_freq=2, logger=None
 
 
 if __name__ == "__main__":
-    # Data files from /data/kun/dataset/
-    train_cfg_dataset = "/data/kun/dataset/train_cfg.txt"
-    train_dfg_dataset = "/data/kun/dataset/train_dfg.txt"
-    val_cfg_dataset = "/data/kun/dataset/val_cfg.txt"
-    val_dfg_dataset = "/data/kun/dataset/val_dfg.txt"
-    test_cfg_dataset = "/data/kun/dataset/test_cfg.txt"
-    test_dfg_dataset = "/data/kun/dataset/test_dfg.txt"
+    # Data files from /data/kun/jtransdata/
+    train_dataset = "/data/kun/jtransdata/addressaware_train.txt"
+    test_dataset = "/data/kun/jtransdata/addressaware_test.txt"
     
-    vocab_path = "./vocab.pkl"
+    vocab_path = "/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware/vocab_addr.pkl"
     
     print("=" * 60)
-    print("Creating Vocabulary from Train + Val + Test Data")
+    print("Creating Vocabulary from Address-Aware Training Data")
     print("=" * 60)
-    print(f"Using WordVocab with max_size=13000, min_freq=2")
+    print(f"Using WordVocab with max_size=10000, min_freq=2")
     print(f"Output: {vocab_path} (pickle format)")
     print()
     
     # Check if files exist
-    files_to_check = [
-        train_cfg_dataset, train_dfg_dataset,
-        val_cfg_dataset, val_dfg_dataset,
-        test_cfg_dataset, test_dfg_dataset
-    ]
+    files_to_check = [train_dataset]
+    
+    # Optionally include test dataset
+    if os.path.exists(test_dataset):
+        files_to_check.append(test_dataset)
     
     for fpath in files_to_check:
         if not os.path.exists(fpath):
             print(f"ERROR: File not found: {fpath}")
             sys.exit(1)
-        print(f"Found: {fpath}")
+        # Get file size
+        file_size = os.path.getsize(fpath) / (1024 * 1024)  # MB
+        print(f"Found: {fpath} ({file_size:.1f} MB)")
     
+    print()
+    print("Building vocabulary (this may take a few minutes)...")
     print()
     
     # Open all files and pass to WordVocab with preprocessing
     # Wrap each file handle with PreprocessedFile to remove address info
-    with open(train_cfg_dataset, "r", encoding="utf-8") as f1, \
-         open(train_dfg_dataset, "r", encoding="utf-8") as f2, \
-         open(val_cfg_dataset, "r", encoding="utf-8") as f3, \
-         open(val_dfg_dataset, "r", encoding="utf-8") as f4, \
-         open(test_cfg_dataset, "r", encoding="utf-8") as f5, \
-         open(test_dfg_dataset, "r", encoding="utf-8") as f6:
-        
-        # Wrap each file with preprocessing
-        preprocessed_files = [
-            PreprocessedFile(f1),
-            PreprocessedFile(f2),
-            PreprocessedFile(f3),
-            PreprocessedFile(f4),
-            PreprocessedFile(f5),
-            PreprocessedFile(f6)
-        ]
+    file_handles = []
+    preprocessed_files = []
+    
+    try:
+        for fpath in files_to_check:
+            fh = open(fpath, "r", encoding="utf-8")
+            file_handles.append(fh)
+            preprocessed_files.append(PreprocessedFile(fh))
         
         vocab = WordVocab(
             preprocessed_files,
-            max_size=13000,
+            max_size=10000,
             min_freq=2
         )
+        
+    finally:
+        # Close all file handles
+        for fh in file_handles:
+            fh.close()
     
     print()
     print("VOCAB SIZE:", len(vocab))
@@ -182,3 +217,8 @@ if __name__ == "__main__":
     print("=" * 60)
     print("Done!")
     print("=" * 60)
+    print()
+    print("You can now use this vocabulary in your training:")
+    print("  from vocab import WordVocab")
+    print("  vocab = WordVocab.load_vocab('vocab.pkl')")
+    print()

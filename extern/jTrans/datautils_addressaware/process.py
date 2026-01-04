@@ -120,6 +120,8 @@ def clean_ida_disasm(ea):
     - Stack variables -> keep as-is (will be converted to var(0xOFFSET) later)
     - Displacements -> "disp" (to avoid address() wrapping)
     - Addresses -> hex values (will be wrapped with hierarchical positions)
+    - Global variable names -> resolved to hex addresses (e.g., wanted_samples -> 0x12340)
+      This ensures debug symbols for global variables are converted to daddr(0x...) format
     """
     # Get mnemonic
     mnem = idc.print_insn_mnem(ea)
@@ -133,6 +135,25 @@ def clean_ida_disasm(ea):
         if not op:
             break
         
+        # Get operand type and value first
+        op_type = idc.get_operand_type(ea, i)
+        op_value = idc.get_operand_value(ea, i)
+        
+        # Force stack variables to use var(0xXX) format instead of debug symbol names
+        # This prevents IDA debug symbols like i_0, f_0, delim_0 from appearing
+        if op_type == idc.o_displ:
+            # This is a displacement operand (stack variable or memory offset)
+            # Check if it contains a debug symbol name pattern (e.g., i_0, delim_0)
+            # Pattern: word characters followed by underscore and digit
+            if re.search(r'\b[a-zA-Z_][a-zA-Z0-9_]*_\d+\b', op):
+                # Replace debug symbol with var(0xXX) format using the offset value
+                # Extract base register and reconstruct with hex offset
+                base_reg_match = re.search(r'\[([a-z0-9]+)', op, re.IGNORECASE)
+                if base_reg_match:
+                    base_reg = base_reg_match.group(1)
+                    # Use var_ format with hex offset
+                    op = f"[{base_reg}+var_{op_value:X}h]" if op_value > 0 else f"[{base_reg}+var_0]"
+        
         # Clean up IDA's duplicate offsets: [rsp+60h+var_60] -> [rsp+var_60]
         if 'var_' in op:
             op = re.sub(r'\+?\s*0x[0-9A-Fa-f]+\s*\+\s*(?=var_)', '+', op)
@@ -140,10 +161,6 @@ def clean_ida_disasm(ea):
             op = re.sub(r'\+\s*\+', '+', op)
             op = re.sub(r'\[\s*\+', '[', op)
             op = re.sub(r'\+\s*\]', ']', op)
-        
-        # Get operand type and value
-        op_type = idc.get_operand_type(ea, i)
-        op_value = idc.get_operand_value(ea, i)
         
         # Handle different operand types
         if op_type == idc.o_imm:
@@ -164,9 +181,24 @@ def clean_ida_disasm(ea):
                 op = "disp"
         elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
             # Code/data address
-            if 'var_' not in op and op_value != idaapi.BADADDR and op_value != 0:
-                if not op.startswith('0x') and not op.startswith('['):
-                    op = hex(op_value)
+            if 'var_' not in op:
+                # Try to get the address value
+                if op_value != idaapi.BADADDR and op_value != 0:
+                    # Valid address from get_operand_value
+                    if not op.startswith('0x') and not op.startswith('['):
+                        op = hex(op_value)
+                elif not op.startswith('0x') and not op.startswith('['):
+                    # Symbol name - try to resolve it
+                    # Remove any segment prefix first
+                    clean_op = op
+                    for seg_prefix in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']:
+                        if clean_op.startswith(seg_prefix):
+                            clean_op = clean_op[len(seg_prefix):]
+                            break
+                    # Try to get address by name
+                    sym_addr = idc.get_name_ea_simple(clean_op)
+                    if sym_addr != idaapi.BADADDR:
+                        op = hex(sym_addr)
         
         operands.append(op)
     
@@ -187,6 +219,12 @@ def normalize_operand(operand, min_addr, max_addr):
     """
     operand = operand.strip()
     
+    # Strip segment register prefixes (ds:, fs:, gs:, es:, cs:, ss:)
+    for seg_prefix in ['cs:', 'ds:', 'es:', 'ss:', 'fs:', 'gs:']:
+        if operand.startswith(seg_prefix):
+            operand = operand[len(seg_prefix):]
+            break
+    
     # Check for displacement (already marked by clean_ida_disasm)
     if operand == "disp":
         return ("disp", None)
@@ -198,6 +236,11 @@ def normalize_operand(operand, min_addr, max_addr):
     # Check for stack variable (var_XX format)
     if operand.startswith("var_"):
         var_offset = operand[4:]  # Get offset after "var_"
+        # Strip any suffix like .plt, .got, etc. - only keep hex part
+        var_offset = var_offset.split('.')[0]  # Take only first part before any dot
+        # Strip Intel hex suffix 'h' if present
+        if var_offset.endswith('h'):
+            var_offset = var_offset[:-1]
         return (f"var(0x{var_offset})", None)
     
     # Check for hex address
@@ -453,6 +496,21 @@ def process_function(func_ea, min_addr, max_addr, symbol_map=None):
                                 symbol_name = name
                         
                         # If we have a symbol name, check if it's a library function
+                        if symbol_name:
+                            # Filter out junk symbols:
+                            # - Cython compiler internals (__pyx_*)
+                            # - Compiler-generated temporaries (__tmp*, __t[0-9]*)
+                            # - C++ mangled names starting with _Z
+                            # - Python/C API internals (__Py*, __py*)
+                            if (symbol_name.startswith('__pyx_') or 
+                                symbol_name.startswith('__tmp') or
+                                symbol_name.startswith('__t') and len(symbol_name) > 3 and symbol_name[3].isdigit() or
+                                symbol_name.startswith('_Z') or
+                                symbol_name.startswith('__Py') or
+                                symbol_name.startswith('__py')):
+                                # Skip junk symbols, clear symbol_name so it falls through to generic address handling
+                                symbol_name = None
+                        
                         if symbol_name:
                             # Check section to see if it's PLT/GOT related
                             section_info = get_section_for_addr(addr_value)

@@ -102,8 +102,9 @@ for binary in "$INPUT_DIR"/*; do
     
     # Run IDA Pro (process.py reads SAVEROOT and DATAROOT from env vars)
     # Use -c (console mode) and -L (log file) flags following jTrans/datautils/run.py
+    # -OIDAPython:AnalysisFlags:~AF_USEDBG disables debug symbol names for local variables
     LOG_FILE="$OUTPUT_DIR/${binary_name}_ida.log"
-    "$IDA_PATH" -L"$LOG_FILE" -c -A -S"$SCRIPT_PATH" "$binary" >/dev/null 2>&1
+    "$IDA_PATH" -L"$LOG_FILE" -c -A -OIDAPython:AnalysisFlags:~AF_USEDBG -S"$SCRIPT_PATH" "$binary" >/dev/null 2>&1
     
     # Check if outputs were generated
     if [ -f "$pickle_file" ] && [ -f "$text_file" ]; then

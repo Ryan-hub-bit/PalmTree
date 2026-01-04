@@ -130,7 +130,7 @@ disp         # Memory displacement (e.g., [rbp+0x10])
 bash run_ida_addressaware.sh <input_binaries_dir> <output_dir> [dataroot_dir]
 
 # Example: Process stripped binaries, save to extract/
-bash run_ida_addressaware.sh /data/kun/jtransdata/dataset /data/kun/jtransdata/extract
+bash run_ida_addressaware.sh /data/kun/jtransdata/small_train /data/kun/jtransdata/addr_extract
 
 # Example: With separate unstripped binary directory for symbol info
 bash run_ida_addressaware.sh \
@@ -147,7 +147,8 @@ bash run_ida_addressaware.sh \
 
 **Step 2**: Combine text files for training
 ```bash
-bash combine_and_split.sh /data/kun/jtransdata/extract ./data
+bash combine_and_split.sh /data/kun/jtransdata/addr_extract /data/kun/jtransdata
+
 ```
 
 This creates:
@@ -155,10 +156,9 @@ This creates:
 - `addressaware_test.txt` (10% of data)
 
 **Step 3**: Create vocabulary
-```bash
 cd ../pretrain/address_aware
-python -c 'from vocab import WordVocab; WordVocab.create_vocab("../../datautils_addressaware/data/addressaware_train.txt", "vocab.pkl")'
-```
+```bash
+python3 create_vocab.py
 
 **Step 4**: Train model
 ```bash
@@ -172,16 +172,6 @@ bash run_addressaware_pretrain.sh
 bash generate_addressaware_data.sh
 ```
 
-**Manual Steps**:
-```bash
-# 1. Convert pickle files
-python convert_pkl_to_addressaware.py \
-    --input /data/kun/jtransdata/extract \
-    --output /data/kun/jtransdata/addressaware \
-    --binary-addr-range 0x400000:0x600000
-
-# 2. Follow steps 2-4 from Approach 1
-```
 
 ## Files
 
@@ -190,9 +180,6 @@ python convert_pkl_to_addressaware.py \
 - **run_ida_addressaware.sh**: Batch process binaries with IDA
 - **combine_and_split.sh**: Combine files and split train/test
 
-### Pickle Conversion (Approach 2)
-- **convert_pkl_to_addressaware.py**: Convert pickles to address-aware format
-- **generate_addressaware_data.sh**: One-command pickle conversion
 
 ### Documentation
 - **README.md**: This file
@@ -230,7 +217,6 @@ push(0x401000:0.1:0.0:0.0) rbp mov(0x401001:0.11:0.05:0.1) rbp rsp lea(0x401005:
 ### Section Handling
 - **.text**: Code addresses with hierarchical positions
 - **.data/.rodata/.bss**: Data addresses with section-based positions
-- **.plt/.got**: Marked with sentinel `2.0:0.0:0.0`
 
 ## Next Steps
 

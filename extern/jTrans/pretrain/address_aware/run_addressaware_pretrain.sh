@@ -15,11 +15,11 @@ conda activate jtrans
 python train_addressaware.py \
     --train_path /data/kun/jtransdata/addressaware_train.txt \
     --test_path /data/kun/jtransdata/addressaware_test.txt \
-    --vocab_path vocab.pkl \
+    --vocab_path vocab_addr.pkl \
     --output_dir /home/kun/Document/AAE/output/addressaware_pretrain \
     --batch_size 32 \
     --learning_rate 1e-4 \
-    --num_epochs 10 \
+    --num_epochs 6 \
     --warmup_steps 10000 \
     --max_len 512 \
     --token_mask_prob 0.15 \
