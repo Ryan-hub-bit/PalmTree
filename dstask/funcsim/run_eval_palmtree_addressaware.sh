@@ -9,14 +9,14 @@
 set -e
 
 # Paths
-POOL_IDS="/data/kun/funcsim_match/pool_ids_10k.json"
-POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_10k.json"
+POOL_IDS="/data/kun/funcsim_match/pool_ids_1k.json"
+POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_1k.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
-VOCAB="../../extern/PalmTree/src/vocab_addr.pkl"
-CHECKPOINT="../../extern/PalmTree/src/output/address_aware/best_model.pt"
+VOCAB="../../extern/PalmTree/src/vocab_addr"
+CHECKPOINT="/home/kun/Document/AAE/output/funcsim/Palmtreeaddr/best_model.pt"
 
 # Output
-OUTPUT="../../output/funcsim/palmtree_addressaware_results_10k.json"
+OUTPUT="../../output/funcsim/palmtree_addressaware_results_1k.json"
 LOG_DIR="../../log/funcsim"
 TASK_NAME="palmtree_addressaware"  # Task identifier for caching
 
@@ -30,7 +30,7 @@ ADDRESS_EMBED_DIM=128
 VAR_EMBED_DIM=32
 
 # Evaluation config
-SEQ_LEN=60
+SEQ_LEN=20
 BATCH_SIZE=32
 NUM_WORKERS=4
 

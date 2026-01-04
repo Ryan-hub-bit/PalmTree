@@ -100,15 +100,50 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
             pool_data = json.load(f)
         
         sampled_query_ids = pool_data['query_ids']
-        selected_func_ids = pool_data['pool_function_ids']
+        selected_func_ids = set(pool_data['pool_function_ids'])
         
-        # Filter to selected functions
+        # Filter queries first
+        funcsim_pairs_initial = {fid: funcsim_pairs[fid] for fid in sampled_query_ids if fid in funcsim_pairs}
+        
+        # CRITICAL: Add ALL ground truth functions to the pool
+        logger.info("Ensuring all ground truth functions are in the pool...")
+        added_gt_count = 0
+        funcsim_pairs = {}
+        missing_from_data = 0
+        
+        for query_id, pair_data in funcsim_pairs_initial.items():
+            ground_truth = pair_data['ground_truth']
+            
+            # Add all ground truth functions to pool
+            for gt_id in ground_truth:
+                if gt_id not in selected_func_ids:
+                    if gt_id in function_blocks:
+                        selected_func_ids.add(gt_id)
+                        added_gt_count += 1
+                    else:
+                        missing_from_data += 1
+            
+            # Only keep queries where ALL ground truth functions are available
+            available_gt = [gt_id for gt_id in ground_truth if gt_id in function_blocks]
+            if len(available_gt) == len(ground_truth):
+                funcsim_pairs[query_id] = {
+                    'ground_truth': available_gt,
+                    'metadata': pair_data.get('metadata', {})
+                }
+        
+        # Filter function_blocks to selected functions
         function_blocks = {fid: function_blocks[fid] for fid in selected_func_ids if fid in function_blocks}
-        funcsim_pairs = {fid: funcsim_pairs[fid] for fid in sampled_query_ids if fid in funcsim_pairs}
         
         logger.info(f"Loaded pre-generated pool:")
-        logger.info(f"  - Pool size: {len(function_blocks)} functions")
-        logger.info(f"  - Queries: {len(funcsim_pairs)}")
+        logger.info(f"  - Pool size (original): {len(pool_data['pool_function_ids'])}")
+        logger.info(f"  - Pool size (with GT): {len(function_blocks)}")
+        logger.info(f"  - Added ground truth: {added_gt_count}")
+        logger.info(f"  - Queries (initial): {len(funcsim_pairs_initial)}")
+        logger.info(f"  - Queries (valid): {len(funcsim_pairs)}")
+        if missing_from_data > 0:
+            logger.warning(f"  - ⚠ {missing_from_data} ground truth functions missing from function_blocks data")
+        if len(funcsim_pairs) < len(funcsim_pairs_initial):
+            logger.warning(f"  - ⚠ Removed {len(funcsim_pairs_initial) - len(funcsim_pairs)} queries with incomplete ground truth")
         logger.info(f"  - Metadata: seed={pool_data['metadata'].get('seed')}, generated={pool_data['metadata'].get('generated_at')}")
     
     # Limit pool size if specified (and no pre-generated pool)
@@ -275,8 +310,37 @@ def compute_retrieval_metrics(model, function_blocks, funcsim_pairs, vocab, devi
     
     logger.info("Computing retrieval metrics...")
     
+    # Validate ground truth availability in pool
+    pool_func_set = set(all_func_ids)
+    queries_with_valid_gt = 0
+    total_gt_in_pool = 0
+    total_gt_count = 0
+    
+    for query_id, pair_data in funcsim_pairs.items():
+        ground_truth = pair_data['ground_truth']
+        total_gt_count += len(ground_truth)
+        available_gt = [gt_id for gt_id in ground_truth if gt_id in pool_func_set]
+        total_gt_in_pool += len(available_gt)
+        if len(available_gt) > 0:
+            queries_with_valid_gt += 1
+    
+    logger.info(f"Ground truth validation:")
+    logger.info(f"  - Queries with ≥1 GT in pool: {queries_with_valid_gt}/{len(funcsim_pairs)}")
+    logger.info(f"  - Total GT in pool: {total_gt_in_pool}/{total_gt_count} ({100*total_gt_in_pool/max(total_gt_count,1):.1f}%)")
+    
+    if total_gt_in_pool < total_gt_count * 0.5:
+        logger.error("⚠️  CRITICAL: Less than 50% of ground truth functions are in the pool!")
+        logger.error("    This will result in artificially low metrics. Check your pool generation!")
+    
     for query_id, pair_data in tqdm(funcsim_pairs.items(), desc="Evaluating queries"):
         ground_truth = set(pair_data['ground_truth'])
+        
+        # Filter ground truth to only those in pool
+        ground_truth = ground_truth & pool_func_set
+        
+        if len(ground_truth) == 0:
+            # Skip queries with no valid ground truth
+            continue
         
         if query_id not in all_embeddings:
             continue
@@ -415,7 +479,9 @@ def main():
             attn_heads=args.attn_heads,
             dropout=0.1,
             use_address_embedding=True,
-            use_var_embedding=True
+            use_var_embedding=True,
+            max_len=args.seq_len,
+            segment_types=16  # Support instruction-level segments (1-8) plus padding
         )
     
     # Load checkpoint
@@ -425,13 +491,29 @@ def main():
     # Handle different checkpoint formats
     if isinstance(checkpoint_data, dict):
         if 'model_state_dict' in checkpoint_data:
-            model.load_state_dict(checkpoint_data['model_state_dict'])
+            state_dict = checkpoint_data['model_state_dict']
         elif 'bert_state_dict' in checkpoint_data:
-            model.load_state_dict(checkpoint_data['bert_state_dict'])
+            state_dict = checkpoint_data['bert_state_dict']
         else:
-            model.load_state_dict(checkpoint_data)
+            state_dict = checkpoint_data
     else:
-        model.load_state_dict(checkpoint_data.state_dict())
+        state_dict = checkpoint_data.state_dict()
+    
+    # If state_dict has "bert." prefix (from FunctionSimilarityModel), extract only BERT weights
+    if any(k.startswith('bert.') for k in state_dict.keys()):
+        logger.info("Detected FunctionSimilarityModel checkpoint, extracting BERT weights...")
+        bert_state_dict = {}
+        for k, v in state_dict.items():
+            if k.startswith('bert.'):
+                # Remove "bert." prefix
+                new_key = k[5:]  # len('bert.') = 5
+                bert_state_dict[new_key] = v
+        state_dict = bert_state_dict
+        logger.info(f"Extracted {len(state_dict)} BERT parameters")
+    
+    # Load checkpoint - should now match exactly
+    model.load_state_dict(state_dict)
+    logger.info("Checkpoint loaded successfully!")
     
     model = model.to(device)
     logger.info("Model loaded successfully!")

@@ -11,21 +11,20 @@ export CUDA_VISIBLE_DEVICES=1
 #
 FUNCTION_BLOCKS="/data/kun/funcsim_match/function_blocks.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
-VOCAB="/home/kun/Document/AAE/extern/PalmTree/src/vocab_addr"
+VOCAB="/home/kun/Document/AAE/extern/PalmTree/src/vocab_base"
 
 # Pre-trained BERT model
 # The script will auto-detect if this model has address/var embeddings:
 # - If YES (e.g., mlm_address/best_bert.pt): Use address/var info from data
 # - If NO  (e.g., mlm/best_bert.pt):         Set all positions/offsets to 0
 #PRETRAINED_BERT="../../output/mlm/best_bert.pt"
-PRETRAINED_BERT="/home/kun/Document/AAE/extern/PalmTree/src/output/address_aware/best_model_bert.pt"
+PRETRAINED_BERT="/home/kun/Document/AAE/extern/PalmTree/src/output/baseline/best_model_bert.pt"
 
 # Output
-OUTPUT_DIR="../../output/funcsim/Palmtreeaddr"
-LOG_DIR="../../log/funcsim/Palmtreeaddr"
-EXPERIMENT_NAME="funcsim_Palmtreeaddr"
-TASK_NAME="Palmtreeaddr"  # Task identifier for embedding cache (e.g., 'mlm', 'mlm_addr_var')
-
+OUTPUT_DIR="../../output/funcsim/PalmtreeBaseline"
+LOG_DIR="../../log/funcsim/PalmtreeBaseline"
+EXPERIMENT_NAME="funcsim_PalmtreeBaseline"
+TASK_NAME="PalmtreeBaseline"  # Task identifier for embedding cache (e.g., 'mlm', 'mlm_addr_var')
 # Model config (must match pre-trained BERT)
 HIDDEN=128
 N_LAYERS=12

@@ -20,7 +20,7 @@ class AddressAwareBERT(nn.Module):
     """
 
     def __init__(self, vocab_size, hidden=768, n_layers=12, attn_heads=12, dropout=0.1, 
-                 use_address_embedding=True, use_var_embedding=True):
+                 use_address_embedding=True, use_var_embedding=True, max_len=512, segment_types=3):
         """
         Args:
             vocab_size: Size of the vocabulary
@@ -30,6 +30,8 @@ class AddressAwareBERT(nn.Module):
             dropout: Dropout rate
             use_address_embedding: Whether to use address-aware positional embeddings
             use_var_embedding: Whether to use var offset embeddings for var(0xXX) tokens
+            max_len: Maximum sequence length for positional embeddings
+            segment_types: Number of segment types
         """
         super().__init__()
         
@@ -48,7 +50,9 @@ class AddressAwareBERT(nn.Module):
             embed_size=hidden,
             dropout=dropout,
             use_address_embedding=use_address_embedding,
-            use_var_embedding=use_var_embedding
+            use_var_embedding=use_var_embedding,
+            max_len=max_len,
+            segment_types=segment_types
         )
 
         # multi-layers transformer blocks, deep network

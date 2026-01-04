@@ -34,7 +34,7 @@ output_path = "cdfg_bert_1/transformer"
 # Model hyperparameters (use config.py values where available)
 VOCAB_SIZE = VOCAB_SIZE if 'VOCAB_SIZE' in dir() else 13000
 MIN_FREQ = 1
-SEQ_LEN = MAXLEN if 'MAXLEN' in dir() else 20
+SEQ_LEN = 20
 BATCH_SIZE = 256
 NUM_WORKERS = 10
 

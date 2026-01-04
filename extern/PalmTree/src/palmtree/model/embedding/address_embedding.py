@@ -226,7 +226,7 @@ class AddressAwareBERTEmbedding(nn.Module):
     5. Var positional embedding (sin/cos on var offsets for var(0xXX) tokens)
     """
     
-    def __init__(self, vocab_size, embed_size, dropout=0.1, use_address_embedding=True, use_var_embedding=True):
+    def __init__(self, vocab_size, embed_size, dropout=0.1, use_address_embedding=True, use_var_embedding=True, max_len=512, segment_types=3):
         """
         Args:
             vocab_size: Size of vocabulary
@@ -234,6 +234,8 @@ class AddressAwareBERTEmbedding(nn.Module):
             dropout: Dropout rate
             use_address_embedding: Whether to use address-aware positional embeddings
             use_var_embedding: Whether to use var offset embeddings
+            max_len: Maximum sequence length for positional embeddings
+            segment_types: Number of segment types (default 3: padding, sent_A, sent_B)
         """
         super().__init__()
         
@@ -245,16 +247,16 @@ class AddressAwareBERTEmbedding(nn.Module):
         self.token_embedding = nn.Embedding(vocab_size, embed_size, padding_idx=0)
         
         # 2. Sequence positional embedding - sinusoidal (standard BERT style)
-        self.position_embedding = SequencePositionalEmbedding(embed_size)
+        self.position_embedding = SequencePositionalEmbedding(embed_size, max_len=max_len)
         
         # 3. Address-aware positional embedding - sin/cos encoding on 3 levels
         if self.use_address_embedding:
-            self.address_position = AddressPositionalEmbedding(embed_size, dropout=dropout)
+            self.address_position = AddressPositionalEmbedding(embed_size, max_len=max_len, dropout=dropout)
         else:
             self.address_position = None
         
         # 4. Segment embedding (for NSP)
-        self.segment_embedding = nn.Embedding(3, embed_size, padding_idx=0)  # 0=padding, 1=sent_A, 2=sent_B
+        self.segment_embedding = nn.Embedding(segment_types, embed_size, padding_idx=0)
         
         # 5. Var positional embedding - sin/cos encoding on var offsets
         if self.use_var_embedding:
