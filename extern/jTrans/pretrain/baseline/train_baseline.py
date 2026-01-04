@@ -411,9 +411,12 @@ def main():
             
             logger.info(f"✓ Checkpoint saved to {checkpoint_dir}")
         
-        # Save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        # Save best model (handle NaN by using MLM loss as fallback)
+        current_loss = val_loss if not torch.isnan(torch.tensor(val_loss)) else val_mlm_loss
+        compare_loss = best_val_loss if not torch.isnan(torch.tensor(best_val_loss)) else float('inf')
+        
+        if current_loss < compare_loss:
+            best_val_loss = current_loss
             best_model_dir = os.path.join(args.output_dir, 'best_model')
             os.makedirs(best_model_dir, exist_ok=True)
             
@@ -422,9 +425,10 @@ def main():
             best_info = {
                 'epoch': epoch + 1,
                 'mode': 'baseline',
-                'best_val_loss': best_val_loss,
+                'best_val_loss': float(best_val_loss) if not torch.isnan(torch.tensor(best_val_loss)) else None,
                 'val_mlm_acc': val_mlm_acc,
                 'val_jtp_acc': val_jtp_acc,
+                'note': 'Used val_mlm_loss for comparison due to NaN in total val_loss' if torch.isnan(torch.tensor(val_loss)) else None,
                 'architecture': {
                     'hidden_size': args.hidden_size,
                     'num_hidden_layers': args.num_hidden_layers,
@@ -435,7 +439,7 @@ def main():
             with open(os.path.join(best_model_dir, 'training_info.json'), 'w') as f:
                 json.dump(best_info, f, indent=2)
             
-            logger.info(f"✓ Best model saved! Val loss: {best_val_loss:.4f}")
+            logger.info(f"✓ Best model saved! Loss: {current_loss:.4f} (MLM acc: {val_mlm_acc:.4f}, JTP acc: {val_jtp_acc:.4f})")
     
     # Save training history
     history_file = os.path.join(args.output_dir, 'training_history.json')
