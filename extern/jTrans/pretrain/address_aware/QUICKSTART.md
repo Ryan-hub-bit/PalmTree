@@ -32,18 +32,8 @@ This will:
 ### Step 2: Create Vocabulary
 
 ```bash
-cd /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware
+python3 create_vocab.py
 
-python << 'EOFPY'
-from vocab import WordVocab
-
-vocab = WordVocab.create_vocab(
-    corpus_path='/data/kun/jtransdata/addressaware_train.txt',
-    output_path='vocab.pkl',
-    min_freq=1
-)
-print(f"✓ Created vocab with {len(vocab)} tokens")
-EOFPY
 ```
 
 ### Step 3: Train Model

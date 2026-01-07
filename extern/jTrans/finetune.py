@@ -8,6 +8,7 @@ import torch.nn as nn
 import numpy as np
 from tqdm import tqdm
 from data import load_paired_data, FunctionDataset_CL, FunctionDataset_CL_Load
+from data_json import FunctionDataset_CL_JSON, FunctionDataset_CL_Load_JSON
 from transformers import AdamW
 import torch.nn.functional as F
 import argparse
@@ -211,6 +212,10 @@ if __name__ == '__main__':
     parser.add_argument("--train_path", type=str, default='./BinaryCorp/small_train', help='the path of training data')
     parser.add_argument("--eval_path", type=str, default='./BinaryCorp/small_test', help='the path of evaluation data')
     parser.add_argument("--load_path", type=str, default='./experiments/BinaryCorp-3M/', help='load path')
+    parser.add_argument("--data_type", type=str, default='pickle', choices=['pickle', 'json'], 
+                        help='data format: pickle (original) or json (baseline/address-aware)')
+    parser.add_argument("--func_blocks", type=str, help='path to func_blocks.json (for json data_type)')
+    parser.add_argument("--ground_truth", type=str, help='path to ground_truth.json (for json data_type)')
 
     args = parser.parse_args()
 
@@ -240,11 +245,32 @@ if __name__ == '__main__':
     load_train, load_test = False, False
     # load_train = f"{args.load_path}/jTrans-{args.train_path.split('/')[-1]}.pkl"
     # load_test = f"{args.load_path}/jTrans-{args.eval_path.split('/')[-1]}.pkl"
-    ft_train_dataset= FunctionDataset_CL_Load(tokenizer,args.train_path,convert_jump_addr=True, load=load_train, opt=['O0','O1','O2','O3','Os'])
-    ft_valid_dataset=FunctionDataset_CL_Load(tokenizer,args.eval_path,convert_jump_addr=True, load=load_test, opt=['O0','O1','O2','O3','Os'])
-    if not load_train:
-        pickle.dump(ft_train_dataset.datas, open(f"{args.load_path}/jTrans-{args.train_path.split('/')[-1]}.pkl", 'wb'))
-        pickle.dump(ft_valid_dataset.datas, open(f"{args.load_path}/jTrans-{args.eval_path.split('/')[-1]}.pkl", 'wb'))
+    
+    if args.data_type == 'json':
+        # Use JSON-based datasets (baseline or address-aware)
+        logger.info(f"Loading JSON datasets from {args.func_blocks} and {args.ground_truth}")
+        ft_train_dataset = FunctionDataset_CL_Load_JSON(
+            tokenizer, args.func_blocks, args.ground_truth,
+            opt=['O0','O1','O2','O3'], add_ebd=True
+        )
+        ft_valid_dataset = FunctionDataset_CL_Load_JSON(
+            tokenizer, args.func_blocks, args.ground_truth,
+            opt=['O0','O1','O2','O3'], add_ebd=True
+        )
+    else:
+        # Use original pickle-based datasets
+        ft_train_dataset = FunctionDataset_CL_Load(
+            tokenizer, args.train_path, convert_jump_addr=True, 
+            load=load_train, opt=['O0','O1','O2','O3','Os']
+        )
+        ft_valid_dataset = FunctionDataset_CL_Load(
+            tokenizer, args.eval_path, convert_jump_addr=True, 
+            load=load_test, opt=['O0','O1','O2','O3','Os']
+        )
+        if not load_train:
+            pickle.dump(ft_train_dataset.datas, open(f"{args.load_path}/jTrans-{args.train_path.split('/')[-1]}.pkl", 'wb'))
+            pickle.dump(ft_valid_dataset.datas, open(f"{args.load_path}/jTrans-{args.eval_path.split('/')[-1]}.pkl", 'wb'))
+    
     logger.info("Done ...")
     train_dp(model, args, ft_train_dataset, ft_valid_dataset, logger)
     logger.info("Finished Training")

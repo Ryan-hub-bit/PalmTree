@@ -139,9 +139,16 @@ class AddressAwareDataset(Dataset):
                     # Extract var offset from var(0xXX)
                     var_hex = var_match.group(1)
                     var_offset_value = int(var_hex, 16)
+                    
+                    # Handle 64-bit negative offsets (two's complement)
+                    # Values > 0x7FFFFFFFFFFFFFFF are negative in two's complement
+                    if var_offset_value > 0x7FFFFFFFFFFFFFFF:
+                        # Convert to signed 64-bit integer
+                        var_offset_value = var_offset_value - 0x10000000000000000
+                    
                     tokens.append('var')  # Token is just 'var'
                     positions.append((-1.0, -1.0, -1.0))  # var has no address position, use -1 as sentinel
-                    var_offsets.append(var_offset_value)  # Store the actual offset (can be 0)
+                    var_offsets.append(var_offset_value)  # Store the actual offset (can be negative)
                 else:
                     tokens.append(operand)
                     positions.append((-1.0, -1.0, -1.0))  # non-address operand, use -1 as sentinel
@@ -203,7 +210,7 @@ class AddressAwareDataset(Dataset):
                 masked_var_offsets.append(-1)
             else:
                 masked_tokens.append(token_id)
-                labels.append(-1)  # Not masked
+                labels.append(-100)  # Not masked - use -100 to match ignore_index in CrossEntropyLoss
                 # Keep var_offset for non-masked tokens
                 masked_var_offsets.append(var_offset)
         
@@ -251,7 +258,7 @@ class AddressAwareDataset(Dataset):
         # Add <sos> at the beginning (segment 1)
         all_tokens.append(self.sos_idx)
         all_positions.append((-1.0, -1.0, -1.0))
-        all_labels.append(-1)
+        all_labels.append(-100)  # SOS is not masked - use -100 to match ignore_index
         all_segments.append(1)
         all_var_offsets.append(-1)  # SOS is not a var, use -1 as sentinel
         
@@ -265,7 +272,7 @@ class AddressAwareDataset(Dataset):
             else:
                 # No instruction-level masking (but still convert to IDs)
                 masked_tokens = [self.vocab.stoi.get(t, self.unk_idx) for t in tokens]
-                labels = [-1] * len(tokens)  # Not masked at instruction level
+                labels = [-100] * len(tokens)  # Not masked - use -100 to match ignore_index
             
             # All tokens in the same segment (segment 1)
             all_tokens.extend(masked_tokens)
@@ -279,7 +286,7 @@ class AddressAwareDataset(Dataset):
         # Add <eos> at the end (segment 1)
         all_tokens.append(self.eos_idx)
         all_positions.append((-1.0, -1.0, -1.0))
-        all_labels.append(-1)
+        all_labels.append(-100)  # EOS is not masked - use -100 to match ignore_index
         all_segments.append(1)
         all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
         
@@ -341,7 +348,7 @@ class AddressAwareDataset(Dataset):
         # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
         all_tokens.append(self.sos_idx)
         all_positions.append((-1.0, -1.0, -1.0))
-        all_labels.append(-1)
+        all_labels.append(-100)  # SOS is not masked - use -100 to match ignore_index
         all_segments.append(1)
         all_var_offsets.append(-1)  # SOS is not a var, use -1 as sentinel
         
@@ -366,7 +373,7 @@ class AddressAwareDataset(Dataset):
             # Add [EOS] after each instruction (same segment as the instruction)
             all_tokens.append(self.eos_idx)
             all_positions.append((-1.0, -1.0, -1.0))
-            all_labels.append(-1)
+            all_labels.append(-100)  # EOS is not masked - use -100 to match ignore_index
             all_segments.append(inst_segment)
             all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
         
@@ -393,10 +400,14 @@ class AddressAwareDataset(Dataset):
         function_pos = [p[1] for p in all_positions]
         bb_pos = [p[2] for p in all_positions]
         
+        # Create attention mask: 1 for real tokens, 0 for padding
+        attention_mask = [1 if token != self.vocab.pad_index else 0 for token in all_tokens]
+        
         return {
             'bert_input': torch.LongTensor(all_tokens),
             'bert_label': torch.LongTensor(all_labels),
             'segment_label': torch.LongTensor(segment_label),
+            'attention_mask': torch.LongTensor(attention_mask),
             'binary_pos': torch.FloatTensor(binary_pos),
             'function_pos': torch.FloatTensor(function_pos),
             'bb_pos': torch.FloatTensor(bb_pos),

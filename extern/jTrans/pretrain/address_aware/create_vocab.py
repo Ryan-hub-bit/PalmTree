@@ -17,10 +17,12 @@ def preprocess_line(line):
     Remove all address information in parentheses from a line and normalize tokens.
     
     Token normalization rules:
-    - All var(0xXX) and var(0xsXX) -> "var" (single token for all stack variables)
+    - All var(0xXX) -> "var" (single token for all stack variables)
     - address(0xADDR:pos1:pos2:pos3) -> "address" (remove position info)
-    - daddr(0xADDR:pos1:pos2:pos3) -> "daddr" (remove position info)
+    - daddr(0xADDR:pos1:pos2:pos3) -> "daddr" (remove position info)  
     - mov(0xADDR:pos1:pos2:pos3) -> "mov" (remove position info from opcodes)
+    - arg_XXXX -> "arg" (IDA auto-generated argument names)
+    - Raw hex addresses 0xXXXX -> filtered out (shouldn't be in vocab)
     - Filter out: jump table labels like (jpt_XXXX
     - Filter out: Intel hex format like 4000h)
     - Remove segment prefix: ds:dword_0 -> dword_0
@@ -30,17 +32,19 @@ def preprocess_line(line):
         mov(0x401000:0.5:0.3:0.2) eax ebx -> mov eax ebx
         address(0x123:0.5:0.3:0.2) -> address
         var(0x10) -> var
-        var(0xs28) -> var
+        arg_55C8 -> arg
+        0x12340 -> (filtered out)
         ds:dword_0 -> dword_0
     
     Returns cleaned tokens as a list.
     """
-    # Remove all patterns like (0xADDR:pos1:pos2:pos3) - address positions
-    cleaned = re.sub(r'\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)', '', line)
+    # Remove all patterns like word(0xADDR:pos1:pos2:pos3) - address positions
+    # This captures the full token including the closing paren
+    cleaned = re.sub(r'(\w+)\(0x[0-9a-fA-F]+:[0-9.]+:[0-9.]+:[0-9.]+\)', r'\1', line)
     
-    # Normalize var(0xXX) and var(0xsXX) to just "var"
-    # This handles both var(0x10) and var(0xs28) formats
-    cleaned = re.sub(r'var\(0x[s]?[0-9a-fA-F]+\)', 'var', cleaned)
+    # Normalize var(0xXX) to just "var" - handle both with and without closing paren
+    # This catches: var(0x10) var(0x10 var(0xFFFFFFFFFFFFFDB4h)
+    cleaned = re.sub(r'var\(0x[0-9a-fA-FhH]+\)?', 'var', cleaned)
     
     # Split by whitespace and tab
     tokens = [tok for tok in cleaned.replace('\t', ' ').split() if tok]
@@ -50,6 +54,15 @@ def preprocess_line(line):
     for tok in tokens:
         # Filter out jump table labels: (jpt_XXXX
         if tok.startswith('(jpt_'):
+            continue
+        
+        # Filter out raw hex addresses: 0xXXXX (these shouldn't be in tokenized output)
+        if re.match(r'^0x[0-9a-fA-F]+$', tok):
+            continue
+        
+        # Normalize arg_XXXX (IDA auto-generated argument names) to just "arg"
+        if re.match(r'^arg_[0-9A-Fa-f]+$', tok):
+            normalized_tokens.append('arg')
             continue
         
         # Convert Intel hex format with closing paren to imm: XXXXh)
@@ -152,15 +165,14 @@ def create_vocab(data_files, vocab_path, max_size=10000, min_freq=2, logger=None
 
 if __name__ == "__main__":
     # Data files from /data/kun/jtransdata/
-    train_dataset = "/data/kun/jtransdata/addressaware_train.txt"
-    test_dataset = "/data/kun/jtransdata/addressaware_test.txt"
+    train_dataset = "/data/kun/jtransdata/addr_train.txt"
     
     vocab_path = "/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware/vocab_addr.pkl"
     
     print("=" * 60)
     print("Creating Vocabulary from Address-Aware Training Data")
     print("=" * 60)
-    print(f"Using WordVocab with max_size=10000, min_freq=2")
+    print(f"Using WordVocab with max_size=10000, min_freq=50")
     print(f"Output: {vocab_path} (pickle format)")
     print()
     
@@ -168,9 +180,6 @@ if __name__ == "__main__":
     files_to_check = [train_dataset]
     
     # Optionally include test dataset
-    if os.path.exists(test_dataset):
-        files_to_check.append(test_dataset)
-    
     for fpath in files_to_check:
         if not os.path.exists(fpath):
             print(f"ERROR: File not found: {fpath}")
@@ -183,7 +192,7 @@ if __name__ == "__main__":
     print("Building vocabulary (this may take a few minutes)...")
     print()
     
-    # Open all files and pass to WordVocab with preprocessing
+    # Open all files and pass to WordVocab with preprocessing 
     # Wrap each file handle with PreprocessedFile to remove address info
     file_handles = []
     preprocessed_files = []
@@ -193,11 +202,11 @@ if __name__ == "__main__":
             fh = open(fpath, "r", encoding="utf-8")
             file_handles.append(fh)
             preprocessed_files.append(PreprocessedFile(fh))
-        
+         
         vocab = WordVocab(
             preprocessed_files,
             max_size=10000,
-            min_freq=2
+            min_freq=50
         )
         
     finally:

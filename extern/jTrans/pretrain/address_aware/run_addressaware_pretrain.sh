@@ -2,24 +2,26 @@
 
 # Address-Aware jTrans Pretraining Script
 # Uses hierarchical address embeddings instead of position=word trick
+# PRETRAINING: Uses single combined file (no train/val/test split)
 
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 # Activate conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
-conda activate jtrans
+conda activate palmtree
 
-# Data from jTrans datautils with address annotations
-# Format: opcode(0xADDR:bnorm:fnorm:bbnorm) operand1 operand2 ...
+# Data from address-aware function export with hierarchical positions
+# Format: opcode(0xADDR:func_pos:bb_pos:inst_pos) operand1 operand2 ...
+# For pretraining, we use the same file for train and test (no validation needed during MLM)
 
-python train_addressaware.py \
-    --train_path /data/kun/jtransdata/addressaware_train.txt \
-    --test_path /data/kun/jtransdata/addressaware_test.txt \
-    --vocab_path vocab_addr.pkl \
-    --output_dir /home/kun/Document/AAE/output/addressaware_pretrain \
+python3 train_addressaware.py \
+    --train_path /data/kun/jtransdata/addr_pretrain.txt \
+    --test_path /data/kun/jtransdata/addr_pretrain.txt \
+    --vocab_path /data/kun/jtransdata/vocab_addr.pkl \
+    --output_dir /home/kun/Document/AAE/output/jtrans/addressaware_pretrain \
     --batch_size 32 \
     --learning_rate 1e-4 \
-    --num_epochs 6 \
+    --num_epochs 10 \
     --warmup_steps 10000 \
     --max_len 512 \
     --token_mask_prob 0.15 \
@@ -28,3 +30,4 @@ python train_addressaware.py \
     --num_attention_heads 12 \
     --save_every 1 \
     --num_workers 4
+

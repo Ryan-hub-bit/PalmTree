@@ -91,13 +91,14 @@ class AddressAwareJTransForMLM(nn.Module):
             jtp_logits: [batch_size, seq_len, max_len]
         """
         # Get embeddings with address awareness
+        # AddressAwareBERTEmbedding expects: token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets
         embeddings = self.bert.embeddings(
-            input_ids=token_ids,
-            token_type_ids=token_type_ids,
-            binary_pos=binary_pos,
-            function_pos=function_pos,
-            bb_pos=bb_pos,
-            var_offsets=var_offsets
+            token_ids,
+            token_type_ids,
+            binary_pos,
+            function_pos,
+            bb_pos,
+            var_offsets
         )
         
         # Pass through transformer
