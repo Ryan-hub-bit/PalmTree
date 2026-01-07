@@ -37,7 +37,8 @@ class BaselinePretrainingDataset(Dataset):
         mlm_probability=0.15,
         jtp_probability=0.20,
         convert_jump_addr=True,
-        on_memory=True
+        on_memory=True,
+        data_percentage=1.0
     ):
         """
         Args:
@@ -48,6 +49,7 @@ class BaselinePretrainingDataset(Dataset):
             jtp_probability: Probability of masking jump tokens
             convert_jump_addr: Whether to convert jump addresses to JUMP_ADDR_X
             on_memory: Load all data into memory
+            data_percentage: Percentage of data to use (0.0-1.0)
         """
         self.data_path = data_path
         self.tokenizer = tokenizer
@@ -68,10 +70,18 @@ class BaselinePretrainingDataset(Dataset):
         if on_memory:
             with open(data_path, 'r', encoding='utf-8') as f:
                 self.lines = [line.strip() for line in f if line.strip()]
+            # Apply data percentage
+            if data_percentage < 1.0:
+                size = int(len(self.lines) * data_percentage)
+                self.lines = self.lines[:size]
+                print(f"Using {data_percentage:.1%} of data: {size}/{len(self.lines)} lines")
         else:
             # Count lines for __len__
             with open(data_path, 'r', encoding='utf-8') as f:
                 self.num_lines = sum(1 for line in f if line.strip())
+            if data_percentage < 1.0:
+                self.num_lines = int(self.num_lines * data_percentage)
+                print(f"Using {data_percentage:.1%} of data: {self.num_lines} lines")
     
     def __len__(self):
         if self.on_memory:
@@ -246,7 +256,8 @@ def create_baseline_dataloaders(
     max_len=512,
     mlm_probability=0.15,
     jtp_probability=0.20,
-    num_workers=4
+    num_workers=4,
+    data_percentage=1.0
 ):
     """
     Create train and test dataloaders for baseline pretraining.
@@ -260,6 +271,7 @@ def create_baseline_dataloaders(
         mlm_probability: MLM masking probability
         jtp_probability: JTP masking probability
         num_workers: Number of data loading workers
+        data_percentage: Percentage of data to use (0.0-1.0)
         
     Returns:
         train_loader, test_loader
@@ -270,7 +282,8 @@ def create_baseline_dataloaders(
         max_len=max_len,
         mlm_probability=mlm_probability,
         jtp_probability=jtp_probability,
-        on_memory=True
+        on_memory=True,
+        data_percentage=data_percentage
     )
     
     test_dataset = BaselinePretrainingDataset(
@@ -279,7 +292,8 @@ def create_baseline_dataloaders(
         max_len=max_len,
         mlm_probability=mlm_probability,
         jtp_probability=jtp_probability,
-        on_memory=True
+        on_memory=True,
+        data_percentage=data_percentage
     )
     
     train_loader = DataLoader(

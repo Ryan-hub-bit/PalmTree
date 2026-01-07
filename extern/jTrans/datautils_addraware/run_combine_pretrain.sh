@@ -3,8 +3,8 @@
 # Combine function export files for PRETRAINING (address-aware version)
 # Combines ALL functions into a single file without train/val/test split
 
-# Usage: ./run_combine_pretrain.sh <input_dir> [output_dir]
-# Example: ./run_combine_pretrain.sh /data/kun/jtransdata/function_exports /data/kun/jtransdata
+# Usage: ./run_combine_pretrain.sh <input_dir> [output_dir] [sample_ratio]
+# Example: ./run_combine_pretrain.sh /data/kun/jtransdata/function_exports /data/kun/jtransdata 0.1
 
 echo "=========================================="
 echo "Pretraining Data Combiner (Address-Aware)"
@@ -12,19 +12,22 @@ echo "=========================================="
 
 # Check arguments
 if [ "$#" -lt 1 ]; then
-    echo "Usage: $0 <input_dir> [output_dir]"
+    echo "Usage: $0 <input_dir> [output_dir] [sample_ratio]"
     echo ""
     echo "Arguments:"
-    echo "  input_dir  : Directory containing *_functions.txt files"
-    echo "  output_dir : (Optional) Output directory (default: /data/kun/jtransdata)"
+    echo "  input_dir    : Directory containing *_functions.txt files"
+    echo "  output_dir   : (Optional) Output directory (default: /data/kun/jtransdata)"
+    echo "  sample_ratio : (Optional) Ratio of data to use (0.0-1.0, default: 1.0)"
     echo ""
-    echo "Example:"
-    echo "  $0 /data/kun/jtransdata/function_exports /data/kun/jtransdata"
+    echo "Examples:"
+    echo "  $0 /data/kun/jtransdata/function_exports /data/kun/jtransdata 1.0    # Use 100% of data"
+    echo "  $0 /data/kun/jtransdata/function_exports /data/kun/jtransdata 0.1    # Use 10% of data"
     exit 1
 fi
 
 INPUT_DIR="$1"
 OUTPUT_DIR="${2:-/data/kun/jtransdata}"
+SAMPLE_RATIO="${3:-1.0}"
 
 # Validate input directory
 if [ ! -d "$INPUT_DIR" ]; then
@@ -38,6 +41,7 @@ mkdir -p "$OUTPUT_DIR"
 echo "Configuration:"
 echo "  Input:  $INPUT_DIR"
 echo "  Output: $OUTPUT_DIR"
+echo "  Sample ratio: $SAMPLE_RATIO ($(echo "$SAMPLE_RATIO * 100" | bc)% of data)"
 echo "  Output file: addr_pretrain.txt"
 echo "  Symbol file: top_symbols.txt"
 echo ""
@@ -56,7 +60,7 @@ python3 combine_function_files_pretrain.py \
     --input_dir "$INPUT_DIR" \
     --output_dir "$OUTPUT_DIR" \
     --top_n 100 \
-    --sample_ratio 1.0 \
+    --sample_ratio "$SAMPLE_RATIO" \
     --enable_smart_merge \
     --output_name addr_pretrain.txt
 

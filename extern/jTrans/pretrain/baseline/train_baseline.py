@@ -257,6 +257,10 @@ def main():
     parser.add_argument('--num_workers', type=int, default=4,
                        help='Number of data loading workers')
     
+    # Data sampling
+    parser.add_argument('--data_ratio', type=float, default=1.0,
+                       help='Ratio of training data to use (0.0-1.0)')
+    
     args = parser.parse_args()
     
     # Setup device
@@ -278,6 +282,7 @@ def main():
     logger.info("=" * 80)
     logger.info("jTrans BASELINE Pretraining (MLM + JTP)")
     logger.info("=" * 80)
+    logger.info(f"Data ratio: {args.data_ratio:.1%} of training data")
     logger.info(f"Train data: {args.train_path}")
     logger.info(f"Test data: {args.test_path}")
     logger.info(f"Device: {device}")
@@ -308,7 +313,8 @@ def main():
         max_len=args.max_len,
         mlm_probability=args.mlm_probability,
         jtp_probability=args.jtp_probability,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        data_percentage=args.data_ratio
     )
     logger.info(f"Train batches: {len(train_loader)}")
     logger.info(f"Test batches: {len(test_loader)}")

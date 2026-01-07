@@ -9,10 +9,14 @@
 #          ./run_addressaware_pretrain.sh 1.0  # Use 100% of data (default)
 
 # Data ratio (default: 1.0 = 100% of data)
-DATA_RATIO="${1:-0.1}"
+DATA_RATIO="${1:-1.0}"
 
-# Use both available GPUs
-export CUDA_VISIBLE_DEVICES=0,1
+# Use all available GPUs (default: 0,1,2,3 for 4 GPUs)
+# SLURM will set CUDA_VISIBLE_DEVICES automatically, but if running locally, set it here
+if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
+    export CUDA_VISIBLE_DEVICES=0,1,2,3
+fi
+echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
 # Uncomment for debugging (makes CUDA synchronous, slower)
 # export CUDA_LAUNCH_BLOCKING=1
 
@@ -31,7 +35,7 @@ echo "=========================================="
 
 # Debug: Check vocab size before training
 echo "Checking vocabulary..."
-python3 << 'VOCABCHECK'
+python3 <<'VOCABCHECK'
 import pickle
 vocab = pickle.load(open('./vocab_addr.pkl', 'rb'))
 print(f"Vocabulary file: ./vocab_addr.pkl")
@@ -41,20 +45,18 @@ print(f"Special tokens: <pad>={vocab.stoi.get('<pad>')}, <unk>={vocab.stoi.get('
 VOCABCHECK
 
 python3 train_addressaware.py \
-    --train_path /data/kun/jtransdata/addr_pretrain.txt \
-    --test_path /data/kun/jtransdata/addr_pretrain.txt \
-    --vocab_path ./vocab_addr.pkl \
-    --output_dir /home/kun/Document/AAE/output/jtrans/addressaware_pretrain \
-    --batch_size 128 \
-    --learning_rate 1e-4 \
-    --num_epochs 10 \
-    --warmup_steps 10000 \
-    --max_len 512 \
-    --token_mask_prob 0.15 \
-    --hidden_size 768 \
-    --num_hidden_layers 12 \
-    --num_attention_heads 12 \
-    --save_every 1 \
-    --num_workers 4 \
-    --data_ratio "$DATA_RATIO"
-
+  --train_path /work/kliu14/jtransdata/addr_pretrain.txt \
+  --vocab_path ./vocab_addr.pkl \
+  --output_dir /work/kliu14/jtransoutput/addressaware_pretrain \
+  --batch_size 256 \
+  --learning_rate 1e-4 \
+  --num_epochs 10 \
+  --warmup_steps 10000 \
+  --max_len 512 \
+  --token_mask_prob 0.15 \
+  --hidden_size 768 \
+  --num_hidden_layers 12 \
+  --num_attention_heads 12 \
+  --save_every 1 \
+  --num_workers 16 \
+  --data_ratio "$DATA_RATIO"
