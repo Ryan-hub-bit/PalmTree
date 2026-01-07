@@ -47,112 +47,91 @@ class SequencePositionalEmbedding(nn.Module):
 
 class AddressPositionalEmbedding(nn.Module):
     """
-    Address-aware positional embedding using sin/cos encoding + MLP projection.
+    Address-aware positional embedding using direct MLP projection on 3 hierarchical positions.
     
-    Applies sinusoidal position encoding to three normalized address values:
+    Uses dual MLPs to distinguish between:
+    - 'address' tokens (code addresses, control flow)
+    - 'daddr' tokens (data addresses, data flow)
+    
+    Takes three normalized position values:
     - binary_pos: [0, 1] position in binary
     - function_pos: [0, 1] position in function  
     - bb_pos: [0, 1] position in basic block
     
-    Each level gets its own sin/cos encoding, then concatenated and projected
-    to d_model via MLP.
+    Each token type gets projected through its own MLP (3 floats → d_model).
     """
     
-    def __init__(self, d_model, max_len=512, intermediate_size=128, dropout=0.1):
+    def __init__(self, d_model, max_len=512, dropout=0.1):
         """
         Args:
             d_model: Embedding dimension (output size)
-            max_len: Maximum sequence length
-            intermediate_size: Size of encoding per address level before concatenation
+            max_len: Maximum sequence length (unused, kept for compatibility)
             dropout: Dropout rate for MLP projection
         """
         super().__init__()
         
         self.d_model = d_model
-        self.d_per_level = intermediate_size  # Dimensions per address level
         
-        # Learnable weight to balance the three levels
-        self.level_weights = nn.Parameter(torch.ones(3))
+        # Dual MLPs: separate projections for code vs data addresses
+        # Input: 3 floats (binary_pos, function_pos, bb_pos)
+        # Output: d_model dimensions
         
-        # MLP to project concatenated encodings (3 * intermediate_size) to d_model
-        concat_size = 3 * intermediate_size
-        self.projection = nn.Sequential(
-            nn.Linear(concat_size, d_model * 2),
+        # MLP for 'address' tokens (code addresses, control flow)
+        self.code_address_projection = nn.Sequential(
+            nn.Linear(3, d_model * 2),
             nn.GELU(),
-            nn.Dropout(dropout),  # Add dropout after activation
+            nn.Dropout(dropout),
             nn.Linear(d_model * 2, d_model),
-            nn.Dropout(dropout)   # Add dropout at output
+            nn.Dropout(dropout)
         )
         
-    def _sinusoidal_encoding(self, positions, d_model):
-        """
-        Create sinusoidal encoding for a batch of positions.
-        
-        Args:
-            positions: [batch_size, seq_len] normalized positions in [0, 1]
-            d_model: Embedding dimension for this level
-            
-        Returns:
-            encoding: [batch_size, seq_len, d_model]
-        """
-        batch_size, seq_len = positions.shape
-        
-        # Create dimension indices
-        div_term = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float32, device=positions.device) 
-                            * -(math.log(10000.0) / d_model))
-        
-        # Scale positions to [0, 10000] range for better frequency distribution
-        positions_scaled = positions.unsqueeze(-1) * 10000.0  # [batch, seq, 1]
-        
-        # Create encoding
-        encoding = torch.zeros(batch_size, seq_len, d_model, device=positions.device)
-        
-        # Apply sin to even indices
-        encoding[:, :, 0::2] = torch.sin(positions_scaled * div_term)
-        
-        # Apply cos to odd indices
-        if d_model % 2 == 0:
-            encoding[:, :, 1::2] = torch.cos(positions_scaled * div_term)
-        else:
-            encoding[:, :, 1::2] = torch.cos(positions_scaled * div_term[:-1])
-        
-        return encoding
+        # MLP for 'daddr' tokens (data addresses, data flow)
+        self.data_address_projection = nn.Sequential(
+            nn.Linear(3, d_model * 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model * 2, d_model),
+            nn.Dropout(dropout)
+        )
     
-    def forward(self, binary_pos, function_pos, bb_pos):
+    def forward(self, binary_pos, function_pos, bb_pos, token_ids, vocab_stoi):
         """
         Forward pass with three levels of address positions.
+        Uses dual MLPs to distinguish code addresses from data addresses.
         
         Args:
             binary_pos: [batch_size, seq_len] binary-level normalized positions (-1 for non-address tokens)
             function_pos: [batch_size, seq_len] function-level normalized positions (-1 for non-address tokens)
             bb_pos: [batch_size, seq_len] basic block-level normalized positions (-1 for non-address tokens)
+            token_ids: [batch_size, seq_len] token indices
+            vocab_stoi: dict mapping token strings to indices (for distinguishing address vs daddr)
             
         Returns:
             embedding: [batch_size, seq_len, d_model] combined positional embedding
-                      (zeros for non-address tokens where positions are -1)
+                      (zeros for non-address/daddr tokens where positions are -1)
         """
-        # Create mask for address tokens (all three positions >= 0)
-        # If any position is -1, the token is not an address-like token
+        # Create mask for address-like tokens (all three positions >= 0)
         address_mask = ((binary_pos >= 0) & (function_pos >= 0) & (bb_pos >= 0)).unsqueeze(-1)  # [batch, seq, 1]
         
-        # Generate sinusoidal encoding for each level
-        binary_enc = self._sinusoidal_encoding(binary_pos, self.d_per_level)
-        function_enc = self._sinusoidal_encoding(function_pos, self.d_per_level)
-        bb_enc = self._sinusoidal_encoding(bb_pos, self.d_per_level)
+        # Stack the 3 position values as a single input vector
+        # [batch_size, seq_len, 3] where each position is in [0, 1]
+        positions = torch.stack([binary_pos, function_pos, bb_pos], dim=-1)
         
-        # Apply learnable weights (softmax normalized)
-        weights = torch.softmax(self.level_weights, dim=0)
+        # Determine which tokens are 'address' vs 'daddr'
+        # Get indices for 'address' and 'daddr' tokens from vocab
+        address_token_id = vocab_stoi.get('address', -1)
+        daddr_token_id = vocab_stoi.get('daddr', -1)
         
-        # Weight each encoding
-        binary_enc = binary_enc * weights[0]
-        function_enc = function_enc * weights[1]
-        bb_enc = bb_enc * weights[2]
+        # Create masks for code and data addresses
+        is_code_address = (token_ids == address_token_id).unsqueeze(-1).float()  # [batch, seq, 1]
+        is_data_address = (token_ids == daddr_token_id).unsqueeze(-1).float()   # [batch, seq, 1]
         
-        # Concatenate along embedding dimension: [batch, seq, 3*intermediate_size]
-        concatenated = torch.cat([binary_enc, function_enc, bb_enc], dim=-1)
+        # Apply appropriate MLP based on token type
+        code_embedding = self.code_address_projection(positions)  # [batch, seq, d_model]
+        data_embedding = self.data_address_projection(positions)  # [batch, seq, d_model]
         
-        # Project to d_model: [batch, seq, d_model]
-        embedding = self.projection(concatenated)
+        # Combine embeddings based on token type
+        embedding = code_embedding * is_code_address + data_embedding * is_data_address
         
         # Zero out embedding for non-address tokens (where address_mask is False)
         embedding = embedding * address_mask.float()
@@ -165,28 +144,34 @@ class VarPositionalEmbedding(nn.Module):
     """
     Positional embedding for var(0xXX) tokens based on their offset values.
     
-    Uses sinusoidal encoding on the variable offset (e.g., 0x10 -> 16).
+    Uses direct MLP projection on raw offset values.
+    Clamps extremely large offsets to prevent numerical issues.
     Only var tokens get the encoding, all other tokens get zeros.
     """
     
-    def __init__(self, d_model, max_offset=4096):
+    def __init__(self, d_model, max_offset=8192, dropout=0.1):
         """
         Args:
             d_model: Embedding dimension
-            max_offset: Maximum expected variable offset (for normalization)
+            max_offset: Maximum offset value (larger values are clamped)
+            dropout: Dropout rate for MLP
         """
         super().__init__()
         self.d_model = d_model
         self.max_offset = max_offset
         
-        # Precompute div_term for sinusoidal encoding
-        div_term = torch.exp(torch.arange(0, d_model, 2, dtype=torch.float32) 
-                            * -(math.log(10000.0) / d_model))
-        self.register_buffer('div_term', div_term)
+        # Direct MLP projection: 1 scalar (raw offset) -> d_model
+        self.projection = nn.Sequential(
+            nn.Linear(1, d_model * 2),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_model * 2, d_model),
+            nn.Dropout(dropout)
+        )
     
     def forward(self, var_offsets):
         """
-        Forward pass.
+        Forward pass with raw offset values (clamped to max_offset).
         
         Args:
             var_offsets: [batch_size, seq_len] variable offsets
@@ -194,33 +179,25 @@ class VarPositionalEmbedding(nn.Module):
                          >= 0 for var tokens (e.g., for var(0x10), offset = 16; for var(0x0), offset = 0)
             
         Returns:
-            encoding: [batch_size, seq_len, d_model] sinusoidal encoding for var offsets
+            encoding: [batch_size, seq_len, d_model] MLP-projected encoding for var offsets
                       (zeros for non-var tokens where offset = -1)
         """
         batch_size, seq_len = var_offsets.shape
         device = var_offsets.device
         
-        # Create output tensor initialized to zeros
-        encoding = torch.zeros(batch_size, seq_len, self.d_model, device=device)
-        
         # Create mask for var tokens (offset >= 0)
         var_mask = (var_offsets >= 0).unsqueeze(-1)  # [batch, seq, 1]
         
-        # For var tokens: use their actual offset value for sinusoidal encoding
-        # For non-var tokens (offset = -1): the encoding will be zeroed out by the mask anyway
-        offsets_scaled = var_offsets.float().unsqueeze(-1)  # [batch, seq, 1]
+        # Use raw offset values, clamped to max_offset
+        # This preserves exact differences for nearby offsets (e.g., var(16) vs var(22))
+        offsets_float = var_offsets.float()
+        offsets_float = torch.clamp(offsets_float, min=0.0, max=float(self.max_offset))
+        encoded = offsets_float.unsqueeze(-1)  # [batch, seq, 1]
         
-        # Apply sin to even indices
-        encoding[:, :, 0::2] = torch.sin(offsets_scaled * self.div_term)
-        
-        # Apply cos to odd indices
-        if self.d_model % 2 == 0:
-            encoding[:, :, 1::2] = torch.cos(offsets_scaled * self.div_term)
-        else:
-            encoding[:, :, 1::2] = torch.cos(offsets_scaled * self.div_term[:-1])
+        # Project through MLP
+        encoding = self.projection(encoded)  # [batch, seq, d_model]
         
         # Zero out encoding for non-var tokens (where var_mask is False)
-        # This ensures non-var tokens (offset = -1) get all zeros regardless of sin/cos(-1)
         encoding = encoding * var_mask.float()
         
         return encoding
@@ -238,7 +215,7 @@ class AddressAwareBERTEmbedding(nn.Module):
     5. Var positional embedding (sin/cos on var offsets for var(0xXX) tokens) - OPTIONAL
     """
     
-    def __init__(self, vocab_size, embed_size, dropout=0.1, max_len=512, use_address_embedding=True, use_var_embedding=True):
+    def __init__(self, vocab_size, embed_size, dropout=0.1, max_len=512, use_address_embedding=True, use_var_embedding=True, segment_types=256, vocab_stoi=None):
         """
         Args:
             vocab_size: Size of vocabulary
@@ -247,12 +224,15 @@ class AddressAwareBERTEmbedding(nn.Module):
             max_len: Maximum sequence length
             use_address_embedding: Whether to use address-aware positional embeddings
             use_var_embedding: Whether to use var offset embeddings
+            segment_types: Number of segment types (instruction IDs). Default 256 to handle long sequences.
+            vocab_stoi: Vocabulary string-to-index mapping (needed for address vs daddr distinction)
         """
         super().__init__()
         
         self.embed_size = embed_size
         self.use_address_embedding = use_address_embedding
         self.use_var_embedding = use_var_embedding
+        self.vocab_stoi = vocab_stoi  # Will be set after vocab is loaded
         
         # 1. Token embedding - trained from scratch
         self.token_embedding = nn.Embedding(vocab_size, embed_size, padding_idx=0)
@@ -266,13 +246,13 @@ class AddressAwareBERTEmbedding(nn.Module):
         else:
             self.address_position = None
         
-        # 4. Segment embedding (supports both NSP and instruction-level segments)
-        # Increased from 2 to 16 to support instruction IDs (1-8) plus padding (0)
-        self.segment_embedding = nn.Embedding(16, embed_size, padding_idx=0)
+        # 4. Segment embedding (supports instruction-level segments)
+        # Supports up to segment_types instruction IDs (default 256 to handle long sequences)
+        self.segment_embedding = nn.Embedding(segment_types, embed_size)
         
-        # 5. Var positional embedding - sin/cos encoding on var offsets (OPTIONAL)
+        # 5. Var positional embedding - direct MLP on var offsets (OPTIONAL)
         if self.use_var_embedding:
-            self.var_position = VarPositionalEmbedding(embed_size)
+            self.var_position = VarPositionalEmbedding(embed_size, dropout=dropout)
         else:
             self.var_position = None
         
@@ -296,15 +276,52 @@ class AddressAwareBERTEmbedding(nn.Module):
         """
         batch_size, seq_len = token_ids.size()
         
+        # VALIDATION: Check for invalid token IDs before embedding lookup
+        max_token_id = token_ids.max().item()
+        min_token_id = token_ids.min().item()
+        vocab_size = self.token_embedding.num_embeddings
+        
+        if max_token_id >= vocab_size or min_token_id < 0:
+            print(f"\n{'='*80}")
+            print(f"INVALID TOKEN ID DETECTED IN FORWARD PASS")
+            print(f"{'='*80}")
+            print(f"Vocab size: {vocab_size}")
+            print(f"Max token ID in batch: {max_token_id}")
+            print(f"Min token ID in batch: {min_token_id}")
+            print(f"Token IDs shape: {token_ids.shape}")
+            
+            # Find all invalid positions
+            invalid_mask = (token_ids >= vocab_size) | (token_ids < 0)
+            if invalid_mask.any():
+                invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
+                print(f"\nNumber of invalid token IDs: {invalid_mask.sum().item()}")
+                print(f"First 10 invalid positions (batch_idx, seq_idx):")
+                for i, (batch_idx, seq_idx) in enumerate(invalid_positions[:10]):
+                    invalid_id = token_ids[batch_idx, seq_idx].item()
+                    print(f"  [{batch_idx.item()}, {seq_idx.item()}] = {invalid_id}")
+                
+                # Show context around first invalid token
+                batch_idx, seq_idx = invalid_positions[0][0].item(), invalid_positions[0][1].item()
+                start_idx = max(0, seq_idx - 5)
+                end_idx = min(seq_len, seq_idx + 6)
+                print(f"\nContext around first invalid token (batch {batch_idx}, position {seq_idx}):")
+                print(f"Token IDs: {token_ids[batch_idx, start_idx:end_idx].tolist()}")
+                print(f"Segment labels: {segment_labels[batch_idx, start_idx:end_idx].tolist()}")
+            print(f"{'='*80}\n")
+            
+            raise ValueError(f"Token ID out of range: min={min_token_id}, max={max_token_id}, vocab_size={vocab_size}")
+        
         # 1. Get token embeddings (trained from scratch)
         token_emb = self.token_embedding(token_ids)
         
         # 2. Get sequence positional embeddings (sinusoidal)
         seq_pos_emb = self.position_embedding(token_ids)
         
-        # 3. Get address positional embeddings (3-level sinusoidal) - OPTIONAL
+        # 3. Get address positional embeddings (direct MLP on 3 hierarchical positions) - OPTIONAL
         if self.use_address_embedding:
-            addr_pos_emb = self.address_position(binary_pos, function_pos, bb_pos)
+            if self.vocab_stoi is None:
+                raise ValueError("vocab_stoi must be provided to distinguish address vs daddr tokens")
+            addr_pos_emb = self.address_position(binary_pos, function_pos, bb_pos, token_ids, self.vocab_stoi)
         else:
             addr_pos_emb = 0
         

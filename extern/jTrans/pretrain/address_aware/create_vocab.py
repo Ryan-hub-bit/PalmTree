@@ -165,7 +165,7 @@ def create_vocab(data_files, vocab_path, max_size=10000, min_freq=2, logger=None
 
 if __name__ == "__main__":
     # Data files from /data/kun/jtransdata/
-    train_dataset = "/data/kun/jtransdata/addr_train.txt"
+    train_dataset = "/data/kun/jtransdata/addr_pretrain.txt"
     
     vocab_path = "/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware/vocab_addr.pkl"
     

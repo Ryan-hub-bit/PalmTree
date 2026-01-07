@@ -63,9 +63,151 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
     
     progress_bar = tqdm(dataloader, desc="Training")
     
-    for batch in progress_bar:
+    for batch_idx, batch in enumerate(progress_bar):
+        # VALIDATION: Check all inputs on CPU before moving to GPU
+        token_ids_cpu = batch['bert_input']
+        segment_labels_cpu = batch['segment_label']
+        mlm_labels_cpu = batch['bert_label']
+        
+        max_id = token_ids_cpu.max().item()
+        min_id = token_ids_cpu.min().item()
+        # Handle DataParallel wrapper
+        actual_model = model.module if isinstance(model, nn.DataParallel) else model
+        vocab_size = actual_model.bert.embeddings.token_embedding.num_embeddings
+        
+        max_seg = segment_labels_cpu.max().item()
+        min_seg = segment_labels_cpu.min().item()
+        segment_vocab_size = actual_model.bert.embeddings.segment_embedding.num_embeddings
+        
+        # Filter out ignore_index (-100) for MLM label validation
+        valid_mlm_mask = (mlm_labels_cpu != -100)
+        if valid_mlm_mask.any():
+            valid_mlm_labels = mlm_labels_cpu[valid_mlm_mask]
+            max_mlm = valid_mlm_labels.max().item()
+            min_mlm = valid_mlm_labels.min().item()
+        else:
+            max_mlm = -1
+            min_mlm = -1
+        
+        # Check MLM labels
+        if max_mlm >= vocab_size or (min_mlm < 0 and min_mlm != -100):
+            print(f"\n{'='*80}")
+            print(f"INVALID MLM LABEL IN BATCH {batch_idx}")
+            print(f"{'='*80}")
+            print(f"Vocab size: {vocab_size} (IDs 0-{vocab_size-1})")
+            print(f"Max MLM label (excluding -100): {max_mlm}")
+            print(f"Min MLM label (excluding -100): {min_mlm}")
+            print(f"MLM labels shape: {mlm_labels_cpu.shape}")
+            
+            # Find invalid positions
+            invalid_mask = ((mlm_labels_cpu >= vocab_size) | (mlm_labels_cpu < -100))
+            invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
+            print(f"\nInvalid MLM label count: {invalid_mask.sum().item()}")
+            print(f"First 20 invalid positions:")
+            for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:20]):
+                invalid_label = mlm_labels_cpu[seq_idx, tok_idx].item()
+                token_id = token_ids_cpu[seq_idx, tok_idx].item()
+                print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: Label = {invalid_label}, Token ID = {token_id}")
+            
+            print(f"{'='*80}\n")
+            raise ValueError(f"Invalid MLM label detected in batch {batch_idx}: max={max_mlm}, allowed=[0, {vocab_size-1}]")
+        
+        # Check JTP labels (if present)
+        jtp_labels_cpu = batch.get('jtp_labels', None)
+        if jtp_labels_cpu is not None:
+            valid_jtp_mask = (jtp_labels_cpu != -100)
+            if valid_jtp_mask.any():
+                valid_jtp_labels = jtp_labels_cpu[valid_jtp_mask]
+                max_jtp = valid_jtp_labels.max().item()
+                min_jtp = valid_jtp_labels.min().item()
+                
+                # JTP labels should be in range [0, seq_len-1]
+                seq_len = token_ids_cpu.shape[1]  # Get sequence length from batch
+                if max_jtp >= seq_len or min_jtp < 0:
+                    print(f"\n{'='*80}")
+                    print(f"INVALID JTP LABEL IN BATCH {batch_idx}")
+                    print(f"{'='*80}")
+                    print(f"Sequence length: {seq_len} (valid positions 0-{seq_len-1})")
+                    print(f"Max JTP label (excluding -100): {max_jtp}")
+                    print(f"Min JTP label (excluding -100): {min_jtp}")
+                    print(f"JTP labels shape: {jtp_labels_cpu.shape}")
+                    
+                    # Find invalid positions
+                    invalid_mask = ((jtp_labels_cpu >= seq_len) | ((jtp_labels_cpu < 0) & (jtp_labels_cpu != -100)))
+                    invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
+                    print(f"\nInvalid JTP label count: {invalid_mask.sum().item()}")
+                    print(f"First 20 invalid positions:")
+                    for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:20]):
+                        invalid_label = jtp_labels_cpu[seq_idx, tok_idx].item()
+                        token_id = token_ids_cpu[seq_idx, tok_idx].item()
+                        print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: JTP Label = {invalid_label}, Token ID = {token_id}")
+                    
+                    print(f"{'='*80}\n")
+                    raise ValueError(f"Invalid JTP label detected in batch {batch_idx}: max={max_jtp}, allowed=[0, {seq_len-1}]")
+        
+        # Check segment labels
+        if max_seg >= segment_vocab_size or min_seg < 0:
+            print(f"\n{'='*80}")
+            print(f"INVALID SEGMENT LABEL IN BATCH {batch_idx}")
+            print(f"{'='*80}")
+            print(f"Segment embedding size: {segment_vocab_size} (IDs 0-{segment_vocab_size-1})")
+            print(f"Max segment label: {max_seg}")
+            print(f"Min segment label: {min_seg}")
+            print(f"Segment labels shape: {segment_labels_cpu.shape}")
+            
+            # Find invalid positions
+            invalid_mask = (segment_labels_cpu >= segment_vocab_size) | (segment_labels_cpu < 0)
+            invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
+            print(f"\nInvalid segment count: {invalid_mask.sum().item()}")
+            print(f"First 20 invalid positions:")
+            for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:20]):
+                invalid_seg = segment_labels_cpu[seq_idx, tok_idx].item()
+                token_id = token_ids_cpu[seq_idx, tok_idx].item()
+                print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: Segment = {invalid_seg}, Token ID = {token_id}")
+            
+            # Show context
+            seq_idx, tok_idx = invalid_positions[0][0].item(), invalid_positions[0][1].item()
+            start = max(0, tok_idx - 5)
+            end = min(segment_labels_cpu.shape[1], tok_idx + 6)
+            print(f"\nContext (seq {seq_idx}, tokens {start}:{end}):")
+            print(f"  Token IDs: {token_ids_cpu[seq_idx, start:end].tolist()}")
+            print(f"  Segments: {segment_labels_cpu[seq_idx, start:end].tolist()}")
+            print(f"{'='*80}\n")
+            
+            raise ValueError(f"Invalid segment label detected in batch {batch_idx}: max={max_seg}, allowed=[0, {segment_vocab_size-1}]")
+        
+        # Check token IDs
+        if max_id >= vocab_size or min_id < 0:
+            print(f"\n{'='*80}")
+            print(f"INVALID TOKEN ID IN BATCH {batch_idx}")
+            print(f"{'='*80}")
+            print(f"Vocab size: {vocab_size}")
+            print(f"Max token ID: {max_id}")
+            print(f"Min token ID: {min_id}")
+            print(f"Token IDs shape: {token_ids_cpu.shape}")
+            
+            # Find invalid positions
+            invalid_mask = (token_ids_cpu >= vocab_size) | (token_ids_cpu < 0)
+            invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
+            print(f"\nInvalid token count: {invalid_mask.sum().item()}")
+            print(f"First 10 invalid positions:")
+            for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:10]):
+                invalid_id = token_ids_cpu[seq_idx, tok_idx].item()
+                print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: ID = {invalid_id}")
+            
+            # Show context
+            seq_idx, tok_idx = invalid_positions[0][0].item(), invalid_positions[0][1].item()
+            start = max(0, tok_idx - 5)
+            end = min(token_ids_cpu.shape[1], tok_idx + 6)
+            print(f"\nContext (seq {seq_idx}, tokens {start}:{end}):")
+            print(f"  Token IDs: {token_ids_cpu[seq_idx, start:end].tolist()}")
+            print(f"  Segments: {batch['segment_label'][seq_idx, start:end].tolist()}")
+            print(f"{'='*80}\n")
+            
+            raise ValueError(f"Invalid token ID detected in batch {batch_idx}")
+        
         # Move to device
-        token_ids = batch['bert_input'].to(device)
+        token_ids = token_ids_cpu.to(device)
         attention_mask = batch['attention_mask'].to(device)
         token_type_ids = batch['segment_label'].to(device)
         mlm_labels = batch['bert_label'].to(device)
@@ -253,6 +395,9 @@ def main():
     # Masking parameters
     parser.add_argument('--token_mask_prob', type=float, default=0.15, help='Token masking probability')
     
+    # Data sampling
+    parser.add_argument('--data_ratio', type=float, default=1.0, help='Ratio of training data to use (0.0-1.0)')
+    
     args = parser.parse_args()
     
     # Setup
@@ -276,6 +421,7 @@ def main():
     logger.info(f"Train data: {args.train_path}")
     logger.info(f"Test data: {args.test_path}")
     logger.info(f"Vocab: {args.vocab_path}")
+    logger.info(f"Data ratio: {args.data_ratio:.1%} of training data")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.learning_rate}")
     
@@ -292,7 +438,8 @@ def main():
         vocab=vocab,
         seq_len=args.max_len,
         token_mask_prob=args.token_mask_prob,
-        on_memory=True
+        on_memory=True,
+        data_percentage=args.data_ratio
     )
     
     test_dataset = AddressAwareDataset(
@@ -300,7 +447,8 @@ def main():
         vocab=vocab,
         seq_len=args.max_len,
         token_mask_prob=args.token_mask_prob,
-        on_memory=True
+        on_memory=True,
+        data_percentage=args.data_ratio
     )
     
     train_dataloader = DataLoader(
@@ -332,7 +480,26 @@ def main():
         dropout=args.dropout,
         max_len=args.max_len
     )
+    
+    # Set vocab_stoi for address/daddr distinction in embeddings
+    model.bert.embeddings.vocab_stoi = vocab.stoi
+    
     model = model.to(device)
+    
+    # Use DataParallel for multi-GPU training
+    if torch.cuda.device_count() > 1:
+        logger.info(f"Using {torch.cuda.device_count()} GPUs for training with DataParallel")
+        model = nn.DataParallel(model)
+    
+    # Verify embedding layer size matches vocab
+    # Handle DataParallel wrapper: .module gives access to the actual model
+    actual_model = model.module if isinstance(model, nn.DataParallel) else model
+    actual_embedding_size = actual_model.bert.embeddings.token_embedding.weight.shape[0]
+    logger.info(f"Model token embedding size: {actual_embedding_size}")
+    logger.info(f"Expected vocab size: {vocab_size}")
+    if actual_embedding_size != vocab_size:
+        logger.error(f"MISMATCH! Embedding size {actual_embedding_size} != vocab size {vocab_size}")
+        raise ValueError(f"Model embedding size mismatch")
     
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -381,7 +548,9 @@ def main():
             os.makedirs(checkpoint_dir, exist_ok=True)
             
             # Save model weights (BERT part only for compatibility)
-            torch.save(model.bert.state_dict(), os.path.join(checkpoint_dir, 'pytorch_model.bin'))
+            # Unwrap DataParallel if needed
+            actual_model = model.module if isinstance(model, nn.DataParallel) else model
+            torch.save(actual_model.bert.state_dict(), os.path.join(checkpoint_dir, 'pytorch_model.bin'))
             
             # Save config
             config = {
@@ -415,7 +584,9 @@ def main():
             best_model_dir = os.path.join(args.output_dir, 'best_model')
             os.makedirs(best_model_dir, exist_ok=True)
             
-            torch.save(model.bert.state_dict(), os.path.join(best_model_dir, 'pytorch_model.bin'))
+            # Unwrap DataParallel if needed
+            actual_model = model.module if isinstance(model, nn.DataParallel) else model
+            torch.save(actual_model.bert.state_dict(), os.path.join(best_model_dir, 'pytorch_model.bin'))
             
             with open(os.path.join(best_model_dir, 'config.json'), 'w') as f:
                 json.dump(config, f, indent=2)

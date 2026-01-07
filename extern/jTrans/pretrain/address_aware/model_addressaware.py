@@ -52,7 +52,9 @@ class AddressAwareJTransForMLM(nn.Module):
             dropout=dropout,
             max_len=max_len,
             use_address_embedding=True,
-            use_var_embedding=True
+            use_var_embedding=True,
+            segment_types=256,  # Support up to 256 instructions per sequence
+            vocab_stoi=None  # Will be set by train script after vocab is loaded
         )
         
         # MLM head (predicts masked tokens)

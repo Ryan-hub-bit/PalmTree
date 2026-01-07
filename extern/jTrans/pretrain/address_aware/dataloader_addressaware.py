@@ -57,6 +57,13 @@ class AddressAwareDataset(Dataset):
         self.sos_idx = vocab.stoi.get('<sos>', 3)
         self.mask_idx = vocab.stoi.get('<mask>', 4)
         
+        # Jump/branch instruction opcodes for JTP task
+        self.jump_opcodes = {
+            'jmp', 'je', 'jne', 'jz', 'jnz', 'jg', 'jge', 'jl', 'jle', 
+            'ja', 'jae', 'jb', 'jbe', 'jo', 'jno', 'js', 'jns', 'jp', 'jnp',
+            'jcxz', 'jecxz', 'jrcxz', 'call', 'ret', 'retn', 'retf'
+        }
+        
         # Regex patterns for parsing inline format from jTrans datautils
         # opcode(0xADDR:bnorm:fnorm:bbnorm)
         self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
@@ -201,7 +208,9 @@ class AddressAwareDataset(Dataset):
                     masked_tokens.append(self.mask_idx)
                 elif prob < 0.9:
                     # Random token - ensure it's within valid vocab range
-                    random_token_id = random.randint(5, len(self.vocab.itos) - 1)
+                    max_valid_id = len(self.vocab) - 1
+                    random_token_id = random.randint(5, max_valid_id)
+                    assert random_token_id <= max_valid_id, f"Random token {random_token_id} > {max_valid_id}"
                     masked_tokens.append(random_token_id)
                 else:
                     masked_tokens.append(token_id)
@@ -290,6 +299,9 @@ class AddressAwareDataset(Dataset):
         all_segments.append(1)
         all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
         
+        # Generate JTP labels
+        jtp_labels = self._create_jtp_labels(instructions, all_tokens_info)
+        
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
             all_tokens = all_tokens[:self.seq_len]
@@ -297,13 +309,15 @@ class AddressAwareDataset(Dataset):
             all_positions = all_positions[:self.seq_len]
             all_segments = all_segments[:self.seq_len]
             all_var_offsets = all_var_offsets[:self.seq_len]
+            jtp_labels = jtp_labels[:self.seq_len]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens += [self.pad_idx] * padding_len
-            all_labels += [-1] * padding_len
+            all_labels += [-100] * padding_len  # Use -100 to match CrossEntropyLoss ignore_index
             all_positions += [(-1.0, -1.0, -1.0)] * padding_len
             all_segments += [0] * padding_len  # Padding gets segment 0
             all_var_offsets += [-1] * padding_len  # Padding is not a var, use -1 as sentinel
+            jtp_labels += [-100] * padding_len  # Padding tokens have no JTP label
         
         # Use segment labels as instruction IDs
         segment_label = all_segments
@@ -322,6 +336,71 @@ class AddressAwareDataset(Dataset):
             'bb_pos': torch.FloatTensor(bb_pos),
             'var_offsets': torch.LongTensor(all_var_offsets),
         }
+    
+    def _create_jtp_labels(self, instructions, all_tokens_info):
+        """
+        Create Jump Target Prediction labels.
+        
+        Args:
+            instructions: List of instruction strings
+            all_tokens_info: List of (token_id, inst_idx, is_opcode, raw_text) for each token position
+            
+        Returns:
+            jtp_labels: List of labels (-100 for non-jumps, target_token_position for jumps)
+        """
+        # Build mapping: instruction address -> instruction index
+        addr_to_inst_idx = {}
+        inst_addresses = []
+        
+        for inst_idx, inst_text in enumerate(instructions):
+            inst_text = inst_text.strip()
+            if not inst_text:
+                continue
+            
+            # Extract instruction address from opcode(0xADDR:...)
+            match = self.addr_pattern.match(inst_text)
+            if match:
+                inst_addr = match.group(2)  # Get 0xADDR
+                addr_to_inst_idx[inst_addr] = inst_idx
+                inst_addresses.append(inst_addr)
+        
+        # Build mapping: instruction index -> first token position (opcode position)
+        inst_idx_to_token_pos = {}
+        for token_pos, (token_id, inst_idx, is_opcode, raw_text) in enumerate(all_tokens_info):
+            if is_opcode and inst_idx >= 0 and inst_idx not in inst_idx_to_token_pos:
+                inst_idx_to_token_pos[inst_idx] = token_pos
+        
+        # First pass: identify jump instructions and their targets
+        jump_inst_targets = {}  # inst_idx -> target_token_pos
+        for token_pos, (token_id, inst_idx, is_opcode, raw_text) in enumerate(all_tokens_info):
+            if is_opcode and raw_text in self.jump_opcodes:
+                if inst_idx < len(instructions):
+                    inst_text = instructions[inst_idx].strip()
+                    
+                    # Check if instruction has address operand
+                    if 'address(' in inst_text:
+                        # Extract target address from address(0xADDR:...)
+                        nested_match = self.nested_addr_pattern.search(inst_text)
+                        if nested_match:
+                            target_addr = nested_match.group(1)  # 0xADDR
+                            target_inst_idx = addr_to_inst_idx.get(target_addr, -1)
+                            
+                            # Convert instruction index to token position
+                            if target_inst_idx >= 0:
+                                target_token_pos = inst_idx_to_token_pos.get(target_inst_idx, -100)
+                                jump_inst_targets[inst_idx] = target_token_pos
+        
+        # Second pass: assign JTP labels to 'address' tokens in jump instructions
+        jtp_labels = []
+        for token_pos, (token_id, inst_idx, is_opcode, raw_text) in enumerate(all_tokens_info):
+            # Place label on the 'address' token that contains the jump target
+            if raw_text == 'address' and inst_idx in jump_inst_targets:
+                jtp_labels.append(jump_inst_targets[inst_idx])
+            else:
+                # Not a jump target address - use -100 (ignored in loss)
+                jtp_labels.append(-100)
+        
+        return jtp_labels
     
     def _process_line_for_token_masking(self, line):
         """
@@ -344,6 +423,7 @@ class AddressAwareDataset(Dataset):
         all_labels = []
         all_segments = []
         all_var_offsets = []
+        all_tokens_info = []  # Track (token_id, inst_idx, is_opcode, raw_text) for JTP
         
         # Add [SOS] at the beginning (gets segment 1 - same as first instruction)
         all_tokens.append(self.sos_idx)
@@ -351,6 +431,7 @@ class AddressAwareDataset(Dataset):
         all_labels.append(-100)  # SOS is not masked - use -100 to match ignore_index
         all_segments.append(1)
         all_var_offsets.append(-1)  # SOS is not a var, use -1 as sentinel
+        all_tokens_info.append((self.sos_idx, -1, False, '<sos>'))
         
         for inst_idx, inst_text in enumerate(instructions):
             inst_text = inst_text.strip()
@@ -364,6 +445,11 @@ class AddressAwareDataset(Dataset):
             # Segment label = instruction number (1-indexed)
             inst_segment = inst_idx + 1
             
+            # Track token info for JTP (before masking)
+            for token_idx, (masked_tok, orig_tok) in enumerate(zip(masked_tokens, tokens)):
+                is_opcode = (token_idx == 0)  # First token is opcode
+                all_tokens_info.append((masked_tok, inst_idx, is_opcode, orig_tok))
+            
             all_tokens.extend(masked_tokens)
             all_positions.extend(positions)
             all_labels.extend(labels)
@@ -376,6 +462,13 @@ class AddressAwareDataset(Dataset):
             all_labels.append(-100)  # EOS is not masked - use -100 to match ignore_index
             all_segments.append(inst_segment)
             all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
+            all_tokens_info.append((self.eos_idx, inst_idx, False, '<eos>'))
+        
+        # Verify lengths match before generating JTP labels
+        assert len(all_tokens) == len(all_tokens_info), f"Length mismatch: {len(all_tokens)} tokens vs {len(all_tokens_info)} token_info"
+        
+        # Generate JTP labels
+        jtp_labels = self._create_jtp_labels(instructions, all_tokens_info)
         
         # Truncate or pad to seq_len
         if len(all_tokens) > self.seq_len:
@@ -384,13 +477,18 @@ class AddressAwareDataset(Dataset):
             all_positions = all_positions[:self.seq_len]
             all_segments = all_segments[:self.seq_len]
             all_var_offsets = all_var_offsets[:self.seq_len]
+            jtp_labels = jtp_labels[:self.seq_len]
+            
+            # Invalidate JTP labels that point beyond truncated sequence
+            jtp_labels = [-100 if (label >= self.seq_len and label != -100) else label for label in jtp_labels]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens += [self.pad_idx] * padding_len
-            all_labels += [-1] * padding_len
+            all_labels += [-100] * padding_len  # Use -100 to match CrossEntropyLoss ignore_index
             all_positions += [(-1.0, -1.0, -1.0)] * padding_len
             all_segments += [0] * padding_len  # Padding gets segment 0
             all_var_offsets += [-1] * padding_len  # Padding is not a var, use -1 as sentinel
+            jtp_labels += [-100] * padding_len  # Padding tokens have no JTP label
         
         # Use segment labels as instruction IDs
         segment_label = all_segments
@@ -412,6 +510,7 @@ class AddressAwareDataset(Dataset):
             'function_pos': torch.FloatTensor(function_pos),
             'bb_pos': torch.FloatTensor(bb_pos),
             'var_offsets': torch.LongTensor(all_var_offsets),
+            'jtp_labels': torch.LongTensor(jtp_labels),
         }
     
     def __len__(self):
@@ -431,4 +530,29 @@ class AddressAwareDataset(Dataset):
         - var_offsets: var(0xXX) offsets
         """
         # Process line with token-level MLM masking
-        return self._process_line_for_token_masking(self.lines[index])
+        result = self._process_line_for_token_masking(self.lines[index])
+        
+        # Validate token IDs are within vocab range (before returning tensors)
+        bert_input = result['bert_input']
+        vocab_size = len(self.vocab)
+        
+        # Convert to numpy for CPU-side checking
+        if hasattr(bert_input, 'numpy'):
+            ids = bert_input.numpy()
+        else:
+            ids = bert_input
+        
+        max_id = ids.max()
+        if max_id >= vocab_size:
+            print(f"\n[ERROR] Token ID {max_id} >= vocab size {vocab_size}")
+            print(f"Index: {index}")
+            print(f"Line preview: {self.lines[index][:300]}...")
+            print(f"First 50 token IDs: {ids[:50]}")
+            # Find invalid tokens
+            invalid_positions = (ids >= vocab_size).nonzero()[0]
+            print(f"Invalid token count: {len(invalid_positions)}")
+            print(f"Invalid token positions (first 20): {invalid_positions[:20]}")
+            print(f"Invalid token IDs: {ids[invalid_positions][:20]}")
+            raise ValueError(f"Token ID {max_id} out of vocab range [0, {vocab_size-1}]")
+        
+        return result
