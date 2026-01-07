@@ -16,10 +16,17 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 import subprocess
+import importlib.util
+import os
 
-# Add parent to path for readidadata
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from readidadata import parse_asm
+# Load readidadata module from parent directory
+script_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(script_dir)
+readidadata_path = os.path.join(parent_dir, 'readidadata.py')
+
+spec = importlib.util.spec_from_file_location("readidadata", readidadata_path)
+readidadata = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(readidadata)
 
 
 def parse_filename(filepath):
@@ -78,9 +85,19 @@ def tokenize_function_baseline(func_data):
     for asm_str in asm_list:
         try:
             # Use readidadata.parse_asm for baseline tokenization
-            parsed = parse_asm(asm_str.strip())
-            if parsed:
-                tokens.append(parsed)
+            # Returns: (operator, operand1, operand2, operand3, annotation)
+            operator, op1, op2, op3, annotation = readidadata.parse_asm(asm_str.strip())
+            
+            # Format as baseline tokens: operator [operands...]
+            if operator:
+                inst_tokens = [operator]
+                if op1 is not None:
+                    inst_tokens.append(op1)
+                if op2 is not None:
+                    inst_tokens.append(op2)
+                if op3 is not None:
+                    inst_tokens.append(op3)
+                tokens.extend(inst_tokens)
         except:
             continue
     
@@ -96,7 +113,7 @@ def create_function_blocks_baseline(pickle_dir, binary_dir):
     import pickle
     
     pickle_path = Path(pickle_dir)
-    pickle_files = list(pickle_path.glob('*_extract.pkl'))
+    pickle_files = list(pickle_path.glob('**/*_extract.pkl'))
     
     func_blocks = {}
     mapping = defaultdict(lambda: defaultdict(dict))
@@ -126,7 +143,10 @@ def create_function_blocks_baseline(pickle_dir, binary_dir):
             binary_path = Path(binary_dir)
             for opt_info in files:
                 opt_level = opt_info['opt']
-                potential_binary = binary_path / f"{binary_name}-{opt_level}"
+                file_hash = opt_info['hash']
+                
+                # Binary filename format: name-OptLevel-hash
+                potential_binary = binary_path / f"{binary_name}-{opt_level}-{file_hash}"
                 
                 if potential_binary.exists():
                     function_names = extract_function_names_from_binary(potential_binary)
@@ -175,13 +195,8 @@ def create_function_blocks_baseline(pickle_dir, binary_dir):
                         'num_instructions': len(asm_list)
                     }
                     
-                    # For ground truth matching
-                    if function_names and func_name in function_names:
-                        # Use actual function name for matching
-                        mapping[binary_name][func_name][opt_level] = func_id
-                    else:
-                        # Use placeholder for matching (won't match across opts)
-                        mapping[binary_name][f"func_{func_id}"][opt_level] = func_id
+                    # For ground truth matching - always use actual function name
+                    mapping[binary_name][func_name][opt_level] = func_id
                     
                     func_id += 1
                     func_count += 1
