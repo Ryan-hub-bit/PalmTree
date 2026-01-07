@@ -214,48 +214,55 @@ def create_function_blocks_baseline(pickle_dir, binary_dir):
 
 def create_ground_truth_baseline(mapping):
     """
-    Create ground truth pairs using same logic as address-aware.
-    Only creates pairs where functions exist in multiple optimization levels.
-    """
-    ground_truth = {
-        'pairs': [],
-        'metadata': {
-            'description': 'Baseline tokenization ground truth',
-            'matching': 'Same function across optimization levels'
-        }
+    Create ground truth with grouped format (SAME as address-aware).
+    Groups all optimization levels for each function.
+    
+    Format:
+    {
+        "pairs": [
+            {
+                "binary_name": "...",
+                "function_name": "...",
+                "O0": func_id,
+                "O1": func_id,
+                ...
+            }
+        ]
     }
     
-    pair_id = 0
+    Note: data_json.py automatically converts this to pair-by-pair format
+    internally for training, so this is more storage-efficient.
+    """
+    pairs = []
     
     for binary_name, func_dict in mapping.items():
         for func_name, opt_dict in func_dict.items():
-            # Only create pairs if function exists in multiple optimization levels
-            if len(opt_dict) >= 2:
-                opt_levels = sorted(opt_dict.keys())
-                
-                # Create all pairwise combinations
-                for i in range(len(opt_levels)):
-                    for j in range(i + 1, len(opt_levels)):
-                        opt1 = opt_levels[i]
-                        opt2 = opt_levels[j]
-                        
-                        func_id1 = opt_dict[opt1]
-                        func_id2 = opt_dict[opt2]
-                        
-                        ground_truth['pairs'].append({
-                            'pair_id': pair_id,
-                            'func_id1': func_id1,
-                            'func_id2': func_id2,
-                            'binary': binary_name,
-                            'func_name': func_name,
-                            'opt1': opt1,
-                            'opt2': opt2,
-                            'label': 1  # Same function
-                        })
-                        
-                        pair_id += 1
+            # Only include if exists in multiple optimization levels
+            if len(opt_dict) > 1:
+                pair = {
+                    'binary_name': binary_name,
+                    'function_name': func_name
+                }
+                pair.update(opt_dict)
+                pairs.append(pair)
     
-    print(f"\n✓ Created {len(ground_truth['pairs'])} ground truth pairs")
+    ground_truth = {
+        'pairs': pairs,
+        'total_pairs': len(pairs)
+    }
+    
+    # Calculate statistics
+    opt_coverage = defaultdict(int)
+    for pair in pairs:
+        for opt in ['O0', 'O1', 'O2', 'O3', 'Os', 'Og', 'Ofast']:
+            if opt in pair:
+                opt_coverage[opt] += 1
+    
+    ground_truth['statistics'] = {
+        'optimization_coverage': dict(opt_coverage)
+    }
+    
+    print(f"\n✓ Created {len(pairs)} function groups")
     
     return ground_truth
 
@@ -305,8 +312,11 @@ def main():
     print("Dataset creation complete!")
     print("=" * 60)
     print(f"Functions: {len(func_blocks)}")
-    print(f"Ground truth pairs: {len(ground_truth['pairs'])}")
-    print(f"\nUse same ground_truth pairs for fair comparison with address-aware version.")
+    print(f"Ground truth groups: {ground_truth['total_pairs']}")
+    print(f"\nOptimization level coverage:")
+    for opt, count in sorted(ground_truth['statistics']['optimization_coverage'].items()):
+        print(f"  {opt}: {count} functions")
+    print(f"\nUsing grouped format (SAME as address-aware) for consistency.")
 
 
 if __name__ == '__main__':

@@ -30,9 +30,17 @@ def run_ida_with_env(cmd, env):
     return subprocess.call(cmd, env=env)
 
 def getTarget(path, prefixfilter=None):
+    """Get list of binaries to process, excluding IDA-generated files"""
     target = []
+    # File extensions to skip
+    skip_extensions = {'.i64', '.idb', '.id0', '.id1', '.id2', '.nam', '.til', '.txt', '.log', '.strip'}
+    
     for root, dirs, files in os.walk(path):
         for file in files:
+            # Skip files with IDA-generated extensions
+            if any(file.endswith(ext) for ext in skip_extensions):
+                continue
+                
             if prefixfilter is None:
                 target.append(os.path.join(root, file))
             else:

@@ -88,22 +88,22 @@ def train_dp(model, args, train_set, valid_set, logger):
         triplet_loss=Triplet_COS_Loss(margin=0.2)
         train_iterator = tqdm(train_dataloader)
         loss_list = []
-        for i, (seq1,seq2,seq3,mask1,mask2,mask3) in enumerate(train_iterator):
+        for i, (seq1,seq2,seq3,mask1,mask2,mask3,seg1,seg2,seg3) in enumerate(train_iterator):
             t1=time.time()
-            input_ids1, attention_mask1 = seq1.cuda(),mask1.cuda()
-            input_ids2, attention_mask2 = seq2.cuda(),mask2.cuda()
-            input_ids3, attention_mask3 = seq3.cuda(),mask3.cuda()
+            input_ids1, attention_mask1, token_type_ids1 = seq1.cuda(), mask1.cuda(), seg1.cuda()
+            input_ids2, attention_mask2, token_type_ids2 = seq2.cuda(), mask2.cuda(), seg2.cuda()
+            input_ids3, attention_mask3, token_type_ids3 = seq3.cuda(), mask3.cuda(), seg3.cuda()
 
             optimizer.zero_grad()
             anchor,pos,neg=0,0,0
 
-            output1 = model(input_ids=input_ids1, attention_mask=attention_mask1)
+            output1 = model(input_ids=input_ids1, attention_mask=attention_mask1, token_type_ids=token_type_ids1)
             anchor = output1.pooler_output
 
-            output2 = model(input_ids=input_ids2, attention_mask=attention_mask2)
+            output2 = model(input_ids=input_ids2, attention_mask=attention_mask2, token_type_ids=token_type_ids2)
             pos = output2.pooler_output
 
-            output3 = model(input_ids=input_ids3, attention_mask=attention_mask3)
+            output3 = model(input_ids=input_ids3, attention_mask=attention_mask3, token_type_ids=token_type_ids3)
             neg = output3.pooler_output
 
             optimizer.zero_grad()
@@ -146,16 +146,16 @@ def finetune_eval(net, data_loader):
         gt=[]
         cons=[]
         eval_iterator = tqdm(data_loader)
-        for i, (seq1,seq2,_,mask1,mask2,_) in enumerate(eval_iterator):
-            input_ids1, attention_mask1= seq1.cuda(),mask1.cuda()
-            input_ids2, attention_mask2= seq2.cuda(),mask2.cuda()
+        for i, (seq1,seq2,_,mask1,mask2,_,seg1,seg2,_) in enumerate(eval_iterator):
+            input_ids1, attention_mask1, token_type_ids1 = seq1.cuda(), mask1.cuda(), seg1.cuda()
+            input_ids2, attention_mask2, token_type_ids2 = seq2.cuda(), mask2.cuda(), seg2.cuda()
 
             anchor,pos=0,0
 
-            output1 = model(input_ids=input_ids1, attention_mask=attention_mask1)
+            output1 = model(input_ids=input_ids1, attention_mask=attention_mask1, token_type_ids=token_type_ids1)
             anchor = output1.pooler_output
 
-            output2 = model(input_ids=input_ids2, attention_mask=attention_mask2)
+            output2 = model(input_ids=input_ids2, attention_mask=attention_mask2, token_type_ids=token_type_ids2)
             pos = output2.pooler_output
 
             ans=0
@@ -205,7 +205,7 @@ if __name__ == '__main__':
     parser.add_argument("--log_every", type=int, default =1, help='logging frequency')
     parser.add_argument("--local_rank", type=int, default = 0, help='local rank used for ddp')
     parser.add_argument("--freeze_cnt", type=int, default=10, help='number of layers to freeze')
-    parser.add_argument("--weight_decay", type=int, default = 1e-4, help='regularization weight decay')
+    parser.add_argument("--weight_decay", type=float, default = 1e-4, help='regularization weight decay')
     parser.add_argument("--eval_every", type=int, default=1, help="evaluate the model every x epochs")
     parser.add_argument("--eval_every_step", type=int, default=1000, help="evaluate the model every x epochs")
     parser.add_argument("--save_every", type=int, default=1, help="save the model every x epochs")

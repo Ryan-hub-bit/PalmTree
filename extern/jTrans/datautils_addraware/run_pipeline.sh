@@ -58,7 +58,7 @@ NONSTRIPPED_DIR="$2"
 OUTPUT_DIR="${3:-/data/kun/jtransdata/function_exports}"
 
 # Configuration
-IDA_PATH="/home/kun/ida-pro-9.0/idat64"
+IDA_PATH="/home/kun/ida-pro-9.0/idat"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXPORT_SCRIPT="${SCRIPT_DIR}/function_export_ida.py"
 COMBINE_SCRIPT="${SCRIPT_DIR}/combine_function_files.py"
@@ -195,18 +195,19 @@ echo ""
 
 if python3 "$DATASET_SCRIPT" \
     "$OUTPUT_DIR" \
-    "$NONSTRIPPED_DIR" \
-    "$OUTPUT_DIR/top_symbols.txt"; then
+    "$OUTPUT_DIR" \
+    --binary-dir "$NONSTRIPPED_DIR" \
+    --symbol-file "$OUTPUT_DIR/top_symbols.txt"; then
     print_success "Function dataset created"
     
-    if [ -f "$OUTPUT_DIR/func_blocks.json" ]; then
-        func_count=$(python3 -c "import json; print(len(json.load(open('$OUTPUT_DIR/func_blocks.json'))))")
-        echo "  - Function blocks: $OUTPUT_DIR/func_blocks.json ($func_count functions)"
+    if [ -f "$OUTPUT_DIR/func_blocks_addr.json" ]; then
+        func_count=$(python3 -c "import json; print(len(json.load(open('$OUTPUT_DIR/func_blocks_addr.json'))))")
+        echo "  - Function blocks: $OUTPUT_DIR/func_blocks_addr.json ($func_count functions)"
     fi
     
-    if [ -f "$OUTPUT_DIR/ground_truth.json" ]; then
-        pair_count=$(python3 -c "import json; print(json.load(open('$OUTPUT_DIR/ground_truth.json'))['total_pairs'])")
-        echo "  - Ground truth: $OUTPUT_DIR/ground_truth.json ($pair_count pairs)"
+    if [ -f "$OUTPUT_DIR/ground_truth_addr.json" ]; then
+        pair_count=$(python3 -c "import json; print(json.load(open('$OUTPUT_DIR/ground_truth_addr.json'))['total_pairs'])")
+        echo "  - Ground truth: $OUTPUT_DIR/ground_truth_addr.json ($pair_count function groups)"
     fi
 else
     print_error "Failed to create function dataset"
@@ -226,8 +227,8 @@ echo "  - val.txt"
 echo "  - test.txt"
 echo ""
 echo "Function similarity dataset:"
-echo "  - func_blocks.json"
-echo "  - ground_truth.json"
+echo "  - func_blocks_addr.json"
+echo "  - ground_truth_addr.json"
 echo ""
 echo "Shared vocabulary:"
 echo "  - top_symbols.txt"

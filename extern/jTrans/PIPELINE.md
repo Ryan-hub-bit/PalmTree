@@ -25,32 +25,28 @@ cd /home/kun/Document/AAE/extern/jTrans/datautils
 # Output: /data/kun/jtransdata/baseline_exports/*_functions.pkl
 ```
 
-### Step 2: Combine for Pretraining
+### Step 2: Convert Pickle to Text Format
 ```bash
 cd /home/kun/Document/AAE/extern/jTrans/datautils
 
-# Combine ALL functions into single file for pretraining (no train/val/test split)
-./run_combine_pretrain.sh /data/kun/jtransdata/baseline_exports /data/kun/jtransdata
+# Convert all pickle files to text format for pretraining
+python3 convert_pkl_to_txt.py \
+    /data/kun/jtransdata/extract \
+    /data/kun/jtransdata/baseline_pretrain.txt
 
 # Output:
-#   - /data/kun/jtransdata/baseline_pretrain.pkl (all functions, smart merged)
-#   - /data/kun/jtransdata/top_symbols.txt (top 100 symbols)
+#   - /data/kun/jtransdata/baseline_pretrain.txt (all functions in text format)
 ```
 
-### Step 3: Create Vocabulary
+### Step 3: Use Original Vocabulary
 ```bash
-cd /home/kun/Document/AAE/extern/jTrans/pretrain/baseline
+# Baseline uses the original jTrans tokenizer vocabulary (no need to create new vocab)
+# Vocabulary location: /home/kun/Document/AAE/extern/jTrans/jtrans_tokenizer/original
 
-# Create baseline vocabulary from pretraining data
-# Creates BOTH vocab.txt (human-readable) and vocab.pkl (for training)
-python3 create_vocab.py \
-    --pkl_file /data/kun/jtransdata/baseline_pretrain.pkl \
-    --vocab_file /data/kun/jtransdata/vocab.txt \
-    --min_freq 50
-
-# Outputs:
-#   - /data/kun/jtransdata/vocab.txt (human-readable vocabulary)
-#   - /data/kun/jtransdata/vocab.pkl (pickle format for training)
+# The original vocab already contains:
+#   - Standard assembly opcodes and registers
+#   - JUMP_ADDR_0 - JUMP_ADDR_99 for jump targets
+#   - Special tokens (<pad>, <unk>, <eos>, <sos>, <mask>)
 ```
 
 ### Step 4: Pretrain MLM Model

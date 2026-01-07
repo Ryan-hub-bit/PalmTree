@@ -189,7 +189,9 @@ def create_function_blocks(export_dir, binary_dir, top_symbols):
             binary_path = Path(binary_dir)
             for opt_info in files:
                 opt_level = opt_info['opt']
-                potential_binary = binary_path / f"{binary_name}-{opt_level}"
+                file_hash = opt_info['hash']
+                # Binary filename includes hash: {binary_name}-{opt}-{hash}
+                potential_binary = binary_path / f"{binary_name}-{opt_level}-{file_hash}"
                 
                 if potential_binary.exists():
                     function_names = extract_function_names_from_binary(potential_binary)
@@ -246,14 +248,14 @@ def create_function_blocks(export_dir, binary_dir, top_symbols):
 
 def create_ground_truth(mapping):
     """
-    Create ground_truth.json with function relationships.
+    Create ground_truth.json with grouped format (more efficient).
     
-    Format:
+    Format groups all optimization levels for each function:
     {
         "pairs": [
             {
                 "binary_name": "...",
-                "function_name": "...",
+                "function_name": "...",  # Real function name from nm
                 "O0": func_id,
                 "O1": func_id,
                 "O2": func_id,
@@ -261,6 +263,9 @@ def create_ground_truth(mapping):
             }
         ]
     }
+    
+    Note: data_json.py automatically converts this to pair-by-pair format
+    internally for training, so this is more storage-efficient.
     """
     pairs = []
     
@@ -294,38 +299,30 @@ def create_ground_truth(mapping):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python create_function_dataset.py <export_dir> [binary_dir] [symbol_file]")
-        print("\nArguments:")
-        print("  export_dir  : Directory containing *_functions.txt files")
-        print("  binary_dir  : (Optional) Directory with non-stripped binaries for function names")
-        print("  symbol_file : (Optional) Path to top symbols file")
-        print("                Default: <export_dir>/top_symbols.txt")
-        print("                IMPORTANT: Use the SAME file as combine_function_files.py")
-        print("\nExample:")
-        print("  # Use default symbol file location (export_dir/top_symbols.txt):")
-        print("  python create_function_dataset.py \\")
-        print("      /data/kun/jtransdata/function_exports \\")
-        print("      /data/kun/jtransdata/small_train")
-        print("\n  # Or specify explicit path (must match combine_function_files.py):")
-        print("  python create_function_dataset.py \\")
-        print("      /data/kun/jtransdata/function_exports \\")
-        print("      /data/kun/jtransdata/small_train \\")
-        print("      /data/kun/jtransdata/function_exports/top_symbols.txt")
-        sys.exit(1)
+    import argparse
+    parser = argparse.ArgumentParser(description='Create function dataset with smart merge')
+    parser.add_argument('export_dir', help='Directory containing *_functions.txt files')
+    parser.add_argument('output_dir', help='Output directory for func_blocks.json and ground_truth.json')
+    parser.add_argument('--binary-dir', help='Directory with non-stripped binaries for function names')
+    parser.add_argument('--symbol-file', help='Path to top symbols file (default: <output_dir>/top_symbols.txt)')
     
-    export_dir = sys.argv[1]
-    binary_dir = sys.argv[2] if len(sys.argv) > 2 else None
-    symbol_file = sys.argv[3] if len(sys.argv) > 3 else None
+    args = parser.parse_args()
+    
+    export_dir = args.export_dir
+    output_dir = args.output_dir
+    binary_dir = args.binary_dir
+    symbol_file = args.symbol_file
     
     print("="*70)
     print("Creating Function Dataset with Smart Merge")
     print("="*70)
     print(f"\nExport directory: {export_dir}")
+    print(f"Output directory: {output_dir}")
     if binary_dir:
         print(f"Binary directory: {binary_dir}")
     
     export_path = Path(export_dir)
+    output_path = Path(output_dir)
     function_files = list(export_path.glob('*_functions.txt'))
     
     if not function_files:
@@ -337,9 +334,9 @@ def main():
     print("Step 1: Loading top symbols for smart merge")
     print("="*70)
     
-    # Default symbol file location
+    # Default symbol file location is output_dir/top_symbols.txt
     if symbol_file is None:
-        symbol_file = export_path / 'top_symbols.txt'
+        symbol_file = output_path / 'top_symbols.txt'
     else:
         symbol_file = Path(symbol_file)
     
@@ -373,15 +370,18 @@ def main():
     print("Step 3: Creating ground truth")
     print("="*70)
     ground_truth = create_ground_truth(mapping)
-    print(f"Created {ground_truth['total_pairs']} function pairs")
+    print(f"Created {ground_truth['total_pairs']} function groups")
     
     # Step 4: Save outputs
     print("\n" + "="*70)
     print("Step 4: Saving outputs")
     print("="*70)
     
-    func_blocks_file = export_path / 'func_blocks.json'
-    ground_truth_file = export_path / 'ground_truth.json'
+    func_blocks_file = output_path / 'func_blocks_addr.json'
+    ground_truth_file = output_path / 'ground_truth_addr.json'
+    
+    # Create output directory if it doesn't exist
+    output_path.mkdir(parents=True, exist_ok=True)
     
     with open(func_blocks_file, 'w', encoding='utf-8') as f:
         json.dump(func_blocks, f, indent=2)
@@ -391,7 +391,7 @@ def main():
     with open(ground_truth_file, 'w', encoding='utf-8') as f:
         json.dump(ground_truth, f, indent=2)
     print(f"Saved: {ground_truth_file}")
-    print(f"  Total function pairs: {ground_truth['total_pairs']}")
+    print(f"  Total function groups: {ground_truth['total_pairs']}")
     
     print("\n" + "="*70)
     print("Statistics")

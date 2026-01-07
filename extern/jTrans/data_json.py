@@ -139,6 +139,9 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
         for func_list in functions:
             tokenized_list = []
             for func_str in func_list:
+                # Create segment labels based on instruction boundaries (tabs)
+                token_type_ids = self._create_segment_labels(func_str, tokenizer, max_length)
+                
                 encoded = tokenizer.encode_plus(
                     func_str,
                     max_length=max_length,
@@ -148,7 +151,8 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
                 )
                 tokenized_list.append({
                     'input_ids': encoded['input_ids'].squeeze(0),
-                    'attention_mask': encoded['attention_mask'].squeeze(0)
+                    'attention_mask': encoded['attention_mask'].squeeze(0),
+                    'token_type_ids': token_type_ids
                 })
             self.tokenized_datas.append(tokenized_list)
         
@@ -156,6 +160,44 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
         self.opt = opt
         
         print(f"Pre-tokenized {len(self.tokenized_datas)} function groups")
+    
+    def _create_segment_labels(self, func_str, tokenizer, max_length):
+        """
+        Create segment labels (token_type_ids) based on instruction boundaries.
+        Instructions are separated by tabs (\t).
+        
+        Returns:
+            torch.Tensor: segment labels matching tokenized sequence length
+        """
+        import torch
+        
+        # Split by tabs to get instructions
+        instructions = func_str.split('\t')
+        
+        # Tokenize each instruction separately to get token counts
+        segment_labels = []
+        
+        for inst_idx, inst in enumerate(instructions):
+            if not inst.strip():
+                continue
+            
+            # Tokenize this instruction to see how many tokens it produces
+            inst_tokens = tokenizer.tokenize(inst.strip())
+            # Segment ID = instruction index + 1 (to match pretraining)
+            segment_id = inst_idx + 1
+            segment_labels.extend([segment_id] * len(inst_tokens))
+        
+        # Add [CLS] token at beginning (segment 1)
+        segment_labels = [1] + segment_labels
+        
+        # Truncate or pad to max_length
+        if len(segment_labels) > max_length:
+            segment_labels = segment_labels[:max_length]
+        else:
+            # Pad with 0s
+            segment_labels = segment_labels + [0] * (max_length - len(segment_labels))
+        
+        return torch.tensor(segment_labels, dtype=torch.long)
     
     def __getitem__(self, idx):
         """Return tokenized (anchor, positive, negative) triplet."""
@@ -179,7 +221,8 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
         
         return (
             anchor['input_ids'], positive['input_ids'], negative['input_ids'],
-            anchor['attention_mask'], positive['attention_mask'], negative['attention_mask']
+            anchor['attention_mask'], positive['attention_mask'], negative['attention_mask'],
+            anchor['token_type_ids'], positive['token_type_ids'], negative['token_type_ids']
         )
     
     def __len__(self):
