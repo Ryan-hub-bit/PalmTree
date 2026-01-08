@@ -20,9 +20,6 @@ echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
 # Uncomment for debugging (makes CUDA synchronous, slower)
 # export CUDA_LAUNCH_BLOCKING=1
 
-# Activate conda environment
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate palmtree
 
 echo "=========================================="
 echo "Starting Baseline Pretraining"
