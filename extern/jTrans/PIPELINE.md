@@ -30,7 +30,7 @@ cd /home/kun/Document/AAE/extern/jTrans/datautils
 cd /home/kun/Document/AAE/extern/jTrans/datautils
 
 # Convert all pickle files to text format for pretraining
-python3 convert_pkl_to_txt.py \
+python3 convert_pkl_to_text.py \
     /data/kun/jtransdata/extract \
     /data/kun/jtransdata/baseline_pretrain.txt
 
