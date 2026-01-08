@@ -10,10 +10,9 @@ Tasks:
 Usage:
     python train_baseline.py \\
         --train_path /path/to/train.txt \\
-        --test_path /path/to/test.txt \\
-        --tokenizer_path /path/to/tokenizer \\
+        --vocab_path /path/to/vocab.pkl \\
         --output_dir ./output_baseline \\
-        --batch_size 32 \\
+        --batch_size 256 \\
         --learning_rate 1e-4 \\
         --num_epochs 10
 """
@@ -216,10 +215,8 @@ def main():
     # Data paths
     parser.add_argument('--train_path', type=str, required=True,
                        help='Path to training data')
-    parser.add_argument('--test_path', type=str, required=True,
-                       help='Path to test data')
-    parser.add_argument('--tokenizer_path', type=str, required=True,
-                       help='Path to tokenizer directory')
+    parser.add_argument('--vocab_path', type=str, required=True,
+                       help='Path to vocabulary file (.pkl)')
     
     # Model architecture
     parser.add_argument('--hidden_size', type=int, default=768,
@@ -244,8 +241,8 @@ def main():
                        help='Warmup steps')
     parser.add_argument('--max_len', type=int, default=512,
                        help='Maximum sequence length')
-    parser.add_argument('--mlm_probability', type=float, default=0.15,
-                       help='MLM masking probability')
+    parser.add_argument('--token_mask_prob', type=float, default=0.15,
+                       help='Token masking probability for MLM')
     parser.add_argument('--jtp_probability', type=float, default=0.20,
                        help='JTP masking probability')
     
@@ -284,34 +281,72 @@ def main():
     logger.info("=" * 80)
     logger.info(f"Data ratio: {args.data_ratio:.1%} of training data")
     logger.info(f"Train data: {args.train_path}")
-    logger.info(f"Test data: {args.test_path}")
     logger.info(f"Device: {device}")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.learning_rate}")
     logger.info(f"Epochs: {args.num_epochs}")
     logger.info(f"Max length: {args.max_len}")
-    logger.info(f"MLM probability: {args.mlm_probability}")
+    logger.info(f"Token mask probability: {args.token_mask_prob}")
     logger.info(f"JTP probability: {args.jtp_probability}")
     logger.info(f"Hidden size: {args.hidden_size}")
     logger.info(f"Layers: {args.num_hidden_layers}")
     logger.info(f"Attention heads: {args.num_attention_heads}")
     logger.info("=" * 80)
     
-    # Load tokenizer
-    logger.info(f"Loading tokenizer from {args.tokenizer_path}...")
-    tokenizer = BertTokenizer.from_pretrained(args.tokenizer_path)
-    vocab_size = len(tokenizer)
+    # Load vocabulary
+    logger.info(f"Loading vocabulary from {args.vocab_path}...")
+    import pickle
+    
+    # Check if it's a pickle file or text file
+    if args.vocab_path.endswith('.pkl'):
+        with open(args.vocab_path, 'rb') as f:
+            vocab = pickle.load(f)
+    else:
+        # Load from text file
+        class SimpleVocab:
+            def __init__(self, vocab_file):
+                self.stoi = {}
+                self.itos = {}
+                with open(vocab_file, 'r') as f:
+                    for idx, line in enumerate(f):
+                        token = line.strip()
+                        self.stoi[token] = idx
+                        self.itos[idx] = token
+                
+                # Set special token IDs
+                self.pad_token_id = self.stoi.get('[PAD]', 0)
+                self.mask_token_id = self.stoi.get('[MASK]', 4)
+                self.unk_token_id = self.stoi.get('[UNK]', 1)
+                self.cls_token_id = self.stoi.get('[CLS]', 2)
+                self.sep_token_id = self.stoi.get('[SEP]', 3)
+            
+            def __len__(self):
+                return len(self.stoi)
+            
+            def convert_tokens_to_ids(self, tokens):
+                if isinstance(tokens, str):
+                    return self.stoi.get(tokens, self.unk_token_id)
+                return [self.stoi.get(token, self.unk_token_id) for token in tokens]
+            
+            def convert_ids_to_tokens(self, ids):
+                if isinstance(ids, int):
+                    return self.itos.get(ids, '<unk>')
+                return [self.itos.get(id, '<unk>') for id in ids]
+        
+        vocab = SimpleVocab(args.vocab_path)
+    
+    vocab_size = len(vocab)
     logger.info(f"Vocabulary size: {vocab_size}")
     
     # Create dataloaders
     logger.info("Creating dataloaders...")
     train_loader, test_loader = create_baseline_dataloaders(
         train_path=args.train_path,
-        test_path=args.test_path,
-        tokenizer=tokenizer,
+        test_path=args.train_path,  # Use same file for pretraining
+        tokenizer=vocab,
         batch_size=args.batch_size,
         max_len=args.max_len,
-        mlm_probability=args.mlm_probability,
+        mlm_probability=args.token_mask_prob,
         jtp_probability=args.jtp_probability,
         num_workers=args.num_workers,
         data_percentage=args.data_ratio
@@ -417,31 +452,10 @@ def main():
             
             logger.info(f"✓ Checkpoint saved to {checkpoint_dir}")
         
-        # Save best model
+        # Track best validation loss for logging
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            best_model_dir = os.path.join(args.output_dir, 'best_model')
-            os.makedirs(best_model_dir, exist_ok=True)
-            
-            model.bert.save_pretrained(best_model_dir)
-            
-            best_info = {
-                'epoch': epoch + 1,
-                'mode': 'baseline',
-                'best_val_loss': best_val_loss,
-                'val_mlm_acc': val_mlm_acc,
-                'val_jtp_acc': val_jtp_acc,
-                'architecture': {
-                    'hidden_size': args.hidden_size,
-                    'num_hidden_layers': args.num_hidden_layers,
-                    'num_attention_heads': args.num_attention_heads,
-                    'vocab_size': vocab_size
-                }
-            }
-            with open(os.path.join(best_model_dir, 'training_info.json'), 'w') as f:
-                json.dump(best_info, f, indent=2)
-            
-            logger.info(f"✓ Best model saved! Val loss: {best_val_loss:.4f}")
+            logger.info(f"✓ New best validation loss: {best_val_loss:.4f}")
     
     # Save training history
     history_file = os.path.join(args.output_dir, 'training_history.json')
