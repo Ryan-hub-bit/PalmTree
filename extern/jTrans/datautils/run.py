@@ -75,7 +75,7 @@ if __name__ == '__main__':
             continue
 
         # Start IDA in async pool with env vars
-        cmd = [ida_path, f'-Llog/{filename}.log', '-c', '-A', f'-S{script_path}', f'-oidb/{filename}.idb', ida_input]
+        cmd = [ida_path, f'-Llog/{filename}.log', '-c', '-A', f'-S{script_path}', f'-oidb/{filename}.i64', ida_input]
         print(f"→ Starting IDA: {filename}")
         
         # Set environment variables for the IDA subprocess
