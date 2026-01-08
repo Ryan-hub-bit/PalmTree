@@ -367,6 +367,11 @@ def main():
     )
     model = model.to(device)
     
+    # Multi-GPU support
+    if torch.cuda.device_count() > 1:
+        logger.info(f"Using {torch.cuda.device_count()} GPUs with DataParallel")
+        model = nn.DataParallel(model)
+    
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -427,8 +432,9 @@ def main():
             checkpoint_dir = os.path.join(args.output_dir, f'checkpoint_epoch_{epoch + 1}')
             os.makedirs(checkpoint_dir, exist_ok=True)
             
-            # Save model
-            model.bert.save_pretrained(checkpoint_dir)
+            # Save model (handle DataParallel wrapper)
+            model_to_save = model.module if hasattr(model, 'module') else model
+            model_to_save.bert.save_pretrained(checkpoint_dir)
             
             # Save training info
             training_info = {
