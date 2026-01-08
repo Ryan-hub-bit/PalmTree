@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=addr_pretrain
+#SBATCH --job-name=baseline_pretrain
 #SBATCH --output=/work/kliu14/jtransdata/log/%x_%j.out
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=16
@@ -17,6 +17,6 @@ source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
 conda activate /work/kliu14/.conda/envs/jtrans
 
 # Your requested command:
-./run_addressaware_pretrain.sh
+./run_baseline_pretrain.sh
 
 echo "Done!"

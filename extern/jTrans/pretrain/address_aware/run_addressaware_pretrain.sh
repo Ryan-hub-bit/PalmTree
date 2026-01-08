@@ -20,10 +20,6 @@ echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
 # Uncomment for debugging (makes CUDA synchronous, slower)
 # export CUDA_LAUNCH_BLOCKING=1
 
-# Activate conda environment
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate jtrans
-
 # Data from address-aware function export with hierarchical positions
 # Format: opcode(0xADDR:func_pos:bb_pos:inst_pos) operand1 operand2 ...
 # For pretraining, we use the same file for train and test (no validation needed during MLM)

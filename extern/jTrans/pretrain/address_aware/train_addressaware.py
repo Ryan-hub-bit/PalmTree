@@ -373,7 +373,6 @@ def main():
     
     # Data paths
     parser.add_argument('--train_path', type=str, required=True, help='Training data path')
-    parser.add_argument('--test_path', type=str, required=True, help='Test data path')
     parser.add_argument('--vocab_path', type=str, required=True, help='Vocabulary path')
     parser.add_argument('--output_dir', type=str, required=True, help='Output directory')
     
@@ -419,7 +418,6 @@ def main():
     logger.info("jTrans ADDRESS-AWARE Pretraining")
     logger.info("=" * 80)
     logger.info(f"Train data: {args.train_path}")
-    logger.info(f"Test data: {args.test_path}")
     logger.info(f"Vocab: {args.vocab_path}")
     logger.info(f"Data ratio: {args.data_ratio:.1%} of training data")
     logger.info(f"Batch size: {args.batch_size}")
@@ -442,15 +440,6 @@ def main():
         data_percentage=args.data_ratio
     )
     
-    test_dataset = AddressAwareDataset(
-        corpus_path=args.test_path,
-        vocab=vocab,
-        seq_len=args.max_len,
-        token_mask_prob=args.token_mask_prob,
-        on_memory=True,
-        data_percentage=args.data_ratio
-    )
-    
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
@@ -459,16 +448,7 @@ def main():
         pin_memory=True
     )
     
-    test_dataloader = DataLoader(
-        test_dataset,
-        batch_size=args.batch_size,
-        shuffle=False,
-        num_workers=args.num_workers,
-        pin_memory=True
-    )
-    
     logger.info(f"Train batches: {len(train_dataloader)}")
-    logger.info(f"Test batches: {len(test_dataloader)}")
     
     # Create model
     logger.info("Creating address-aware model...")
@@ -520,8 +500,6 @@ def main():
     logger.info("Starting training...")
     logger.info("=" * 80)
     
-    best_val_loss = float('inf')
-    
     for epoch in range(args.num_epochs):
         logger.info(f"Epoch {epoch + 1}/{args.num_epochs}")
         logger.info("-" * 80)
@@ -533,14 +511,6 @@ def main():
         
         logger.info(f"Train - Loss: {train_loss:.4f}, MLM Loss: {train_mlm_loss:.4f}, JTP Loss: {train_jtp_loss:.4f}")
         logger.info(f"Train - MLM Acc: {train_mlm_acc:.4f}, JTP Acc: {train_jtp_acc:.4f}")
-        
-        # Validate
-        val_loss, val_mlm_loss, val_jtp_loss, val_mlm_acc, val_jtp_acc = validate_epoch(
-            model, test_dataloader, device, logger
-        )
-        
-        logger.info(f"Val - Loss: {val_loss:.4f}, MLM Loss: {val_mlm_loss:.4f}, JTP Loss: {val_jtp_loss:.4f}")
-        logger.info(f"Val - MLM Acc: {val_mlm_acc:.4f}, JTP Acc: {val_jtp_acc:.4f}")
         
         # Save checkpoint
         if (epoch + 1) % args.save_every == 0:
@@ -569,29 +539,12 @@ def main():
             training_info = {
                 'epoch': epoch + 1,
                 'train_loss': train_loss,
-                'val_loss': val_loss,
                 'train_mlm_acc': train_mlm_acc,
-                'val_mlm_acc': val_mlm_acc,
             }
             with open(os.path.join(checkpoint_dir, 'training_info.json'), 'w') as f:
                 json.dump(training_info, f, indent=2)
             
             logger.info(f"✓ Checkpoint saved to {checkpoint_dir}")
-        
-        # Save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_model_dir = os.path.join(args.output_dir, 'best_model')
-            os.makedirs(best_model_dir, exist_ok=True)
-            
-            # Unwrap DataParallel if needed
-            actual_model = model.module if isinstance(model, nn.DataParallel) else model
-            torch.save(actual_model.bert.state_dict(), os.path.join(best_model_dir, 'pytorch_model.bin'))
-            
-            with open(os.path.join(best_model_dir, 'config.json'), 'w') as f:
-                json.dump(config, f, indent=2)
-            
-            logger.info(f"✓ Best model saved (val_loss: {best_val_loss:.4f})")
         
         logger.info("=" * 80)
     
@@ -600,3 +553,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
