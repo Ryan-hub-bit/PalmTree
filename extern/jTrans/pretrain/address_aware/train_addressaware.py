@@ -31,6 +31,36 @@ from dataloader_addressaware import AddressAwareDataset
 from vocab import WordVocab
 
 
+def find_latest_checkpoint(output_dir):
+    """Find the most recent checkpoint in the output directory.
+    
+    Returns:
+        tuple: (checkpoint_path, epoch_num) or (None, 0) if no checkpoint found
+    """
+    if not os.path.exists(output_dir):
+        return None, 0
+    
+    # Find all checkpoint directories
+    checkpoint_dirs = []
+    for item in os.listdir(output_dir):
+        if item.startswith('checkpoint_epoch_'):
+            try:
+                epoch_num = int(item.split('_')[-1])
+                checkpoint_path = os.path.join(output_dir, item)
+                # Verify it's a valid checkpoint
+                if os.path.exists(os.path.join(checkpoint_path, 'pytorch_model.bin')):
+                    checkpoint_dirs.append((checkpoint_path, epoch_num))
+            except ValueError:
+                continue
+    
+    if not checkpoint_dirs:
+        return None, 0
+    
+    # Return the checkpoint with the highest epoch number
+    checkpoint_dirs.sort(key=lambda x: x[1], reverse=True)
+    return checkpoint_dirs[0]
+
+
 def setup_logging(output_dir):
     """Setup logging configuration."""
     os.makedirs(output_dir, exist_ok=True)
@@ -450,6 +480,9 @@ def main():
     
     logger.info(f"Train batches: {len(train_dataloader)}")
     
+    # Check for existing checkpoint
+    checkpoint_path, start_epoch = find_latest_checkpoint(args.output_dir)
+    
     # Create model
     logger.info("Creating address-aware model...")
     model = create_addressaware_model(
@@ -463,6 +496,21 @@ def main():
     
     # Set vocab_stoi for address/daddr distinction in embeddings
     model.bert.embeddings.vocab_stoi = vocab.stoi
+    
+    # Load checkpoint if found
+    if checkpoint_path:
+        logger.info("=" * 80)
+        logger.info(f"RESUMING FROM CHECKPOINT: {checkpoint_path}")
+        logger.info(f"Continuing from epoch {start_epoch}")
+        logger.info("=" * 80)
+        
+        checkpoint_model_path = os.path.join(checkpoint_path, 'pytorch_model.bin')
+        state_dict = torch.load(checkpoint_model_path, map_location='cpu')
+        model.bert.load_state_dict(state_dict)
+        logger.info("✓ Model weights loaded successfully")
+    else:
+        logger.info("No checkpoint found. Starting training from scratch.")
+        start_epoch = 0
     
     model = model.to(device)
     
@@ -500,7 +548,7 @@ def main():
     logger.info("Starting training...")
     logger.info("=" * 80)
     
-    for epoch in range(args.num_epochs):
+    for epoch in range(start_epoch, args.num_epochs):
         logger.info(f"Epoch {epoch + 1}/{args.num_epochs}")
         logger.info("-" * 80)
         
