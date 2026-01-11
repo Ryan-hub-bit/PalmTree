@@ -93,6 +93,9 @@ class BaselinePretrainingDataset(Dataset):
         """
         Extract jump tokens and their target positions.
         
+        Note: tokens already include [CLS] at position 0, so we need to adjust
+        target positions by +1 to account for CLS insertion.
+        
         Returns:
             jump_positions: List of (token_idx, target_position)
         """
@@ -103,9 +106,12 @@ class BaselinePretrainingDataset(Dataset):
             match = jump_pattern.match(token)
             if match:
                 target_pos = int(match.group(1))
+                # Adjust target position to account for CLS token at position 0
+                adjusted_target_pos = target_pos + 1
+                
                 # Ensure target position is within sequence length
-                if target_pos < self.max_len:
-                    jump_positions.append((i, target_pos))
+                if adjusted_target_pos < self.max_len:
+                    jump_positions.append((i, adjusted_target_pos))
         
         return jump_positions
     

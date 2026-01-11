@@ -6,6 +6,7 @@ Compatible with existing finetune.py and fasteval.py interfaces.
 
 import json
 import random
+import re
 import torch
 from pathlib import Path
 
@@ -227,3 +228,250 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
     
     def __len__(self):
         return len(self.tokenized_datas)
+
+
+class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
+    """
+    Contrastive learning dataset for address-aware JSON-based function data.
+    Parses hierarchical position information from address-aware tokens.
+    
+    Compatible with AddressAwareJTransForMLM model.
+    """
+    def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512):
+        functions, ebds = load_paired_data_json(
+            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd
+        )
+        
+        # Regex patterns from address-aware pretrain dataloader
+        self.addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+        self.nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+        self.daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+        self.var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
+        
+        # Pre-process all functions
+        print("Pre-processing address-aware functions...")
+        self.processed_datas = []
+        
+        for func_list in functions:
+            processed_list = []
+            for func_str in func_list:
+                # Parse address-aware tokens
+                processed = self._parse_address_aware_function(func_str, tokenizer, max_length)
+                processed_list.append(processed)
+            self.processed_datas.append(processed_list)
+        
+        self.ebds = ebds
+        self.opt = opt
+        self.tokenizer = tokenizer
+        
+        print(f"Pre-processed {len(self.processed_datas)} address-aware function groups")
+    
+    def _parse_instruction(self, inst_text):
+        """
+        Parse a single address-aware instruction.
+        Format: opcode(0xADDR:bnorm:fnorm:bbnorm) operand1 operand2 ...
+        
+        Returns:
+            tokens: List of token strings
+            positions: List of (binary_pos, function_pos, bb_pos) tuples
+            var_offsets: List of var offset values (-1 for non-var tokens)
+        """
+        tokens = []
+        positions = []
+        var_offsets = []
+        
+        # Split instruction into space-separated parts
+        parts = inst_text.strip().split()
+        
+        for part in parts:
+            # Check for opcode(address) pattern
+            match = self.addr_pattern.match(part)
+            if match:
+                opcode = match.group(1)
+                binary_pos = float(match.group(3))
+                function_pos = float(match.group(4))
+                bb_pos = float(match.group(5))
+                
+                tokens.append(opcode)
+                positions.append((binary_pos, function_pos, bb_pos))
+                var_offsets.append(-1)
+                continue
+            
+            # Check for nested address() pattern
+            nested_match = self.nested_addr_pattern.match(part)
+            if nested_match:
+                binary_pos = float(nested_match.group(2))
+                function_pos = float(nested_match.group(3))
+                bb_pos = float(nested_match.group(4))
+                
+                tokens.append('address')
+                positions.append((binary_pos, function_pos, bb_pos))
+                var_offsets.append(-1)
+                continue
+            
+            # Check for daddr() pattern
+            daddr_match = self.daddr_pattern.match(part)
+            if daddr_match:
+                binary_pos = float(daddr_match.group(2))
+                function_pos = float(daddr_match.group(3))
+                bb_pos = float(daddr_match.group(4))
+                
+                tokens.append('daddr')
+                positions.append((binary_pos, function_pos, bb_pos))
+                var_offsets.append(-1)
+                continue
+            
+            # Check for var() pattern
+            var_match = self.var_pattern.match(part)
+            if var_match:
+                hex_offset = var_match.group(1)
+                offset_val = int(hex_offset, 16)
+                
+                # Handle two's complement for negative offsets
+                if offset_val >= 2**63:
+                    offset_val = offset_val - 2**64
+                
+                tokens.append('var')
+                positions.append((-1.0, -1.0, -1.0))  # var tokens don't have positions
+                var_offsets.append(offset_val)
+                continue
+            
+            # Regular token (no address info)
+            tokens.append(part)
+            positions.append((-1.0, -1.0, -1.0))
+            var_offsets.append(-1)
+        
+        return tokens, positions, var_offsets
+    
+    def _parse_address_aware_function(self, func_str, tokenizer, max_length):
+        """
+        Parse an entire address-aware function string.
+        Format: inst1\tinst2\tinst3...
+        
+        Returns dict with:
+            - input_ids: Token IDs
+            - attention_mask: Attention mask
+            - token_type_ids: Segment labels
+            - binary_pos: Binary position embeddings
+            - function_pos: Function position embeddings
+            - bb_pos: Basic block position embeddings
+            - var_offsets: Variable offset values
+        """
+        instructions = func_str.split('\t')
+        
+        all_tokens = []
+        all_positions = []
+        all_var_offsets = []
+        all_segments = []
+        
+        # Add [CLS] at beginning
+        all_tokens.append('[CLS]')
+        all_positions.append((-1.0, -1.0, -1.0))
+        all_var_offsets.append(-1)
+        all_segments.append(1)  # CLS gets segment 1
+        
+        for inst_idx, inst_text in enumerate(instructions):
+            inst_text = inst_text.strip()
+            if not inst_text:
+                continue
+            
+            tokens, positions, var_offsets = self._parse_instruction(inst_text)
+            
+            inst_segment = inst_idx + 1  # 1-indexed
+            
+            all_tokens.extend(tokens)
+            all_positions.extend(positions)
+            all_var_offsets.extend(var_offsets)
+            all_segments.extend([inst_segment] * len(tokens))
+            
+            # Add [SEP] after each instruction (same segment)
+            all_tokens.append('[SEP]')
+            all_positions.append((-1.0, -1.0, -1.0))
+            all_var_offsets.append(-1)
+            all_segments.append(inst_segment)
+        
+        # Convert tokens to IDs using tokenizer's vocabulary
+        token_ids = []
+        for tok in all_tokens:
+            # Use tokenizer's convert_tokens_to_ids method for proper handling
+            token_id = tokenizer.convert_tokens_to_ids(tok)
+            token_ids.append(token_id)
+        
+        # Truncate or pad to max_length
+        if len(token_ids) > max_length:
+            token_ids = token_ids[:max_length]
+            all_positions = all_positions[:max_length]
+            all_var_offsets = all_var_offsets[:max_length]
+            all_segments = all_segments[:max_length]
+        else:
+            padding_len = max_length - len(token_ids)
+            pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+            token_ids += [pad_token_id] * padding_len
+            all_positions += [(-1.0, -1.0, -1.0)] * padding_len
+            all_var_offsets += [-1] * padding_len
+            all_segments += [0] * padding_len  # Padding gets segment 0
+        
+        # Create attention mask
+        pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+        attention_mask = [1 if tid != pad_token_id else 0 for tid in token_ids]
+        
+        # Split positions into separate lists
+        binary_pos = [p[0] for p in all_positions]
+        function_pos = [p[1] for p in all_positions]
+        bb_pos = [p[2] for p in all_positions]
+        
+        return {
+            'input_ids': torch.LongTensor(token_ids),
+            'attention_mask': torch.LongTensor(attention_mask),
+            'token_type_ids': torch.LongTensor(all_segments),
+            'binary_pos': torch.FloatTensor(binary_pos),
+            'function_pos': torch.FloatTensor(function_pos),
+            'bb_pos': torch.FloatTensor(bb_pos),
+            'var_offsets': torch.LongTensor(all_var_offsets)
+        }
+    
+    def __getitem__(self, idx):
+        """
+        Return address-aware (anchor, positive, negative) triplet.
+        
+        Returns tuple of:
+            - input_ids (3 tensors)
+            - attention_mask (3 tensors)
+            - token_type_ids (3 tensors)
+            - binary_pos (3 tensors)
+            - function_pos (3 tensors)
+            - bb_pos (3 tensors)
+            - var_offsets (3 tensors)
+        """
+        pairs = self.processed_datas[idx]
+        
+        # Select anchor and positive from same function
+        pos = random.randint(0, len(pairs) - 1)
+        pos2 = random.randint(0, len(pairs) - 1)
+        
+        # Select negative from different function
+        neg_idx = random.randint(0, len(self.processed_datas) - 1)
+        while neg_idx == idx:
+            neg_idx = random.randint(0, len(self.processed_datas) - 1)
+        
+        neg_pairs = self.processed_datas[neg_idx]
+        neg_pos = random.randint(0, len(neg_pairs) - 1)
+        
+        anchor = pairs[pos]
+        positive = pairs[pos2]
+        negative = neg_pairs[neg_pos]
+        
+        return (
+            anchor['input_ids'], positive['input_ids'], negative['input_ids'],
+            anchor['attention_mask'], positive['attention_mask'], negative['attention_mask'],
+            anchor['token_type_ids'], positive['token_type_ids'], negative['token_type_ids'],
+            anchor['binary_pos'], positive['binary_pos'], negative['binary_pos'],
+            anchor['function_pos'], positive['function_pos'], negative['function_pos'],
+            anchor['bb_pos'], positive['bb_pos'], negative['bb_pos'],
+            anchor['var_offsets'], positive['var_offsets'], negative['var_offsets']
+        )
+    
+    def __len__(self):
+        return len(self.processed_datas)
+

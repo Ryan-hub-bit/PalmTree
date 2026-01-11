@@ -74,34 +74,184 @@ def extract_function_names_from_binary(binary_path):
     return function_names
 
 
+def build_instruction_address_map(func_data):
+    """
+    Build mapping from basic block addresses to instruction positions.
+    Uses CFG data from pkl file.
+    
+    Returns:
+        Tuple of (addr_to_pos dict, total_instructions)
+    """
+    cfg = func_data.get('cfg')
+    
+    if cfg is None:
+        return {}, 0
+    
+    try:
+        import networkx as nx
+        if not isinstance(cfg, nx.DiGraph):
+            return {}, 0
+    except ImportError:
+        return {}, 0
+    
+    addr_to_pos = {}
+    current_pos = 0
+    
+    # Sort basic blocks by address
+    sorted_blocks = sorted(cfg.nodes())
+    
+    for block_addr in sorted_blocks:
+        block_data = cfg.nodes.get(block_addr, {})
+        bb_asm = block_data.get('asm', [])
+        
+        # Map this block's start address to current position
+        addr_to_pos[block_addr] = current_pos
+        current_pos += len(bb_asm)
+    
+    return addr_to_pos, current_pos
+
+
+def find_jump_targets(func_data):
+    """
+    Extract jump instruction positions and their target positions using CFG.
+    
+    Returns:
+        Dict mapping instruction_position -> target_instruction_position
+    """
+    cfg = func_data.get('cfg')
+    
+    if cfg is None:
+        return {}
+    
+    try:
+        import networkx as nx
+        if not isinstance(cfg, nx.DiGraph):
+            return {}
+    except ImportError:
+        return {}
+    
+    addr_to_pos, _ = build_instruction_address_map(func_data)
+    jump_map = {}
+    
+    # Analyze CFG edges to find jumps
+    for src_addr, tgt_addr in cfg.edges():
+        src_data = cfg.nodes.get(src_addr, {})
+        bb_asm = src_data.get('asm', [])
+        
+        if not bb_asm:
+            continue
+        
+        # Check if last instruction in block is a jump
+        last_instr = bb_asm[-1]
+        parts = last_instr.strip().split()
+        
+        if parts and parts[0].startswith('j'):
+            # This is a jump - map source position to target position
+            src_pos = addr_to_pos.get(src_addr)
+            tgt_pos = addr_to_pos.get(tgt_addr)
+            
+            if src_pos is not None and tgt_pos is not None:
+                # The jump is at the last instruction of the source block
+                jump_instr_pos = src_pos + len(bb_asm) - 1
+                jump_map[jump_instr_pos] = tgt_pos
+    
+    return jump_map
+
+
 def tokenize_function_baseline(func_data):
     """
-    Tokenize function using baseline jTrans approach.
+    Tokenize function using baseline jTrans approach with JUMP_ADDR_X normalization.
+    
+    Uses CFG data to properly resolve jump targets to instruction positions,
+    then converts to token-level positions (JUMP_ADDR_X).
+    
+    Jump addresses beyond position 511 are replaced with:
+    - JUMP_ADDR_EXCEEDED: if target position >= 512
+    - UNK_JUMP_ADDR: if target cannot be resolved
+    
     Returns space-separated token string.
     """
     asm_list = func_data.get('asm', [])
     
+    if not asm_list:
+        return None
+    
+    # Get jump mappings from CFG (instruction position -> target instruction position)
+    jump_map = find_jump_targets(func_data)
+    
+    # First pass: build tokens and map instruction positions to token positions
+    instr_to_token_pos = {}  # instruction index -> starting token index
     tokens = []
-    for asm_str in asm_list:
+    
+    for instr_idx, asm_str in enumerate(asm_list):
+        instr_to_token_pos[instr_idx] = len(tokens)
+        
         try:
-            # Use readidadata.parse_asm for baseline tokenization
-            # Returns: (operator, operand1, operand2, operand3, annotation)
-            operator, op1, op2, op3, annotation = readidadata.parse_asm(asm_str.strip())
+            operator, op1, op2, op3, annotation = readidadata.parse_asm(asm_str)
             
-            # Format as baseline tokens: operator [operands...]
             if operator:
-                inst_tokens = [operator]
-                if op1 is not None:
-                    inst_tokens.append(op1)
-                if op2 is not None:
-                    inst_tokens.append(op2)
-                if op3 is not None:
-                    inst_tokens.append(op3)
-                tokens.extend(inst_tokens)
+                tokens.append(operator)
+            if op1:
+                tokens.append(op1)
+            if op2:
+                tokens.append(op2)
+            if op3:
+                tokens.append(op3)
         except:
             continue
     
-    return ' '.join(tokens)
+    # Second pass: generate final tokens with JUMP_ADDR_X replacement
+    result_tokens = []
+    
+    for instr_idx, asm_str in enumerate(asm_list):
+        try:
+            operator, op1, op2, op3, annotation = readidadata.parse_asm(asm_str)
+            
+            # Add operator
+            if operator:
+                result_tokens.append(operator)
+            
+            # Handle jump instructions
+            if operator and operator.startswith('j'):
+                # Check if we have a CFG-based target for this jump
+                if instr_idx in jump_map:
+                    # Get target instruction position
+                    target_instr_pos = jump_map[instr_idx]
+                    # Convert to token position
+                    target_token_pos = instr_to_token_pos.get(target_instr_pos)
+                    
+                    if target_token_pos is not None:
+                        # Check if exceeds vocab limit
+                        if target_token_pos >= 512:
+                            result_tokens.append('JUMP_ADDR_EXCEEDED')
+                        else:
+                            result_tokens.append(f'JUMP_ADDR_{target_token_pos}')
+                    else:
+                        result_tokens.append('UNK_JUMP_ADDR')
+                else:
+                    # No CFG info - check if it's an unresolvable jump
+                    if op1 and (op1 == 'UNK_ADDR' or op1.startswith('hex_')):
+                        result_tokens.append('UNK_JUMP_ADDR')
+                    elif op1:
+                        result_tokens.append(op1)
+                
+                # Add remaining operands
+                if op2:
+                    result_tokens.append(op2)
+                if op3:
+                    result_tokens.append(op3)
+            else:
+                # Non-jump instruction - add all operands normally
+                if op1:
+                    result_tokens.append(op1)
+                if op2:
+                    result_tokens.append(op2)
+                if op3:
+                    result_tokens.append(op3)
+        except:
+            continue
+    
+    return ' '.join(result_tokens)
 
 
 def create_function_blocks_baseline(pickle_dir, binary_dir):
