@@ -22,7 +22,7 @@ import json
 
 # Add pretrain/address_aware to path for importing address embedding
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'pretrain', 'address_aware'))
-WANDB = True
+WANDB = False  # Disabled - use `wandb login` if you want to enable logging
 
 def get_logger(name):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename=name)
@@ -117,14 +117,14 @@ def train_dp(model, args, train_set, valid_set, logger):
                 
                 optimizer.zero_grad()
                 
-                # Address-aware model forward (wrapped to return pooler_output)
+                # Address-aware model forward (returns dict)
                 output1 = model(
                     token_ids=input_ids1, attention_mask=attention_mask1, 
                     token_type_ids=token_type_ids1,
                     binary_pos=binary_pos1, function_pos=function_pos1, 
                     bb_pos=bb_pos1, var_offsets=var_offsets1
                 )
-                anchor = output1.pooler_output
+                anchor = output1['pooler_output']
                 
                 output2 = model(
                     token_ids=input_ids2, attention_mask=attention_mask2, 
@@ -132,7 +132,7 @@ def train_dp(model, args, train_set, valid_set, logger):
                     binary_pos=binary_pos2, function_pos=function_pos2, 
                     bb_pos=bb_pos2, var_offsets=var_offsets2
                 )
-                pos = output2.pooler_output
+                pos = output2['pooler_output']
                 
                 output3 = model(
                     token_ids=input_ids3, attention_mask=attention_mask3, 
@@ -140,7 +140,7 @@ def train_dp(model, args, train_set, valid_set, logger):
                     binary_pos=binary_pos3, function_pos=function_pos3, 
                     bb_pos=bb_pos3, var_offsets=var_offsets3
                 )
-                neg = output3.pooler_output
+                neg = output3['pooler_output']
                 
             else:
                 # Baseline: 3 fields × 3 (anchor, positive, negative) = 9
@@ -179,31 +179,73 @@ def train_dp(model, args, train_set, valid_set, logger):
                         'global_step' : global_steps,
                     })
 
-        if (epoch+1) % args.eval_every == 0:
-            logger.info(f"Doing Evaluation ...")
-            mrr = finetune_eval(model, valid_dataloader, model_type=args.model_type)
-            logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], mrr={mrr}")
-            if WANDB:
-                wandb.log({
-                    'mrr': mrr
-                })
+        # Skip evaluation during training - evaluate best model at the end
+        # if (epoch+1) % args.eval_every == 0:
+        #     logger.info(f"Doing Evaluation ...")
+        #     eval_results = finetune_eval(model, valid_dataloader, model_type=args.model_type)
+        #     logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], MRR={eval_results['mrr']:.4f}, "
+        #                f"Recall@1={eval_results['recall@1']:.4f}, "
+        #                f"Recall@5={eval_results['recall@5']:.4f}, "
+        #                f"Recall@10={eval_results['recall@10']:.4f}")
+        #     if WANDB:
+        #         wandb.log(eval_results)
+        
         if (epoch+1) % args.save_every == 0:
             logger.info(f"Saving Model ...")
-            model.module.save_pretrained(os.path.join(args.output_path, f"finetune_epoch_{epoch+1}"))
-            logger.info(f"Done")
+            save_dir = os.path.join(args.output_path, f"finetune_epoch_{epoch+1}")
+            model.module.save_pretrained(save_dir)
+            
+            # Save training metadata
+            metadata = {
+                'epoch': epoch + 1,
+                'model_type': args.model_type,
+                'learning_rate': args.lr,
+                'batch_size': args.batch_size,
+                'data_ratio': args.data_ratio
+            }
+            
+            metadata_path = os.path.join(save_dir, 'training_metadata.json')
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=2)
+            
+            logger.info(f"Done - saved to {save_dir}")
+    
+    # Final evaluation on best model (last checkpoint)
+    logger.info("="*80)
+    logger.info("Starting Final Evaluation on Best Model")
+    logger.info("="*80)
+    eval_results = finetune_eval(model, valid_dataloader, model_type=args.model_type)
+    logger.info(f"\nFINAL RESULTS:")
+    logger.info(f"MRR:        {eval_results['mrr']:.4f}")
+    logger.info(f"Recall@1:   {eval_results['recall@1']:.4f}")
+    logger.info(f"Recall@5:   {eval_results['recall@5']:.4f}")
+    logger.info(f"Recall@10:  {eval_results['recall@10']:.4f}")
+    logger.info("="*80)
+    
+    if WANDB:
+        wandb.log({
+            'final_mrr': eval_results['mrr'],
+            'final_recall@1': eval_results['recall@1'],
+            'final_recall@5': eval_results['recall@5'],
+            'final_recall@10': eval_results['recall@10']
+        })
 
 
 def finetune_eval(net, data_loader, model_type='baseline'):
+    """
+    Evaluate using pooling strategy with proper ground truth tracking.
+    Uses dataset metadata to identify which samples belong to same function.
+    """
     net.eval()
     with torch.no_grad():
-        avg=[]
-        gt=[]
-        cons=[]
-        eval_iterator = tqdm(data_loader)
+        # Step 1: Collect all embeddings with their function IDs
+        all_embeddings = []
+        function_ids = []  # Track which function each embedding belongs to
         
-        for i, batch_data in enumerate(eval_iterator):
+        print("Collecting embeddings from validation set...")
+        batch_idx = 0
+        for batch_data in tqdm(data_loader, desc="Encoding"):
             if model_type == 'addressaware':
-                # Unpack address-aware batch (only need anchor and positive for eval)
                 (seq1, seq2, _, mask1, mask2, _, seg1, seg2, _,
                  binary_pos1, binary_pos2, _,
                  function_pos1, function_pos2, _,
@@ -218,59 +260,102 @@ def finetune_eval(net, data_loader, model_type='baseline'):
                 bb_pos1, bb_pos2 = bb_pos1.cuda(), bb_pos2.cuda()
                 var_offsets1, var_offsets2 = var_offsets1.cuda(), var_offsets2.cuda()
                 
-                output1 = model(
+                output1 = net(
                     token_ids=input_ids1, attention_mask=attention_mask1, 
                     token_type_ids=token_type_ids1,
                     binary_pos=binary_pos1, function_pos=function_pos1, 
                     bb_pos=bb_pos1, var_offsets=var_offsets1
                 )
-                anchor = output1.pooler_output
+                emb1 = output1['pooler_output'].cpu()
                 
-                output2 = model(
+                output2 = net(
                     token_ids=input_ids2, attention_mask=attention_mask2, 
                     token_type_ids=token_type_ids2,
                     binary_pos=binary_pos2, function_pos=function_pos2, 
                     bb_pos=bb_pos2, var_offsets=var_offsets2
                 )
-                pos = output2.pooler_output
-                
+                emb2 = output2['pooler_output'].cpu()
             else:
-                # Baseline
                 seq1, seq2, _, mask1, mask2, _, seg1, seg2, _ = batch_data
                 
                 input_ids1, attention_mask1, token_type_ids1 = seq1.cuda(), mask1.cuda(), seg1.cuda()
                 input_ids2, attention_mask2, token_type_ids2 = seq2.cuda(), mask2.cuda(), seg2.cuda()
 
-                output1 = model(input_ids=input_ids1, attention_mask=attention_mask1, token_type_ids=token_type_ids1)
-                anchor = output1.pooler_output
+                output1 = net(input_ids=input_ids1, attention_mask=attention_mask1, token_type_ids=token_type_ids1)
+                emb1 = output1.pooler_output.cpu()
 
-                output2 = model(input_ids=input_ids2, attention_mask=attention_mask2, token_type_ids=token_type_ids2)
-                pos = output2.pooler_output
-
-            ans=0
-            for i in range(len(anchor)):    # check every vector of (vA,vB)
-                vA=anchor[i:i+1].cpu()  #pos[i]
-                sim=[]
-                for j in range(len(pos)):
-                    vB=pos[j:j+1].cpu()   # pos[j]
-                    AB_sim=F.cosine_similarity(vA, vB).item()
-                    sim.append(AB_sim)
-                    if j!=i:
-                        cons.append(AB_sim)
-                sim=np.array(sim)
-                y=np.argsort(-sim)
-                posi=0
-                for j in range(len(pos)):
-                    if y[j]==i:
-                        posi=j+1
-
-                gt.append(sim[i])
-
-                ans+=1/posi
-
-            ans=ans/len(anchor)
-            avg.append(ans)
-        return np.mean(np.array(avg))
+                output2 = net(input_ids=input_ids2, attention_mask=attention_mask2, token_type_ids=token_type_ids2)
+                emb2 = output2.pooler_output.cpu()
+            
+            # Both embeddings from same batch come from SAME functions
+            # This is the key: anchor and positive in same batch are from same function
+            for i in range(len(emb1)):
+                all_embeddings.append(emb1[i])
+                function_ids.append(batch_idx * len(emb1) + i)  # Unique function ID per batch item
+                
+                all_embeddings.append(emb2[i])
+                function_ids.append(batch_idx * len(emb1) + i)  # Same function ID as emb1[i]
+            
+            batch_idx += 1
+        
+        all_embeddings = torch.stack(all_embeddings)  # [N, hidden_size]
+        function_ids = np.array(function_ids)  # [N]
+        
+        print(f"Collected {len(all_embeddings)} embeddings from {len(np.unique(function_ids))} unique functions")
+        print(f"Evaluating function similarity...")
+        
+        # Step 2: For each embedding, find its ground truth pairs (same function_id) and evaluate
+        mrr_list = []
+        recall_at_1 = []
+        recall_at_5 = []
+        recall_at_10 = []
+        
+        for i in tqdm(range(len(all_embeddings)), desc="Evaluating"):
+            query_emb = all_embeddings[i:i+1]
+            query_func_id = function_ids[i]
+            
+            # Compute similarity against ALL embeddings
+            similarities = F.cosine_similarity(query_emb, all_embeddings, dim=1).numpy()
+            
+            # Exclude self-similarity
+            similarities[i] = -np.inf
+            
+            # Rank by similarity (descending)
+            ranked_indices = np.argsort(-similarities)
+            
+            # Find where ANY ground truth appears (same function_id, excluding self)
+            ground_truth_mask = (function_ids == query_func_id) & (np.arange(len(function_ids)) != i)
+            ground_truth_indices = np.where(ground_truth_mask)[0]
+            
+            if len(ground_truth_indices) == 0:
+                continue  # Skip if no ground truth pairs
+            
+            # Find best rank among all ground truth pairs
+            ranks = []
+            for gt_idx in ground_truth_indices:
+                rank = np.where(ranked_indices == gt_idx)[0][0] + 1
+                ranks.append(rank)
+            
+            best_rank = min(ranks)  # Best rank among all ground truth pairs
+            
+            # Compute metrics using best rank
+            mrr_list.append(1.0 / best_rank)
+            recall_at_1.append(1.0 if best_rank <= 1 else 0.0)
+            recall_at_5.append(1.0 if best_rank <= 5 else 0.0)
+            recall_at_10.append(1.0 if best_rank <= 10 else 0.0)
+        
+        # Compute final metrics
+        mrr = np.mean(mrr_list)
+        r1 = np.mean(recall_at_1)
+        r5 = np.mean(recall_at_5)
+        r10 = np.mean(recall_at_10)
+        
+        return {
+            'mrr': mrr,
+            'recall@1': r1,
+            'recall@5': r5,
+            'recall@10': r10
+        }
 
 class BinBertModel(BertModel):
     def __init__(self, config, add_pooling_layer=True):
@@ -293,10 +378,9 @@ class AddressAwareBertWrapper(nn.Module):
         """
         Forward pass returning pooled output (CLS token).
         
-        Returns:
-            SimpleNamespace with:
-                - pooler_output: [batch_size, hidden_size]
-                - last_hidden_state: [batch_size, seq_len, hidden_size]
+        Returns dict compatible with DataParallel:
+            - pooler_output: [batch_size, hidden_size]
+            - last_hidden_state: [batch_size, seq_len, hidden_size]
         """
         # Get embeddings
         embeddings = self.bert.embeddings(
@@ -317,12 +401,39 @@ class AddressAwareBertWrapper(nn.Module):
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
         pooler_output = sequence_output[:, 0, :]  # CLS token
         
-        # Return in format compatible with BertModel output
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            pooler_output=pooler_output,
-            last_hidden_state=sequence_output
-        )
+        # Return dict (DataParallel compatible)
+        return {
+            'pooler_output': pooler_output,
+            'last_hidden_state': sequence_output
+        }
+    
+    def save_pretrained(self, save_directory):
+        """
+        Save the model weights and config to a directory.
+        Compatible with HuggingFace's save_pretrained interface.
+        Saves everything needed to reload the model later.
+        """
+        os.makedirs(save_directory, exist_ok=True)
+        
+        # Save the BERT model state dict
+        model_path = os.path.join(save_directory, 'pytorch_model.bin')
+        torch.save(self.bert.state_dict(), model_path)
+        
+        # Save config
+        if hasattr(self.bert, 'config'):
+            config_path = os.path.join(save_directory, 'config.json')
+            with open(config_path, 'w') as f:
+                json.dump(self.bert.config.to_dict(), f, indent=2)
+        
+        # Save model type marker
+        model_info_path = os.path.join(save_directory, 'model_info.json')
+        with open(model_info_path, 'w') as f:
+            json.dump({
+                'model_type': 'address_aware_jtrans',
+                'wrapper_class': 'AddressAwareBertWrapper'
+            }, f, indent=2)
+        
+        print(f"Model saved to {save_directory}")
 
 
 if __name__ == '__main__':
@@ -354,6 +465,8 @@ if __name__ == '__main__':
                         help='data format: pickle (original) or json (baseline/address-aware)')
     parser.add_argument("--func_blocks", type=str, help='path to func_blocks.json (for json data_type)')
     parser.add_argument("--ground_truth", type=str, help='path to ground_truth.json (for json data_type)')
+    parser.add_argument("--data_ratio", type=float, default=1.0,
+                        help='ratio of data to use (0.0 to 1.0), default 1.0 for all data')
 
     args = parser.parse_args()
 
@@ -364,6 +477,10 @@ if __name__ == '__main__':
     logger = get_logger(f"jTrans_{args.lr}_batchsize_{args.batch_size}_weight_decay_{args.weight_decay}_{tim}")
 
     logger.info(f"Loading Pretrained Model from {args.model_path} ...")
+    
+    # Load tokenizer first (needed for vocab_stoi in address-aware mode)
+    tokenizer = BertTokenizer.from_pretrained(args.tokenizer)
+    logger.info("Tokenizer loaded ...")
     
     if args.model_type == 'addressaware':
         # Load address-aware BERT encoder (pretrain only saves bert.state_dict())
@@ -388,6 +505,9 @@ if __name__ == '__main__':
         
         bert_model = BertModel(config, add_pooling_layer=False)
         
+        # Create vocab_stoi from tokenizer
+        vocab_stoi = tokenizer.get_vocab()  # Returns {token: id} dict
+        
         # Replace embeddings with address-aware version
         bert_model.embeddings = AddressAwareBERTEmbedding(
             vocab_size=config_dict['vocab_size'],
@@ -397,7 +517,7 @@ if __name__ == '__main__':
             use_address_embedding=True,
             use_var_embedding=True,
             segment_types=256,
-            vocab_stoi=None  # Will use default indices
+            vocab_stoi=vocab_stoi  # Pass tokenizer vocab
         )
         
         # Load pretrained weights
@@ -431,8 +551,6 @@ if __name__ == '__main__':
     print(model)
 
     logger.info("Done ...")
-    tokenizer = BertTokenizer.from_pretrained(args.tokenizer)
-    logger.info("Tokenizer Done ...")
 
     load_train, load_test = False, False
     # load_train = f"{args.load_path}/jTrans-{args.train_path.split('/')[-1]}.pkl"
@@ -446,21 +564,21 @@ if __name__ == '__main__':
             # Address-aware uses hierarchical position embeddings
             ft_train_dataset = FunctionDataset_CL_AddressAware_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
             ft_valid_dataset = FunctionDataset_CL_AddressAware_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
         else:
             # Baseline uses standard token sequences
             ft_train_dataset = FunctionDataset_CL_Load_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
             ft_valid_dataset = FunctionDataset_CL_Load_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
     else:
         # Use original pickle-based datasets

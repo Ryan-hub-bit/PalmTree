@@ -11,7 +11,7 @@ import torch
 from pathlib import Path
 
 
-def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 'O2', 'O3'], add_ebd=False):
+def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 'O2', 'O3'], add_ebd=False, data_ratio=1.0):
     """
     Load function pairs from JSON format (baseline or address-aware).
     
@@ -24,6 +24,7 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
         ground_truth_path: Path to ground_truth.json or ground_truth_baseline.json
         opt: List of optimization levels to include
         add_ebd: Whether to add embedding metadata
+        data_ratio: Ratio of data to use (0.0 to 1.0), default 1.0 (all data)
     """
     # Load data
     with open(func_blocks_path, 'r') as f:
@@ -35,17 +36,15 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
     # Build mapping: (binary, func_name) -> {opt: func_id}
     func_mapping = {}
     for pair in ground_truth['pairs']:
-        key = (pair['binary'], pair['func_name'])
+        key = (pair['binary_name'], pair['function_name'])
         
         if key not in func_mapping:
             func_mapping[key] = {}
         
-        # Add both functions from the pair
-        opt1, opt2 = pair['opt1'], pair['opt2']
-        func_id1, func_id2 = pair['func_id1'], pair['func_id2']
-        
-        func_mapping[key][opt1] = func_id1
-        func_mapping[key][opt2] = func_id2
+        # Add function IDs for each optimization level
+        for opt_level in ['O0', 'O1', 'O2', 'O3', 'Os']:
+            if opt_level in pair:
+                func_mapping[key][opt_level] = pair[opt_level]
     
     # Convert to original format
     functions = []
@@ -67,7 +66,7 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
             if o in opt_dict:
                 func_id = opt_dict[o]
                 func_data = func_blocks[str(func_id)]  # JSON keys are strings
-                func_str = func_data['tokens']
+                func_str = func_data['instructions']  # Use 'instructions' key from JSON
                 
                 if add_ebd:
                     ebd_entry[o] = len(func_list)
@@ -79,6 +78,15 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
             
             if add_ebd:
                 func_emb_data.append(ebd_entry)
+    
+    # Apply data ratio if specified
+    if data_ratio < 1.0:
+        import math
+        subset_size = max(1, int(len(functions) * data_ratio))
+        functions = functions[:subset_size]
+        if add_ebd:
+            func_emb_data = func_emb_data[:subset_size]
+        print(f'Using {data_ratio*100:.1f}% of data: {subset_size} unique functions')
     
     print(f'TOTAL {sum(len(f) for f in functions)} function variants across {len(functions)} unique functions')
     
@@ -128,9 +136,9 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
     Pre-tokenized dataset version for JSON data.
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
-                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512):
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0):
         functions, ebds = load_paired_data_json(
-            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd
+            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )
         
         # Pre-tokenize all functions
@@ -238,9 +246,9 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
     Compatible with AddressAwareJTransForMLM model.
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
-                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512):
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0):
         functions, ebds = load_paired_data_json(
-            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd
+            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )
         
         # Regex patterns from address-aware pretrain dataloader
