@@ -10,7 +10,7 @@ python finetune.py \
     --func_blocks /work/kliu14/jtransdata/func_blocks_addr.json \
     --ground_truth /work/kliu14/jtransdata/ground_truth_addr.json \
     --tokenizer /home/kliu14/AAE/extern/jTrans/pretrain/address_aware \
-    --model_path /home/kliu14/AAE/output/jtrans/addressaware_pretrain/checkpoint_epoch_10 \
+    --model_path /work/kliu14/jtransoutput/addressaware_pretrain/checkpoint_epoch_10 \
     --output_path /work/kliu14/jtransoutput/addressaware_finetune \
     --model_type addressaware \
     --batch_size 32 \
