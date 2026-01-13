@@ -11,7 +11,7 @@ import torch
 from pathlib import Path
 
 
-def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 'O2', 'O3'], add_ebd=False):
+def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 'O2', 'O3'], add_ebd=False, data_ratio=1.0):
     """
     Load function pairs from JSON format (baseline or address-aware).
     
@@ -24,28 +24,87 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
         ground_truth_path: Path to ground_truth.json or ground_truth_baseline.json
         opt: List of optimization levels to include
         add_ebd: Whether to add embedding metadata
+        data_ratio: Ratio of data to use (0.0 to 1.0), default 1.0 for all data
     """
-    # Load data
-    with open(func_blocks_path, 'r') as f:
-        func_blocks = json.load(f)
-    
+    # Load ground truth
+    print(f'Loading ground truth from {ground_truth_path}...')
     with open(ground_truth_path, 'r') as f:
         ground_truth = json.load(f)
     
+    all_pairs = ground_truth['pairs']
+    total_pairs = len(all_pairs)
+    
+    # Apply data_ratio to limit number of pairs BEFORE processing
+    if data_ratio < 1.0:
+        # For quick testing with address-aware (millions of pairs), cap at reasonable limit
+        if data_ratio <= 0.001:
+            num_pairs = 500  # Fixed cap for quick testing
+            print(f'Quick test mode: using {num_pairs} pairs (data_ratio={data_ratio}, total available={total_pairs})')
+        else:
+            num_pairs = int(total_pairs * data_ratio)
+            print(f'Using {num_pairs} / {total_pairs} pairs (data_ratio={data_ratio})')
+        
+        num_pairs = max(1, min(num_pairs, total_pairs))
+        all_pairs = all_pairs[:num_pairs]
+    else:
+        print(f'Using all {total_pairs} pairs')
+    
+    # Collect only the function IDs we need
+    needed_func_ids = set()
+    print(f'Collecting needed function IDs from {len(all_pairs)} pairs...')
+    for pair in all_pairs:
+        # Handle both baseline format (binary_name, function_name) and address-aware format (binary, func_name)
+        binary = pair.get('binary_name', pair.get('binary'))
+        func_name = pair.get('function_name', pair.get('func_name'))
+        
+        # Baseline format: has O0, O1, O2, O3, Os fields directly
+        # Address-aware format: has opt1, opt2, func_id1, func_id2
+        if 'opt1' in pair and 'opt2' in pair:
+            # Address-aware format
+            needed_func_ids.add(str(pair['func_id1']))
+            needed_func_ids.add(str(pair['func_id2']))
+        else:
+            # Baseline format - all optimization levels in one entry
+            for opt_level in ['O0', 'O1', 'O2', 'O3', 'Os']:
+                if opt_level in pair:
+                    needed_func_ids.add(str(pair[opt_level]))
+    
+    print(f'Loading only {len(needed_func_ids)} needed functions from {func_blocks_path}...')
+    
+    # Load ONLY the needed function blocks
+    func_blocks = {}
+    with open(func_blocks_path, 'r') as f:
+        all_blocks = json.load(f)
+        for func_id in needed_func_ids:
+            if func_id in all_blocks:
+                func_blocks[func_id] = all_blocks[func_id]
+    
+    print(f'Loaded {len(func_blocks)} function blocks')
+    
     # Build mapping: (binary, func_name) -> {opt: func_id}
     func_mapping = {}
-    for pair in ground_truth['pairs']:
-        key = (pair['binary'], pair['func_name'])
+    for pair in all_pairs:
+        # Handle both baseline format (binary_name, function_name) and address-aware format (binary, func_name)
+        binary = pair.get('binary_name', pair.get('binary'))
+        func_name = pair.get('function_name', pair.get('func_name'))
+        key = (binary, func_name)
         
         if key not in func_mapping:
             func_mapping[key] = {}
         
-        # Add both functions from the pair
-        opt1, opt2 = pair['opt1'], pair['opt2']
-        func_id1, func_id2 = pair['func_id1'], pair['func_id2']
-        
-        func_mapping[key][opt1] = func_id1
-        func_mapping[key][opt2] = func_id2
+        # Baseline format: has O0, O1, O2, O3, Os fields directly
+        # Address-aware format: has opt1, opt2, func_id1, func_id2
+        if 'opt1' in pair and 'opt2' in pair:
+            # Address-aware format
+            opt1, opt2 = pair['opt1'], pair['opt2']
+            func_id1, func_id2 = pair['func_id1'], pair['func_id2']
+            func_mapping[key][opt1] = func_id1
+            func_mapping[key][opt2] = func_id2
+        else:
+            # Baseline format - all optimization levels in one entry
+            for opt_level in ['O0', 'O1', 'O2', 'O3', 'Os']:
+                if opt_level in pair:
+                    func_mapping[key][opt_level] = pair[opt_level]
     
     # Convert to original format
     functions = []
@@ -67,7 +126,14 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
             if o in opt_dict:
                 func_id = opt_dict[o]
                 func_data = func_blocks[str(func_id)]  # JSON keys are strings
-                func_str = func_data['tokens']
+                
+                # Handle both baseline format (tokens) and address-aware format (instructions)
+                if 'tokens' in func_data:
+                    func_str = func_data['tokens']
+                elif 'instructions' in func_data:
+                    func_str = func_data['instructions']
+                else:
+                    continue
                 
                 if add_ebd:
                     ebd_entry[o] = len(func_list)
@@ -128,14 +194,17 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
     Pre-tokenized dataset version for JSON data.
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
-                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512):
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0):
         functions, ebds = load_paired_data_json(
-            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd
+            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )
         
         # Pre-tokenize all functions
         print("Pre-tokenizing functions...")
         self.tokenized_datas = []
+        
+        # Get vocab size for validation
+        vocab_size = len(tokenizer)
         
         for func_list in functions:
             tokenized_list = []
@@ -150,8 +219,13 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
                     truncation=True,
                     return_tensors='pt'
                 )
+                
+                # Clip token IDs to vocab size to prevent CUDA errors
+                input_ids = encoded['input_ids'].squeeze(0)
+                input_ids = torch.clamp(input_ids, 0, vocab_size - 1)
+                
                 tokenized_list.append({
-                    'input_ids': encoded['input_ids'].squeeze(0),
+                    'input_ids': input_ids,
                     'attention_mask': encoded['attention_mask'].squeeze(0),
                     'token_type_ids': token_type_ids
                 })
@@ -164,39 +238,17 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
     
     def _create_segment_labels(self, func_str, tokenizer, max_length):
         """
-        Create segment labels (token_type_ids) based on instruction boundaries.
-        Instructions are separated by tabs (\t).
+        Create segment labels (token_type_ids) for baseline model.
+        Baseline uses simple 0/1 alternating segments or all zeros.
         
         Returns:
             torch.Tensor: segment labels matching tokenized sequence length
         """
         import torch
         
-        # Split by tabs to get instructions
-        instructions = func_str.split('\t')
-        
-        # Tokenize each instruction separately to get token counts
-        segment_labels = []
-        
-        for inst_idx, inst in enumerate(instructions):
-            if not inst.strip():
-                continue
-            
-            # Tokenize this instruction to see how many tokens it produces
-            inst_tokens = tokenizer.tokenize(inst.strip())
-            # Segment ID = instruction index + 1 (to match pretraining)
-            segment_id = inst_idx + 1
-            segment_labels.extend([segment_id] * len(inst_tokens))
-        
-        # Add [CLS] token at beginning (segment 1)
-        segment_labels = [1] + segment_labels
-        
-        # Truncate or pad to max_length
-        if len(segment_labels) > max_length:
-            segment_labels = segment_labels[:max_length]
-        else:
-            # Pad with 0s
-            segment_labels = segment_labels + [0] * (max_length - len(segment_labels))
+        # For baseline model, use simple segment labels (all 0s)
+        # BERT's token_type_embeddings only has 2 types (0 and 1)
+        segment_labels = [0] * max_length
         
         return torch.tensor(segment_labels, dtype=torch.long)
     
@@ -238,9 +290,9 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
     Compatible with AddressAwareJTransForMLM model.
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
-                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512):
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0):
         functions, ebds = load_paired_data_json(
-            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd
+            func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )
         
         # Regex patterns from address-aware pretrain dataloader
@@ -365,11 +417,11 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
         all_var_offsets = []
         all_segments = []
         
-        # Add [CLS] at beginning
-        all_tokens.append('[CLS]')
+        # Add <sos> at beginning (address-aware uses <sos> not [CLS])
+        all_tokens.append('<sos>')
         all_positions.append((-1.0, -1.0, -1.0))
         all_var_offsets.append(-1)
-        all_segments.append(1)  # CLS gets segment 1
+        all_segments.append(1)  # SOS gets segment 1
         
         for inst_idx, inst_text in enumerate(instructions):
             inst_text = inst_text.strip()
@@ -385,17 +437,21 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
             all_var_offsets.extend(var_offsets)
             all_segments.extend([inst_segment] * len(tokens))
             
-            # Add [SEP] after each instruction (same segment)
-            all_tokens.append('[SEP]')
+            # Add <eos> after each instruction (same segment, address-aware uses <eos> not [SEP])
+            all_tokens.append('<eos>')
             all_positions.append((-1.0, -1.0, -1.0))
             all_var_offsets.append(-1)
             all_segments.append(inst_segment)
         
         # Convert tokens to IDs using tokenizer's vocabulary
         token_ids = []
+        unk_token_id = tokenizer.unk_token_id if tokenizer.unk_token_id is not None else 1  # Default to 1 (<unk>)
         for tok in all_tokens:
             # Use tokenizer's convert_tokens_to_ids method for proper handling
             token_id = tokenizer.convert_tokens_to_ids(tok)
+            # Handle None return for unknown tokens
+            if token_id is None:
+                token_id = unk_token_id
             token_ids.append(token_id)
         
         # Truncate or pad to max_length

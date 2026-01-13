@@ -10,6 +10,7 @@ import numpy as np
 from tqdm import tqdm
 from data import load_paired_data, FunctionDataset_CL, FunctionDataset_CL_Load
 from data_json import FunctionDataset_CL_JSON, FunctionDataset_CL_Load_JSON, FunctionDataset_CL_AddressAware_JSON
+from finetune_eval_with_pool import finetune_eval_cached, generate_embeddings, evaluate_with_pool
 from transformers import AdamW
 import torch.nn.functional as F
 import argparse
@@ -18,11 +19,12 @@ import logging
 import time
 import data
 import pickle
+from pathlib import Path
 import json
 
 # Add pretrain/address_aware to path for importing address embedding
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'pretrain', 'address_aware'))
-WANDB = True
+WANDB = False  # Set to True and run `wandb login` if you want to enable logging
 
 def get_logger(name):
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', filename=name)
@@ -55,8 +57,8 @@ def train_dp(model, args, train_set, valid_set, logger):
     device = torch.device("cuda")
     model.to(device)
     logger.info("Finished Initialization...")
-    train_dataloader = DataLoader(train_set, batch_size=args.batch_size, num_workers=48, shuffle=True, prefetch_factor=4)
-    valid_dataloader = DataLoader(valid_set, batch_size=args.eval_batch_size, num_workers=48, shuffle=True, prefetch_factor=4)
+    train_dataloader = DataLoader(train_set, batch_size=args.batch_size, num_workers=4, shuffle=True, prefetch_factor=2)
+    valid_dataloader = DataLoader(valid_set, batch_size=args.eval_batch_size, num_workers=4, shuffle=True, prefetch_factor=2)
 
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = []
@@ -84,7 +86,13 @@ def train_dp(model, args, train_set, valid_set, logger):
 
     optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
 
-    model = nn.DataParallel(model)
+    # Only use DataParallel if multiple GPUs available
+    if torch.cuda.device_count() > 1:
+        print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
+        model = nn.DataParallel(model)
+    else:
+        print("Using single GPU")
+    
     global_steps = 0
     etc=0
     for epoch in range(args.epoch):
@@ -124,7 +132,7 @@ def train_dp(model, args, train_set, valid_set, logger):
                     binary_pos=binary_pos1, function_pos=function_pos1, 
                     bb_pos=bb_pos1, var_offsets=var_offsets1
                 )
-                anchor = output1.pooler_output
+                anchor = output1['pooler_output']
                 
                 output2 = model(
                     token_ids=input_ids2, attention_mask=attention_mask2, 
@@ -132,7 +140,7 @@ def train_dp(model, args, train_set, valid_set, logger):
                     binary_pos=binary_pos2, function_pos=function_pos2, 
                     bb_pos=bb_pos2, var_offsets=var_offsets2
                 )
-                pos = output2.pooler_output
+                pos = output2['pooler_output']
                 
                 output3 = model(
                     token_ids=input_ids3, attention_mask=attention_mask3, 
@@ -140,7 +148,7 @@ def train_dp(model, args, train_set, valid_set, logger):
                     binary_pos=binary_pos3, function_pos=function_pos3, 
                     bb_pos=bb_pos3, var_offsets=var_offsets3
                 )
-                neg = output3.pooler_output
+                neg = output3['pooler_output']
                 
             else:
                 # Baseline: 3 fields × 3 (anchor, positive, negative) = 9
@@ -181,16 +189,43 @@ def train_dp(model, args, train_set, valid_set, logger):
 
         if (epoch+1) % args.eval_every == 0:
             logger.info(f"Doing Evaluation ...")
-            mrr = finetune_eval(model, valid_dataloader, model_type=args.model_type)
-            logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], mrr={mrr}")
-            if WANDB:
-                wandb.log({
-                    'mrr': mrr
-                })
+            
+            if args.use_cached_eval:
+                # Use embedding cache for pool-based evaluation
+                cache_path = None
+                if args.embedding_cache_dir:
+                    cache_dir = Path(args.embedding_cache_dir)
+                    cache_dir.mkdir(parents=True, exist_ok=True)
+                    cache_path = cache_dir / f"embeddings_epoch_{epoch+1}.npz"
+                
+                # Pass the dataset directly (not dataloader)
+                metrics = finetune_eval_cached(
+                    model, valid_set, model_type=args.model_type,
+                    embedding_cache_path=str(cache_path) if cache_path else None,
+                    pool_size=args.eval_pool_size,
+                    force_regenerate=(epoch == 0)  # Regenerate first epoch
+                )
+                mrr = metrics['mrr']
+                logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], mrr={mrr:.4f}, "
+                           f"recall@1={metrics['recall@1']:.4f}, recall@5={metrics['recall@5']:.4f}, "
+                           f"pool_size={args.eval_pool_size}")
+                if WANDB:
+                    wandb.log(metrics)
+            else:
+                # Original batch-based evaluation
+                mrr = finetune_eval(model, valid_dataloader, model_type=args.model_type)
+                logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], mrr={mrr}")
+                if WANDB:
+                    wandb.log({
+                        'mrr': mrr
+                    })
         if (epoch+1) % args.save_every == 0:
             logger.info(f"Saving Model ...")
-            model.module.save_pretrained(os.path.join(args.output_path, f"finetune_epoch_{epoch+1}"))
-            logger.info(f"Done")
+            save_dir = os.path.join(args.output_path, f"finetune_epoch_{epoch+1}")
+            # Handle both DataParallel and single GPU models
+            model_to_save = model.module if hasattr(model, 'module') else model
+            model_to_save.save_pretrained(save_dir)
+            logger.info(f"Model saved to {save_dir}")
 
 
 def finetune_eval(net, data_loader, model_type='baseline'):
@@ -224,7 +259,7 @@ def finetune_eval(net, data_loader, model_type='baseline'):
                     binary_pos=binary_pos1, function_pos=function_pos1, 
                     bb_pos=bb_pos1, var_offsets=var_offsets1
                 )
-                anchor = output1.pooler_output
+                anchor = output1['pooler_output']
                 
                 output2 = model(
                     token_ids=input_ids2, attention_mask=attention_mask2, 
@@ -232,7 +267,7 @@ def finetune_eval(net, data_loader, model_type='baseline'):
                     binary_pos=binary_pos2, function_pos=function_pos2, 
                     bb_pos=bb_pos2, var_offsets=var_offsets2
                 )
-                pos = output2.pooler_output
+                pos = output2['pooler_output']
                 
             else:
                 # Baseline
@@ -276,7 +311,23 @@ class BinBertModel(BertModel):
     def __init__(self, config, add_pooling_layer=True):
         super().__init__(config)
         self.config = config
-        self.embeddings.position_embeddings=self.embeddings.word_embeddings
+        
+        # Baseline model: position_embeddings = word_embeddings (share weights)
+        # This replicates the pretraining behavior
+        self.embeddings.position_embeddings.weight = self.embeddings.word_embeddings.weight
+        
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None, **kwargs):
+        # Use input_ids as position_ids to index into the shared embedding matrix
+        if position_ids is None:
+            position_ids = input_ids.clone()
+        
+        return super().forward(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,
+            **kwargs
+        )
 
 
 class AddressAwareBertWrapper(nn.Module):
@@ -294,7 +345,7 @@ class AddressAwareBertWrapper(nn.Module):
         Forward pass returning pooled output (CLS token).
         
         Returns:
-            SimpleNamespace with:
+            Dict with:
                 - pooler_output: [batch_size, hidden_size]
                 - last_hidden_state: [batch_size, seq_len, hidden_size]
         """
@@ -317,12 +368,43 @@ class AddressAwareBertWrapper(nn.Module):
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
         pooler_output = sequence_output[:, 0, :]  # CLS token
         
-        # Return in format compatible with BertModel output
-        from types import SimpleNamespace
-        return SimpleNamespace(
-            pooler_output=pooler_output,
-            last_hidden_state=sequence_output
-        )
+        # Return as dict (compatible with DataParallel)
+        return {
+            'pooler_output': pooler_output,
+            'last_hidden_state': sequence_output
+        }
+    
+    def save_pretrained(self, save_directory):
+        """
+        Save the model to a directory (compatible with HuggingFace interface).
+        """
+        import os
+        import json
+        os.makedirs(save_directory, exist_ok=True)
+        
+        # Save the wrapped BERT model's state dict
+        model_path = os.path.join(save_directory, 'pytorch_model.bin')
+        torch.save(self.bert.state_dict(), model_path)
+        
+        # Save config (extract from the BERT model's config if available)
+        config_path = os.path.join(save_directory, 'config.json')
+        
+        # Try to get config from the model if it exists
+        if hasattr(self.bert, 'config'):
+            config = self.bert.config.to_dict()
+        else:
+            # Otherwise, construct config from model structure
+            config = {
+                'vocab_size': self.bert.embeddings.token_embedding.num_embeddings,
+                'hidden_size': self.bert.embeddings.embed_size,
+                'num_hidden_layers': len(self.bert.encoder.layer),
+                'num_attention_heads': self.bert.encoder.layer[0].attention.self.num_attention_heads,
+                'max_position_embeddings': 512,
+                'type_vocab_size': self.bert.embeddings.segment_embedding.num_embeddings,
+            }
+        
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=2)
 
 
 if __name__ == '__main__':
@@ -354,6 +436,14 @@ if __name__ == '__main__':
                         help='data format: pickle (original) or json (baseline/address-aware)')
     parser.add_argument("--func_blocks", type=str, help='path to func_blocks.json (for json data_type)')
     parser.add_argument("--ground_truth", type=str, help='path to ground_truth.json (for json data_type)')
+    parser.add_argument("--data_ratio", type=float, default=1.0,
+                        help='ratio of data to use (0.0 to 1.0), default 1.0 for all data')
+    parser.add_argument("--eval_pool_size", type=int, default=100, 
+                        help='pool size for evaluation (positive + negatives)')
+    parser.add_argument("--use_cached_eval", action='store_true', 
+                        help='use cached embeddings for evaluation')
+    parser.add_argument("--embedding_cache_dir", type=str, default=None, 
+                        help='directory to cache embeddings')
 
     args = parser.parse_args()
 
@@ -368,6 +458,13 @@ if __name__ == '__main__':
     if args.model_type == 'addressaware':
         # Load address-aware BERT encoder (pretrain only saves bert.state_dict())
         from pretrain.address_aware.address_embedding import AddressAwareBERTEmbedding
+        import pickle
+        
+        # Load vocab for address vs daddr distinction
+        vocab_path = os.path.join(args.tokenizer, 'vocab_addr.pkl')
+        with open(vocab_path, 'rb') as f:
+            vocab = pickle.load(f)
+        vocab_stoi = vocab.stoi  # string to index mapping
         
         # Load config
         import json
@@ -397,7 +494,7 @@ if __name__ == '__main__':
             use_address_embedding=True,
             use_var_embedding=True,
             segment_types=256,
-            vocab_stoi=None  # Will use default indices
+            vocab_stoi=vocab_stoi  # Pass vocab mapping for address vs daddr distinction
         )
         
         # Load pretrained weights
@@ -410,8 +507,25 @@ if __name__ == '__main__':
         logger.info("Loaded address-aware BERT encoder")
         
     else:
-        # Load baseline model (position_embeddings = word_embeddings)
-        model = BinBertModel.from_pretrained(args.model_path)
+        # Load baseline model 
+        # The pretrained model has position_embeddings = word_embeddings (size 2902)
+        # We need to load with the correct size
+        from transformers import BertConfig as BaseConfig
+        config_path = os.path.join(args.model_path, 'config.json')
+        with open(config_path, 'r') as f:
+            config_dict = json.load(f)
+        
+        # Override max_position_embeddings to match vocab_size
+        config_dict['max_position_embeddings'] = config_dict['vocab_size']
+        
+        config = BaseConfig(**config_dict)
+        model = BinBertModel(config)
+        
+        # Load weights
+        weights_path = os.path.join(args.model_path, 'pytorch_model.bin')
+        state_dict = torch.load(weights_path, map_location='cpu')
+        model.load_state_dict(state_dict, strict=False)  # strict=False for pooler
+        logger.info(f"Loaded baseline model with position_embeddings size {config.max_position_embeddings}")
 
     freeze_layer_count = args.freeze_cnt
     # Handle wrapper for address-aware
@@ -446,21 +560,21 @@ if __name__ == '__main__':
             # Address-aware uses hierarchical position embeddings
             ft_train_dataset = FunctionDataset_CL_AddressAware_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
             ft_valid_dataset = FunctionDataset_CL_AddressAware_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
         else:
             # Baseline uses standard token sequences
             ft_train_dataset = FunctionDataset_CL_Load_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
             ft_valid_dataset = FunctionDataset_CL_Load_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
             )
     else:
         # Use original pickle-based datasets
