@@ -496,11 +496,57 @@ def main():
         num_training_steps=total_steps
     )
     
+    # Check for existing checkpoints to resume training
+    start_epoch = 0
+    if os.path.exists(args.output_dir):
+        # Find all checkpoint directories
+        checkpoint_dirs = [d for d in os.listdir(args.output_dir) 
+                          if d.startswith('checkpoint_epoch_') and 
+                          os.path.isdir(os.path.join(args.output_dir, d))]
+        
+        if checkpoint_dirs:
+            # Extract epoch numbers and find the latest
+            epoch_nums = [int(d.split('_')[-1]) for d in checkpoint_dirs]
+            latest_epoch = max(epoch_nums)
+            latest_checkpoint_dir = os.path.join(args.output_dir, f'checkpoint_epoch_{latest_epoch}')
+            
+            logger.info("=" * 80)
+            logger.info(f"Found existing checkpoint at epoch {latest_epoch}")
+            logger.info(f"Loading checkpoint from: {latest_checkpoint_dir}")
+            
+            try:
+                # Load model state
+                checkpoint_path = os.path.join(latest_checkpoint_dir, 'pytorch_model.bin')
+                if os.path.exists(checkpoint_path):
+                    actual_model = model.module if isinstance(model, nn.DataParallel) else model
+                    actual_model.bert.load_state_dict(torch.load(checkpoint_path, map_location=device))
+                    logger.info("✓ Model weights loaded")
+                
+                # Load optimizer state if exists
+                optimizer_path = os.path.join(latest_checkpoint_dir, 'optimizer.pt')
+                if os.path.exists(optimizer_path):
+                    optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
+                    logger.info("✓ Optimizer state loaded")
+                
+                # Load scheduler state if exists
+                scheduler_path = os.path.join(latest_checkpoint_dir, 'scheduler.pt')
+                if os.path.exists(scheduler_path):
+                    scheduler.load_state_dict(torch.load(scheduler_path, map_location=device))
+                    logger.info("✓ Scheduler state loaded")
+                
+                start_epoch = latest_epoch
+                logger.info(f"Resuming training from epoch {start_epoch + 1}")
+                logger.info("=" * 80)
+            except Exception as e:
+                logger.warning(f"Failed to load checkpoint: {e}")
+                logger.warning("Starting training from scratch")
+                start_epoch = 0
+    
     # Training loop
     logger.info("Starting training...")
     logger.info("=" * 80)
     
-    for epoch in range(args.num_epochs):
+    for epoch in range(start_epoch, args.num_epochs):
         logger.info(f"Epoch {epoch + 1}/{args.num_epochs}")
         logger.info("-" * 80)
         
@@ -521,6 +567,10 @@ def main():
             # Unwrap DataParallel if needed
             actual_model = model.module if isinstance(model, nn.DataParallel) else model
             torch.save(actual_model.bert.state_dict(), os.path.join(checkpoint_dir, 'pytorch_model.bin'))
+            
+            # Save optimizer and scheduler states for resumption
+            torch.save(optimizer.state_dict(), os.path.join(checkpoint_dir, 'optimizer.pt'))
+            torch.save(scheduler.state_dict(), os.path.join(checkpoint_dir, 'scheduler.pt'))
             
             # Save config
             config = {
