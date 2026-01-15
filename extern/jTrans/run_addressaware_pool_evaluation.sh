@@ -7,18 +7,14 @@ conda activate jtrans
 # Configuration
 DATA_DIR="/data/kun/jtransdata"
 
-# Baseline model configuration
-BASELINE_MODEL="/home/kun/Document/AAE/output/jtrans/baseline_finetune/finetune_epoch_3"
-BASELINE_TOKENIZER="/home/kun/Document/AAE/extern/jTrans/pretrain/baseline"
-FUNC_BLOCKS_BASELINE="${DATA_DIR}/func_blocks_baseline.json"
 
 # Address-aware model configuration
-ADDRESSAWARE_MODEL="/home/kun/Document/AAE/output/jtrans/addressware_finetune"
+ADDRESSAWARE_MODEL="/home/kun/Document/AAE/output/jtrans/addressaware_finetune/finetune_epoch_4"
 ADDRESSAWARE_TOKENIZER="/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware"
 FUNC_BLOCKS_ADDRESSAWARE="${DATA_DIR}/func_blocks_addr.json"
 
 POOL_DIR="${DATA_DIR}/fair_pools"
-OUTPUT_DIR="${DATA_DIR}/fair_pool_results"
+OUTPUT_DIR="${DATA_DIR}/fair_pool_addr_results"
 
 mkdir -p "${OUTPUT_DIR}"
 
@@ -42,19 +38,19 @@ for POOL_SIZE in 100 1000 10000; do
             continue
         fi
         
-        # Evaluate baseline model
+        # Evaluate address-aware model
         echo ""
-        echo "Evaluating BASELINE model..."
-        BASELINE_OUTPUT="${OUTPUT_DIR}/baseline_${POOL_SIZE}_${OPT_PAIR}.txt"
+        echo "Evaluating ADDRESS-AWARE model..."
+        ADDRESSAWARE_OUTPUT="${OUTPUT_DIR}/addressaware_${POOL_SIZE}_${OPT_PAIR}.txt"
         
-        python evaluate_baseline_with_pools.py \
-            --model_path "${BASELINE_MODEL}" \
-            --tokenizer "${BASELINE_TOKENIZER}" \
-            --func_blocks "${FUNC_BLOCKS_BASELINE}" \
+        python evaluate_addressaware_with_pools.py \
+            --model_path "${ADDRESSAWARE_MODEL}" \
+            --tokenizer "${ADDRESSAWARE_TOKENIZER}" \
+            --func_blocks "${FUNC_BLOCKS_ADDRESSAWARE}" \
             --pool_file "${POOL_FILE}" \
             --query_file "${QUERY_FILE}" \
             --max_length 512 \
-            --output_file "${BASELINE_OUTPUT}"
+            --output_file "${ADDRESSAWARE_OUTPUT}"
     done
 done
 

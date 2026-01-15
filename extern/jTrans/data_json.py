@@ -380,9 +380,11 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
                 hex_offset = var_match.group(1)
                 offset_val = int(hex_offset, 16)
                 
-                # Handle two's complement for negative offsets
-                if offset_val >= 2**63:
-                    offset_val = offset_val - 2**64
+                # Handle 64-bit negative offsets (two's complement)
+                # Values > 0x7FFFFFFFFFFFFFFF are negative in two's complement
+                if offset_val > 0x7FFFFFFFFFFFFFFF:
+                    # Convert to signed 64-bit integer
+                    offset_val = offset_val - 0x10000000000000000
                 
                 tokens.append('var')
                 positions.append((-1.0, -1.0, -1.0))  # var tokens don't have positions
@@ -417,7 +419,7 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
         all_var_offsets = []
         all_segments = []
         
-        # Add <sos> at beginning (address-aware uses <sos> not [CLS])
+        # Add <sos> at beginning (segment 1) - MATCH PRETRAIN
         all_tokens.append('<sos>')
         all_positions.append((-1.0, -1.0, -1.0))
         all_var_offsets.append(-1)
@@ -430,18 +432,19 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
             
             tokens, positions, var_offsets = self._parse_instruction(inst_text)
             
-            inst_segment = inst_idx + 1  # 1-indexed
-            
+            # All tokens in segment 1 - MATCH PRETRAIN (not per-instruction segments)
             all_tokens.extend(tokens)
             all_positions.extend(positions)
             all_var_offsets.extend(var_offsets)
-            all_segments.extend([inst_segment] * len(tokens))
+            all_segments.extend([1] * len(tokens))
             
-            # Add <eos> after each instruction (same segment, address-aware uses <eos> not [SEP])
-            all_tokens.append('<eos>')
-            all_positions.append((-1.0, -1.0, -1.0))
-            all_var_offsets.append(-1)
-            all_segments.append(inst_segment)
+            # NO <eos> after each instruction - MATCH PRETRAIN
+        
+        # Add <eos> at the end ONLY (segment 1) - MATCH PRETRAIN
+        all_tokens.append('<eos>')
+        all_positions.append((-1.0, -1.0, -1.0))
+        all_var_offsets.append(-1)
+        all_segments.append(1)
         
         # Convert tokens to IDs using tokenizer's vocabulary
         token_ids = []

@@ -61,35 +61,8 @@ python finetune.py \
 
 echo ""
 echo "========================================"
-echo "Step 2: Evaluating with pool sizes"
+echo "Training completed!"
 echo "========================================"
-echo "Pool sizes: ${POOL_SIZES}"
-echo "Query ratio: ${QUERY_RATIO}"
-echo ""
-
-# Get the final fine-tuned model
-FINETUNED_MODEL="${OUTPUT_DIR}/finetune_epoch_${EPOCH}"
-
-# Create embeddings directory
-mkdir -p ${EMBEDDING_CACHE}
-
-# Run evaluation
-python evaluate_with_pools.py \
-    --model_path ${FINETUNED_MODEL} \
-    --tokenizer ${TOKENIZER} \
-    --func_blocks ${FUNC_BLOCKS} \
-    --ground_truth ${GROUND_TRUTH} \
-    --model_type addressaware \
-    --embedding_cache ${EMBEDDING_CACHE}/embeddings_all.pkl \
-    --pool_sizes ${POOL_SIZES} \
-    --query_ratio ${QUERY_RATIO} \
-    --data_ratio ${DATA_RATIO} \
-    --output_file ${OUTPUT_DIR}/pool_evaluation_results.txt
-
-echo ""
-echo "========================================"
-echo "Quick Test Complete!"
-echo "========================================"
-echo "Results: ${OUTPUT_DIR}/pool_evaluation_results.txt"
-cat ${OUTPUT_DIR}/pool_evaluation_results.txt
+echo "Model saved to: ${OUTPUT_DIR}/finetune_epoch_${EPOCH}"
+echo "Run separate evaluation script for testing."
 echo ""

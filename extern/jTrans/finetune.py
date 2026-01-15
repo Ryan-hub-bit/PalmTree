@@ -10,7 +10,7 @@ import numpy as np
 from tqdm import tqdm
 from data import load_paired_data, FunctionDataset_CL, FunctionDataset_CL_Load
 from data_json import FunctionDataset_CL_JSON, FunctionDataset_CL_Load_JSON, FunctionDataset_CL_AddressAware_JSON
-from finetune_eval_with_pool import finetune_eval_cached, generate_embeddings, evaluate_with_pool
+# from finetune_eval_with_pool import finetune_eval_cached, generate_embeddings, evaluate_with_pool  # Module not available
 from transformers import AdamW
 import torch.nn.functional as F
 import argparse
@@ -188,37 +188,21 @@ def train_dp(model, args, train_set, valid_set, logger):
                     })
 
         if (epoch+1) % args.eval_every == 0:
-            logger.info(f"Doing Evaluation ...")
+            logger.info(f"Skipping evaluation (training only mode)")
+            # logger.info(f"Doing Evaluation ...")
             
-            if args.use_cached_eval:
-                # Use embedding cache for pool-based evaluation
-                cache_path = None
-                if args.embedding_cache_dir:
-                    cache_dir = Path(args.embedding_cache_dir)
-                    cache_dir.mkdir(parents=True, exist_ok=True)
-                    cache_path = cache_dir / f"embeddings_epoch_{epoch+1}.npz"
-                
-                # Pass the dataset directly (not dataloader)
-                metrics = finetune_eval_cached(
-                    model, valid_set, model_type=args.model_type,
-                    embedding_cache_path=str(cache_path) if cache_path else None,
-                    pool_size=args.eval_pool_size,
-                    force_regenerate=(epoch == 0)  # Regenerate first epoch
-                )
-                mrr = metrics['mrr']
-                logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], mrr={mrr:.4f}, "
-                           f"recall@1={metrics['recall@1']:.4f}, recall@5={metrics['recall@5']:.4f}, "
-                           f"pool_size={args.eval_pool_size}")
-                if WANDB:
-                    wandb.log(metrics)
-            else:
-                # Original batch-based evaluation
-                mrr = finetune_eval(model, valid_dataloader, model_type=args.model_type)
-                logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], mrr={mrr}")
-                if WANDB:
-                    wandb.log({
-                        'mrr': mrr
-                    })
+            # if args.use_cached_eval:
+            #     logger.info("WARNING: Cached evaluation not available (finetune_eval_with_pool module missing)")
+            #     logger.info("Skipping cached evaluation. Use original evaluation or run separate eval script after training.")
+            #     mrr = 0.0
+            # else:
+            #     # Original batch-based evaluation
+            #     mrr = finetune_eval(model, valid_dataloader, model_type=args.model_type)
+            #     logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], mrr={mrr}")
+            #     if WANDB:
+            #         wandb.log({
+            #             'mrr': mrr
+            #         })
         if (epoch+1) % args.save_every == 0:
             logger.info(f"Saving Model ...")
             save_dir = os.path.join(args.output_path, f"finetune_epoch_{epoch+1}")

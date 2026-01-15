@@ -76,6 +76,11 @@ def load_model(model_path, tokenizer_path):
     """Load address-aware model."""
     print(f"Loading address-aware model from {model_path}...")
     
+    # Add tokenizer path to sys.path for vocab module
+    tokenizer_dir = str(Path(tokenizer_path).resolve())
+    if tokenizer_dir not in sys.path:
+        sys.path.insert(0, tokenizer_dir)
+    
     # Load vocab for address vs daddr distinction
     vocab_path = Path(tokenizer_path) / 'vocab_addr.pkl'
     with open(vocab_path, 'rb') as f:
@@ -127,88 +132,172 @@ def load_model(model_path, tokenizer_path):
     return model
 
 
-def tokenize_function(func_str, tokenizer, max_length=512):
-    """Tokenize for address-aware model."""
+def _parse_instruction(inst_text):
+    """
+    Parse a single address-aware instruction - EXACTLY matching PRETRAIN logic.
+    Format: opcode(0xADDR:bnorm:fnorm:bbnorm) operand1 operand2 ...
+    
+    Returns:
+        tokens: List of token strings
+        positions: List of (binary_pos, function_pos, bb_pos) tuples
+        var_offsets: List of var offset values (-1 for non-var tokens)
+    """
     addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
     nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
     daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
     var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
     
-    # Parse instructions and extract position info
-    instructions = func_str.strip().split('\n')
     tokens = []
-    binary_positions = []
-    function_positions = []
-    bb_positions = []
+    positions = []
     var_offsets = []
     
-    for inst in instructions:
-        parts = inst.strip().split()
-        for part in parts:
-            match = addr_pattern.match(part)
-            if match:
-                tokens.append(match.group(1))
-                binary_positions.append(float(match.group(3)))
-                function_positions.append(float(match.group(4)))
-                bb_positions.append(float(match.group(5)))
-                var_offsets.append(-1)
-                continue
+    # Split instruction into space-separated parts
+    parts = inst_text.strip().split()
+    
+    for part in parts:
+        # Check for opcode(address) pattern
+        match = addr_pattern.match(part)
+        if match:
+            opcode = match.group(1)
+            binary_pos = float(match.group(3))
+            function_pos = float(match.group(4))
+            bb_pos = float(match.group(5))
             
-            nested_match = nested_addr_pattern.match(part)
-            if nested_match:
-                tokens.append('address')
-                binary_positions.append(float(nested_match.group(2)))
-                function_positions.append(float(nested_match.group(3)))
-                bb_positions.append(float(nested_match.group(4)))
-                var_offsets.append(-1)
-                continue
-            
-            daddr_match = daddr_pattern.match(part)
-            if daddr_match:
-                tokens.append('daddr')
-                binary_positions.append(float(daddr_match.group(2)))
-                function_positions.append(float(daddr_match.group(3)))
-                bb_positions.append(float(daddr_match.group(4)))
-                var_offsets.append(-1)
-                continue
-            
-            var_match = var_pattern.match(part)
-            if var_match:
-                tokens.append('var')
-                binary_positions.append(0.0)
-                function_positions.append(0.0)
-                bb_positions.append(0.0)
-                offset = int(var_match.group(1), 16)
-                var_offsets.append(offset)
-                continue
-            
-            tokens.append(part)
-            binary_positions.append(0.0)
-            function_positions.append(0.0)
-            bb_positions.append(0.0)
+            tokens.append(opcode)
+            positions.append((binary_pos, function_pos, bb_pos))
             var_offsets.append(-1)
+            continue
+        
+        # Check for nested address() pattern
+        nested_match = nested_addr_pattern.match(part)
+        if nested_match:
+            binary_pos = float(nested_match.group(2))
+            function_pos = float(nested_match.group(3))
+            bb_pos = float(nested_match.group(4))
+            
+            tokens.append('address')
+            positions.append((binary_pos, function_pos, bb_pos))
+            var_offsets.append(-1)
+            continue
+        
+        # Check for daddr() pattern
+        daddr_match = daddr_pattern.match(part)
+        if daddr_match:
+            binary_pos = float(daddr_match.group(2))
+            function_pos = float(daddr_match.group(3))
+            bb_pos = float(daddr_match.group(4))
+            
+            tokens.append('daddr')
+            positions.append((binary_pos, function_pos, bb_pos))
+            var_offsets.append(-1)
+            continue
+        
+        # Check for var() pattern
+        var_match = var_pattern.match(part)
+        if var_match:
+            hex_offset = var_match.group(1)
+            offset_val = int(hex_offset, 16)
+            
+            # Handle 64-bit negative offsets (two's complement)
+            # Values > 0x7FFFFFFFFFFFFFFF are negative in two's complement
+            if offset_val > 0x7FFFFFFFFFFFFFFF:
+                # Convert to signed 64-bit integer
+                offset_val = offset_val - 0x10000000000000000
+            
+            tokens.append('var')
+            positions.append((-1.0, -1.0, -1.0))  # var tokens don't have positions
+            var_offsets.append(offset_val)
+            continue
+        
+        # Regular token (no address info)
+        tokens.append(part)
+        positions.append((-1.0, -1.0, -1.0))
+        var_offsets.append(-1)
     
-    # Tokenize
-    input_ids = tokenizer.convert_tokens_to_ids(tokens[:max_length])
-    seq_len = len(input_ids)
+    return tokens, positions, var_offsets
+
+
+def tokenize_function(func_str, tokenizer, max_length=512):
+    """
+    Tokenize address-aware function - EXACTLY matching PRETRAIN logic.
+    Format: inst1\tinst2\tinst3... (tab-separated instructions)
+    """
+    # Split by tabs (not newlines!)
+    instructions = func_str.split('\t')
     
-    # Pad
-    input_ids += [tokenizer.pad_token_id] * (max_length - seq_len)
-    binary_positions += [0.0] * (max_length - seq_len)
-    function_positions += [0.0] * (max_length - seq_len)
-    bb_positions += [0.0] * (max_length - seq_len)
-    var_offsets += [-1] * (max_length - seq_len)
-    attention_mask = [1] * seq_len + [0] * (max_length - seq_len)
-    token_type_ids = [0] * max_length
+    all_tokens = []
+    all_positions = []
+    all_var_offsets = []
+    all_segments = []
+    
+    # Add <sos> at the beginning (segment 1)
+    all_tokens.append('<sos>')
+    all_positions.append((-1.0, -1.0, -1.0))
+    all_var_offsets.append(-1)
+    all_segments.append(1)
+    
+    
+    for inst_idx, inst_text in enumerate(instructions):
+        inst_text = inst_text.strip()
+        if not inst_text:
+            continue
+        
+        tokens, positions, var_offsets = _parse_instruction(inst_text)
+        
+        # All tokens in segment 1 (PRETRAIN style, not per-instruction segments)
+        all_tokens.extend(tokens)
+        all_positions.extend(positions)
+        all_var_offsets.extend(var_offsets)
+        all_segments.extend([1] * len(tokens))
+        
+        # NO <eos> after each instruction
+    
+    # Add <eos> at the end ONLY (segment 1)
+    all_tokens.append('<eos>')
+    all_positions.append((-1.0, -1.0, -1.0))
+    all_var_offsets.append(-1)
+    all_segments.append(1)
+    
+    # Convert tokens to IDs using tokenizer's vocabulary
+    token_ids = []
+    unk_token_id = tokenizer.unk_token_id if tokenizer.unk_token_id is not None else 1
+    for tok in all_tokens:
+        token_id = tokenizer.convert_tokens_to_ids(tok)
+        if token_id is None:
+            token_id = unk_token_id
+        token_ids.append(token_id)
+    
+    # Truncate or pad to max_length
+    if len(token_ids) > max_length:
+        token_ids = token_ids[:max_length]
+        all_positions = all_positions[:max_length]
+        all_var_offsets = all_var_offsets[:max_length]
+        all_segments = all_segments[:max_length]
+    else:
+        padding_len = max_length - len(token_ids)
+        pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+        token_ids += [pad_token_id] * padding_len
+        all_positions += [(-1.0, -1.0, -1.0)] * padding_len
+        all_var_offsets += [-1] * padding_len
+        all_segments += [0] * padding_len  # Padding gets segment 0
+    
+    # Create attention mask
+    pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+    attention_mask = [1 if tid != pad_token_id else 0 for tid in token_ids]
+    
+    # Split positions into separate lists
+    binary_pos = [p[0] for p in all_positions]
+    function_pos = [p[1] for p in all_positions]
+    bb_pos = [p[2] for p in all_positions]
     
     return {
-        'input_ids': torch.tensor(input_ids[:max_length], dtype=torch.long),
-        'attention_mask': torch.tensor(attention_mask[:max_length], dtype=torch.long),
-        'token_type_ids': torch.tensor(token_type_ids[:max_length], dtype=torch.long),
-        'binary_pos': torch.tensor(binary_positions[:max_length], dtype=torch.float),
-        'function_pos': torch.tensor(function_positions[:max_length], dtype=torch.float),
-        'bb_pos': torch.tensor(bb_positions[:max_length], dtype=torch.float),
-        'var_offsets': torch.tensor(var_offsets[:max_length], dtype=torch.long)
+        'input_ids': torch.tensor(token_ids, dtype=torch.long),
+        'attention_mask': torch.tensor(attention_mask, dtype=torch.long),
+        'token_type_ids': torch.tensor(all_segments, dtype=torch.long),
+        'binary_pos': torch.tensor(binary_pos, dtype=torch.float),
+        'function_pos': torch.tensor(function_pos, dtype=torch.float),
+        'bb_pos': torch.tensor(bb_pos, dtype=torch.float),
+        'var_offsets': torch.tensor(all_var_offsets, dtype=torch.long)
     }
 
 
