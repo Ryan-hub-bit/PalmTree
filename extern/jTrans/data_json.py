@@ -432,19 +432,21 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
             
             tokens, positions, var_offsets = self._parse_instruction(inst_text)
             
-            # All tokens in segment 1 - MATCH PRETRAIN (not per-instruction segments)
+            # Segment label = instruction number (1-indexed) - MATCH PRETRAIN
+            inst_segment = inst_idx + 1
             all_tokens.extend(tokens)
             all_positions.extend(positions)
             all_var_offsets.extend(var_offsets)
-            all_segments.extend([1] * len(tokens))
+            all_segments.extend([inst_segment] * len(tokens))
             
             # NO <eos> after each instruction - MATCH PRETRAIN
         
-        # Add <eos> at the end ONLY (segment 1) - MATCH PRETRAIN
+        # Add <eos> at the end ONLY (gets last instruction's segment) - MATCH PRETRAIN
+        last_segment = inst_idx + 1 if instructions else 1
         all_tokens.append('<eos>')
         all_positions.append((-1.0, -1.0, -1.0))
         all_var_offsets.append(-1)
-        all_segments.append(1)
+        all_segments.append(last_segment)
         
         # Convert tokens to IDs using tokenizer's vocabulary
         token_ids = []

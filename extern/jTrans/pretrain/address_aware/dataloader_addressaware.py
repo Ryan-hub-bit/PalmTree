@@ -456,13 +456,16 @@ class AddressAwareDataset(Dataset):
             all_segments.extend([inst_segment] * len(masked_tokens))
             all_var_offsets.extend(var_offsets)
             
-            # Add [EOS] after each instruction (same segment as the instruction)
-            all_tokens.append(self.eos_idx)
-            all_positions.append((-1.0, -1.0, -1.0))
-            all_labels.append(-100)  # EOS is not masked - use -100 to match ignore_index
-            all_segments.append(inst_segment)
-            all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
-            all_tokens_info.append((self.eos_idx, inst_idx, False, '<eos>'))
+            # NO [EOS] after each instruction
+        
+        # Add [EOS] at the end ONLY (gets last instruction's segment)
+        last_segment = inst_idx + 1 if instructions else 1
+        all_tokens.append(self.eos_idx)
+        all_positions.append((-1.0, -1.0, -1.0))
+        all_labels.append(-100)  # EOS is not masked - use -100 to match ignore_index
+        all_segments.append(last_segment)
+        all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
+        all_tokens_info.append((self.eos_idx, inst_idx, False, '<eos>'))
         
         # Verify lengths match before generating JTP labels
         assert len(all_tokens) == len(all_tokens_info), f"Length mismatch: {len(all_tokens)} tokens vs {len(all_tokens_info)} token_info"
