@@ -493,6 +493,10 @@ class AddressAwareDataset(Dataset):
             all_var_offsets += [-1] * padding_len  # Padding is not a var, use -1 as sentinel
             jtp_labels += [-100] * padding_len  # Padding tokens have no JTP label
         
+        # Clamp segment labels to valid range [0, 255] (segment_types=256)
+        # Functions with >255 instructions will have segments capped at 255
+        all_segments = [min(seg, 255) for seg in all_segments]
+        
         # Use segment labels as instruction IDs
         segment_label = all_segments
         

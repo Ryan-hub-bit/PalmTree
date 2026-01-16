@@ -473,6 +473,10 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
             all_var_offsets += [-1] * padding_len
             all_segments += [0] * padding_len  # Padding gets segment 0
         
+        # Clamp segment labels to valid range [0, 255] (segment_types=256)
+        # Functions with >255 instructions will have segments capped at 255
+        all_segments = [min(seg, 255) for seg in all_segments]
+        
         # Create attention mask
         pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
         attention_mask = [1 if tid != pad_token_id else 0 for tid in token_ids]

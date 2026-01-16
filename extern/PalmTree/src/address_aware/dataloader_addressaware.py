@@ -347,6 +347,10 @@ class InstructionMaskingDataset(Dataset):
             all_var_offsets += [-1] * padding_len  # Padding is not a var, use -1 as sentinel
             all_is_daddr += [0] * padding_len  # Padding is not a daddr
         
+        # Clamp segment labels to valid range [0, 15] (segment_types=16 in PalmTree)
+        # Functions with >15 instructions will have segments capped at 15
+        all_segments = [min(seg, 15) for seg in all_segments]
+        
         # Use segment labels as instruction IDs
         segment_label = all_segments
         
@@ -439,6 +443,10 @@ class InstructionMaskingDataset(Dataset):
             all_segments += [0] * padding_len  # Padding gets segment 0
             all_var_offsets += [-1] * padding_len  # Padding is not a var, use -1 as sentinel
             all_is_daddr += [0] * padding_len  # Padding is not a daddr
+        
+        # Clamp segment labels to valid range [0, 15] (segment_types=16 in PalmTree)
+        # Functions with >15 instructions will have segments capped at 15
+        all_segments = [min(seg, 15) for seg in all_segments]
         
         # Use segment labels as instruction IDs
         segment_label = all_segments
