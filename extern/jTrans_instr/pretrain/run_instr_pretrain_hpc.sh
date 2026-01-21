@@ -33,7 +33,7 @@ INTERMEDIATE_SIZE=3072
 MAX_INSTRUCTIONS=201
 
 # Training hyperparameters
-BATCH_SIZE=256  # Reduced from 256 to avoid OOM. Increase gradually if you have more GPU memory
+BATCH_SIZE=100  # Reduced from 256 to avoid OOM. Increase gradually if you have more GPU memory
 LEARNING_RATE=1e-4
 NUM_EPOCHS=10
 WARMUP_STEPS=10000
