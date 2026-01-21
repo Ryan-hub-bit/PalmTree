@@ -22,8 +22,8 @@ echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
 
 # Paths (modify these to match your HPC setup)
 TRAIN_PATH="/work/kliu14/jtrans_instr/instr_pretrain.txt"
-TOKENIZER_PATH="/work/kliu14/jtrans_instr/jtrans_tokenizer"
-OUTPUT_DIR="/work/kliu14/jtrans_instr_output/jtrans_instr_pretrain"
+TOKENIZER_PATH="/home/kliu14/AAE/extern/jTrans_instr/jtrans_tokenizer"
+OUTPUT_DIR="/work/kliu14/jtrans_instr/jtrans_instr_pretrain_output"
 
 # Model architecture
 HIDDEN_SIZE=768
