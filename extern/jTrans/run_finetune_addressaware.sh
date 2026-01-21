@@ -16,7 +16,7 @@ python finetune.py \
     --batch_size 32 \
     --eval_batch_size 64 \
     --lr 1e-5 \
-    --epoch 1 \
+    --epoch 10 \
     --weight_decay 0.01 \
     --freeze_cnt 10 \
     --data_ratio 0.001

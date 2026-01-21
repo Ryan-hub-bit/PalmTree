@@ -1,17 +1,17 @@
 #!/bin/bash
 # Quick test pipeline for address-aware model with small data
 
-set -e  # Exit on error
+set -e # Exit on error
 
 # Activate conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate jtrans
 
 # GPU Configuration
-GPU_IDS=${1:-"1"}  # Default to GPU 0 if not specified
+GPU_IDS=${1:-"1"} # Default to GPU 0 if not specified
 export CUDA_VISIBLE_DEVICES=${GPU_IDS}
 # Configuration
-MODEL_PATH="/home/kun/Document/AAE/output/jtrans/addressaware_pretrain/checkpoint_epoch_10"
+MODEL_PATH="/home/kun/Document/AAE/output/jtrans/addressaware_pretrain/checkpoint_epoch_7"
 TOKENIZER="/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware"
 FUNC_BLOCKS="/data/kun/jtransdata/func_blocks_addr.json"
 GROUND_TRUTH="/data/kun/jtransdata/ground_truth_addr.json"
@@ -22,14 +22,14 @@ EMBEDDING_CACHE="${OUTPUT_DIR}/embeddings_cache"
 BATCH_SIZE=32
 EVAL_BATCH_SIZE=64
 LR=1e-5
-EPOCH=2  # Just 2 epochs for quick test
+EPOCH=2 # Just 2 epochs for quick test
 WEIGHT_DECAY=0.01
 FREEZE_CNT=10
-DATA_RATIO=0.0001  # Will use max 500 pairs for quick test
+DATA_RATIO=0.0001 # Will use max 500 pairs for quick test
 
 # Evaluation parameters
 POOL_SIZES="100 1000 10000"
-QUERY_RATIO=0.1  # Use 10% of queries
+QUERY_RATIO=0.1 # Use 10% of queries
 
 echo "========================================"
 echo "QUICK TEST - Address-Aware Pipeline"
@@ -44,20 +44,20 @@ echo "Step 1: Fine-tuning address-aware model"
 echo "========================================"
 
 python finetune.py \
-    --model_type addressaware \
-    --data_type json \
-    --func_blocks ${FUNC_BLOCKS} \
-    --ground_truth ${GROUND_TRUTH} \
-    --tokenizer ${TOKENIZER} \
-    --model_path ${MODEL_PATH} \
-    --output_path ${OUTPUT_DIR} \
-    --batch_size ${BATCH_SIZE} \
-    --eval_batch_size ${EVAL_BATCH_SIZE} \
-    --lr ${LR} \
-    --epoch ${EPOCH} \
-    --weight_decay ${WEIGHT_DECAY} \
-    --freeze_cnt ${FREEZE_CNT} \
-    --data_ratio ${DATA_RATIO}
+  --model_type addressaware \
+  --data_type json \
+  --func_blocks ${FUNC_BLOCKS} \
+  --ground_truth ${GROUND_TRUTH} \
+  --tokenizer ${TOKENIZER} \
+  --model_path ${MODEL_PATH} \
+  --output_path ${OUTPUT_DIR} \
+  --batch_size ${BATCH_SIZE} \
+  --eval_batch_size ${EVAL_BATCH_SIZE} \
+  --lr ${LR} \
+  --epoch ${EPOCH} \
+  --weight_decay ${WEIGHT_DECAY} \
+  --freeze_cnt ${FREEZE_CNT} \
+  --data_ratio ${DATA_RATIO}
 
 echo ""
 echo "========================================"

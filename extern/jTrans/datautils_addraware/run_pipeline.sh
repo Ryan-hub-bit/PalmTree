@@ -104,13 +104,22 @@ echo ""
 export OUTPUT_DIR
 export IDA_PATH
 
-# Count binaries to process
-total_binaries=$(find "$STRIPPED_DIR" -maxdepth 1 -type f -executable | wc -l)
-echo "Found $total_binaries executable files to process"
+# Count binaries to process (skip IDA database files)
+total_binaries=0
+for f in "$STRIPPED_DIR"/*; do
+    if [ -f "$f" ]; then
+        basename_f=$(basename "$f")
+        if [[ ! "$basename_f" =~ \.(i64|id0|id1|id2|nam|til)$ ]]; then
+            ((total_binaries++))
+        fi
+    fi
+done
+
+echo "Found $total_binaries binary files to process"
 echo ""
 
 if [ $total_binaries -eq 0 ]; then
-    print_error "No executable files found in $STRIPPED_DIR"
+    print_error "No binary files found in $STRIPPED_DIR"
     exit 1
 fi
 
@@ -118,9 +127,15 @@ processed=0
 failed=0
 
 for binary in "$STRIPPED_DIR"/*; do
-    # Check if it's an executable file
-    if [ -f "$binary" ] && [ -x "$binary" ]; then
+    # Check if it's a file and skip IDA database files
+    if [ -f "$binary" ]; then
         binary_name=$(basename "$binary")
+        
+        # Skip IDA database files
+        if [[ "$binary_name" =~ \.(i64|id0|id1|id2|nam|til)$ ]]; then
+            continue
+        fi
+        
         processed=$((processed + 1))
         
         echo "[$processed/$total_binaries] Processing: $binary_name"

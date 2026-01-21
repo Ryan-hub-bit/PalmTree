@@ -594,10 +594,20 @@ def process_file_ida(fpath: str, out_dir: str):
     # Write entire functions to output file
     print("[INFO] Writing functions to output file...")
     written = 0
+    skipped_empty = 0
+    skipped_small = 0
+    MIN_INSTRUCTIONS = 5
+    
     with open(out_file, 'w', encoding='utf-8') as w:
         for func_name, func_start, func_end, func_instructions in func_data:
             # Skip empty functions
             if not func_instructions:
+                skipped_empty += 1
+                continue
+            
+            # Skip functions with fewer than MIN_INSTRUCTIONS (same as baseline)
+            if len(func_instructions) < MIN_INSTRUCTIONS:
+                skipped_small += 1
                 continue
             
             # Build the entire function as a single line
@@ -607,6 +617,7 @@ def process_file_ida(fpath: str, out_dir: str):
                 written += 1
     
     print(f"[DONE] {out_file} (wrote {written} functions)")
+    print(f"[INFO] Skipped: {skipped_empty} empty, {skipped_small} < {MIN_INSTRUCTIONS} instructions")
     print(f"[INFO] Position encoding:")
     print(f"  CODE: func_in_binary:bb_in_function:inst_in_bb")
     print(f"  DATA: section_in_binary:addr_in_section:0.0")

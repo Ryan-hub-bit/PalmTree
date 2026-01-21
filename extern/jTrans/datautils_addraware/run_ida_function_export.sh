@@ -73,8 +73,14 @@ if [ -d "$INPUT" ]; then
     SUCCESS_COUNT=0
     FAIL_COUNT=0
     
-    # Find all executable files (binaries) in the directory
+    # Find all binary files (skip .i64 IDA database files and other metadata)
     while IFS= read -r -d '' binary; do
+        # Skip IDA database files and other metadata
+        basename_file=$(basename "$binary")
+        if [[ "$basename_file" == *.i64 ]] || [[ "$basename_file" == *.id0 ]] || [[ "$basename_file" == *.id1 ]] || [[ "$basename_file" == *.id2 ]] || [[ "$basename_file" == *.nam ]] || [[ "$basename_file" == *.til ]]; then
+            continue
+        fi
+        
         ((TOTAL_FILES++))
         echo ""
         echo "Processing file $TOTAL_FILES: $(basename "$binary")"
@@ -86,7 +92,7 @@ if [ -d "$INPUT" ]; then
             ((FAIL_COUNT++))
             echo "✗ Failed: $(basename "$binary")"
         fi
-    done < <(find "$INPUT" -maxdepth 1 -type f -executable -print0)
+    done < <(find "$INPUT" -maxdepth 1 -type f -print0)
     
     # Summary
     echo ""
