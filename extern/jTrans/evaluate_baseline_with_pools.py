@@ -181,14 +181,18 @@ def main():
     # Load pool and query definitions
     print(f"\nLoading pool from {args.pool_file}")
     with open(args.pool_file, 'r') as f:
-        pool_data = json.load(f)
+        pool_json = json.load(f)
     
     print(f"Loading queries from {args.query_file}")
     with open(args.query_file, 'r') as f:
-        query_data = json.load(f)
+        query_json = json.load(f)
     
-    print(f"  Pool size: {len(pool_data)}")
-    print(f"  Query size: {len(query_data)}")
+    # Convert to list of IDs
+    pool_ids = pool_json['pool'] if isinstance(pool_json, dict) else pool_json
+    query_ids = query_json['queries'] if isinstance(query_json, dict) else query_json
+    
+    print(f"  Pool size: {len(pool_ids)}")
+    print(f"  Query size: {len(query_ids)}")
     
     # Load function blocks
     print(f"\nLoading function blocks from {args.func_blocks}")
@@ -202,8 +206,8 @@ def main():
     print("\nGenerating query embeddings...")
     query_embeddings = []
     
-    for query in tqdm(query_data, desc="Queries"):
-        func_id = str(query['baseline_func_id'])
+    for func_id in tqdm(query_ids, desc="Queries"):
+        func_id = str(func_id)
         func_str = func_blocks[func_id].get('tokens', func_blocks[func_id].get('instructions', ''))
         tokenized = tokenize_function(func_str, tokenizer, args.max_length)
         embedding = generate_embedding(model, tokenized, device)
@@ -213,8 +217,8 @@ def main():
     print("\nGenerating pool embeddings...")
     pool_embeddings = []
     
-    for pool_entry in tqdm(pool_data, desc="Pool"):
-        func_id = str(pool_entry['baseline_func_id'])
+    for func_id in tqdm(pool_ids, desc="Pool"):
+        func_id = str(func_id)
         func_str = func_blocks[func_id].get('tokens', func_blocks[func_id].get('instructions', ''))
         tokenized = tokenize_function(func_str, tokenizer, args.max_length)
         embedding = generate_embedding(model, tokenized, device)

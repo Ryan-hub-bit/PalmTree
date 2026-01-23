@@ -124,7 +124,7 @@ def tokenize_instruction_instr(raw_instr, jump_targets):
     tokens = readidadata.tokenize_instruction(raw_instr)
     
     # Check if this is a control flow instruction with known target
-    if tokens and tokens[0] in ['call', 'jmp', 'je', 'jne', 'jz', 'jnz', 
+    if tokens and tokens[0] in ['jmp', 'je', 'jne', 'jz', 'jnz', 
                                 'ja', 'jae', 'jb', 'jbe', 'jg', 'jge', 
                                 'jl', 'jle', 'jo', 'jno', 'js', 'jns']:
         # Replace address operand with instr_addr_{i}
@@ -218,20 +218,36 @@ def tokenize_function_instr(func_data):
     # Tokenize each instruction
     instruction_tokens = []
     for idx, instr in enumerate(all_instructions):
-        tokens = readidadata.tokenize_instruction(instr)
+        # Parse instruction using readidadata
+        operator, op1, op2, op3, annotation = readidadata.parse_asm(instr)
         
-        # Check if this instruction has a jump target
-        if idx in jump_targets:
+        # Build token list
+        tokens = []
+        if operator:
+            tokens.append(operator)
+        
+        # Check if this instruction has a jump target (only for jump instructions, NOT call)
+        if idx in jump_targets and operator and operator.startswith('j'):
+            # This is a jump instruction (jmp, je, jne, etc.) with a known target
             target_idx = jump_targets[idx]
-            # Replace last token (address) with instr_addr_{target_idx}
-            if tokens and tokens[0] in ['call', 'jmp', 'je', 'jne', 'jz', 'jnz',
-                                        'ja', 'jae', 'jb', 'jbe', 'jg', 'jge',
-                                        'jl', 'jle', 'jo', 'jno', 'js', 'jns']:
-                if len(tokens) > 1:
-                    tokens[-1] = f'instr_addr_{target_idx}'
+            tokens.append(f'instr_addr_{target_idx}')
+            # Add remaining operands if any
+            if op2:
+                tokens.append(op2)
+            if op3:
+                tokens.append(op3)
+        else:
+            # Not a jump with target, add all operands normally (including call instructions)
+            if op1:
+                tokens.append(op1)
+            if op2:
+                tokens.append(op2)
+            if op3:
+                tokens.append(op3)
         
         # Join tokens within instruction with space
         instruction_tokens.append(' '.join(tokens))
+
     
     # Join instructions with \t separator
     return '\t'.join(instruction_tokens)

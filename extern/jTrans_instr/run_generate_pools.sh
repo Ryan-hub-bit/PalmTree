@@ -7,11 +7,11 @@ conda activate jtrans
 
 # Paths
 FUNC_BLOCKS_BASELINE="/data/kun/jtransdata/func_blocks_baseline.json"
-FUNC_BLOCKS_ADDRESSAWARE="/data/kun/jtransdata/func_blocks_addressaware.json"
+FUNC_BLOCKS_ADDRESSAWARE="/data/kun/jtransdata/func_blocks_addr.json"
 FUNC_BLOCKS_INSTR="/data/kun/jtrans_instr/func_blocks_instr.json"
 
 GROUND_TRUTH_BASELINE="/data/kun/jtransdata/ground_truth_baseline.json"
-GROUND_TRUTH_ADDRESSAWARE="/data/kun/jtransdata/ground_truth_addressaware.json"
+GROUND_TRUTH_ADDRESSAWARE="/data/kun/jtransdata/ground_truth_addr.json"
 GROUND_TRUTH_INSTR="/data/kun/jtrans_instr/ground_truth_instr.json"
 
 OUTPUT_DIR="/data/kun/jtransdata/fair_pools"

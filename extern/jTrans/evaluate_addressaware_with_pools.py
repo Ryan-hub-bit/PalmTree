@@ -397,17 +397,18 @@ def main():
     print(f"Loading tokenizer from {args.tokenizer}")
     tokenizer = BertTokenizer.from_pretrained(args.tokenizer)
     
-    # Load pool and query definitions
-    print(f"\nLoading pool from {args.pool_file}")
-    with open(args.pool_file, 'r') as f:
-        pool_data = json.load(f)
+    # Load pool and query definitions from meta files
+    # Meta files contain IDs for all three models
+    meta_file = args.pool_file.replace('.json', '_meta.json')
+    print(f"\nLoading metadata from {meta_file}")
+    with open(meta_file, 'r') as f:
+        meta_data = json.load(f)
     
-    print(f"Loading queries from {args.query_file}")
-    with open(args.query_file, 'r') as f:
-        query_data = json.load(f)
+    pool_ids = [entry['addressaware_func_id'] for entry in meta_data['pool_entries']]
+    query_ids = [entry['addressaware_func_id'] for entry in meta_data['query_entries']]
     
-    print(f"  Pool size: {len(pool_data)}")
-    print(f"  Query size: {len(query_data)}")
+    print(f"  Pool size: {len(pool_ids)}")
+    print(f"  Query size: {len(query_ids)}")
     
     # Load function blocks
     print(f"\nLoading function blocks from {args.func_blocks}")
@@ -421,8 +422,8 @@ def main():
     print("\nGenerating query embeddings...")
     query_embeddings = []
     
-    for query in tqdm(query_data, desc="Queries"):
-        func_id = str(query['addressaware_func_id'])
+    for func_id in tqdm(query_ids, desc="Queries"):
+        func_id = str(func_id)
         func_str = func_blocks[func_id].get('instructions', func_blocks[func_id].get('tokens', ''))
         tokenized = tokenize_function(func_str, tokenizer, args.max_length)
         embedding = generate_embedding(model, tokenized, device)
@@ -432,8 +433,8 @@ def main():
     print("\nGenerating pool embeddings...")
     pool_embeddings = []
     
-    for pool_entry in tqdm(pool_data, desc="Pool"):
-        func_id = str(pool_entry['addressaware_func_id'])
+    for func_id in tqdm(pool_ids, desc="Pool"):
+        func_id = str(func_id)
         func_str = func_blocks[func_id].get('instructions', func_blocks[func_id].get('tokens', ''))
         tokenized = tokenize_function(func_str, tokenizer, args.max_length)
         embedding = generate_embedding(model, tokenized, device)
