@@ -114,7 +114,7 @@ def convert_function_to_text_with_jumps(func_data):
     3. Replace jump targets with instr_addr_{i} where i is target instruction index
     
     Returns:
-        Space-separated token string
+        Tab-separated instruction string (instructions separated by \t, tokens by space)
     """
     asm_list = func_data.get('asm', [])
     
@@ -124,7 +124,7 @@ def convert_function_to_text_with_jumps(func_data):
     # Get jump mappings from CFG (instruction index -> target instruction index)
     jump_map = find_jump_targets(func_data)
     
-    result_tokens = []
+    instruction_strings = []  # Each element is a space-separated string of tokens for one instruction
     MAXLEN = 200  # Maximum instruction index
     
     for i, asm_str in enumerate(asm_list):
@@ -167,13 +167,15 @@ def convert_function_to_text_with_jumps(func_data):
                 if op3:
                     tokens.append(op3)
             
-            result_tokens.extend(tokens)
+            # Join tokens for this instruction with space
+            instruction_strings.append(' '.join(tokens))
             
         except Exception as e:
             print(f"Warning: Failed to parse instruction '{asm_str}': {e}", file=sys.stderr)
             continue
     
-    return ' '.join(result_tokens)
+    # Join all instructions with \t (tab)
+    return '\t'.join(instruction_strings)
 
 
 def convert_pickle_to_text(pkl_path, output_path, min_instructions=5, max_instructions=512):

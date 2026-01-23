@@ -97,67 +97,59 @@ class InstrPretrainingDataset(Dataset):
                     if i == idx:
                         return line.strip()
     
-    def _parse_instruction_boundaries(self, tokens):
+    def _parse_instruction_boundaries(self, func_str):
         """
-        Parse instruction boundaries from tokens.
+        Parse instruction boundaries from function string.
         
-        Assumes tokens are formatted as:
-        [CLS] instr0_token1 instr0_token2 ... instr1_token1 ... [SEP]
-        
-        Instructions are separated by instruction address markers or control flow tokens.
-        For simplicity, we'll use a heuristic: new instruction starts with:
-        - Assembly mnemonics (mov, add, push, pop, jmp, call, ret, etc.)
-        - After instr_addr_* tokens
+        Assumes instructions are separated by \t (tab character).
+        Format: instr0_token1 instr0_token2 ...\tinstr1_token1 ...\t...
         
         Returns:
+            tokens: List of all tokens (with [CLS] and [SEP])
             instruction_ids: List mapping each token position to instruction index
             jump_info: List of (token_idx, target_instruction_idx) for instr_addr tokens
         """
-        instruction_ids = []
+        # Split by \t to get instructions
+        instructions = func_str.split('\t')
+        
+        all_tokens = ['[CLS]']
+        instruction_ids = [0]  # [CLS] -> instruction 0
         jump_info = []
         current_instr_idx = 0
         
-        # Assembly instruction mnemonics (common ones)
-        mnemonics = {
-            'mov', 'add', 'sub', 'push', 'pop', 'lea', 'xor', 'or', 'and', 'not',
-            'jmp', 'je', 'jne', 'jz', 'jnz', 'ja', 'jb', 'jg', 'jl', 'call', 'ret',
-            'test', 'cmp', 'inc', 'dec', 'mul', 'div', 'shl', 'shr', 'sal', 'sar',
-            'leave', 'enter', 'nop', 'int', 'syscall', 'sysenter'
-        }
-        
         instr_addr_pattern = re.compile(r'instr_addr_(\d+)')
         
-        for i, token in enumerate(tokens):
-            # [CLS] and [SEP] get their own instruction index
-            if token == '[CLS]':
-                instruction_ids.append(0)
-                current_instr_idx = 0
+        for instr in instructions:
+            if not instr.strip():
                 continue
-            elif token == '[SEP]':
+            
+            # Split instruction into tokens
+            instr_tokens = instr.split()
+            
+            for token in instr_tokens:
+                # Check if this is an instr_addr token
+                match = instr_addr_pattern.match(token)
+                if match:
+                    target_instr_idx = int(match.group(1))
+                    # Clamp to valid range
+                    if target_instr_idx >= self.max_instructions:
+                        target_instr_idx = self.max_instructions - 1
+                    jump_info.append((len(all_tokens), target_instr_idx))
+                
+                all_tokens.append(token)
                 instruction_ids.append(current_instr_idx)
-                continue
             
-            # Check if this is an instr_addr token
-            match = instr_addr_pattern.match(token)
-            if match:
-                target_instr_idx = int(match.group(1))
-                # Clamp to valid range
-                if target_instr_idx >= self.max_instructions:
-                    target_instr_idx = self.max_instructions - 1
-                jump_info.append((i, target_instr_idx))
-                instruction_ids.append(current_instr_idx)
-                continue
-            
-            # Check if this starts a new instruction
-            if token.lower() in mnemonics:
-                current_instr_idx += 1
-                # Clamp to max_instructions
-                if current_instr_idx >= self.max_instructions:
-                    current_instr_idx = self.max_instructions - 1
-            
-            instruction_ids.append(current_instr_idx)
+            # Move to next instruction
+            current_instr_idx += 1
+            # Clamp to max_instructions
+            if current_instr_idx >= self.max_instructions:
+                current_instr_idx = self.max_instructions - 1
         
-        return instruction_ids, jump_info
+        # Add [SEP] token
+        all_tokens.append('[SEP]')
+        instruction_ids.append(current_instr_idx)
+        
+        return all_tokens, instruction_ids, jump_info
     
     def _apply_mlm_mask(self, input_ids, labels, jump_indices):
         """
@@ -235,20 +227,17 @@ class InstrPretrainingDataset(Dataset):
                 - jtp_labels: Labels for JTP (-100 for non-jump)
         """
         # Get function text
-        line = self._get_line(idx)
+        func_str = self._get_line(idx)
         
-        # Tokenize
-        tokens = line.split()
+        # Parse instruction boundaries (this now returns tokens, instruction_ids, jump_info)
+        tokens, instruction_ids, jump_info = self._parse_instruction_boundaries(func_str)
         
         # Truncate if needed
-        if len(tokens) > self.max_len - 2:  # Reserve space for [CLS] and [SEP]
-            tokens = tokens[:self.max_len - 2]
-        
-        # Add special tokens
-        tokens = ['[CLS]'] + tokens + ['[SEP]']
-        
-        # Parse instruction boundaries and extract jump info
-        instruction_ids, jump_info = self._parse_instruction_boundaries(tokens)
+        if len(tokens) > self.max_len:
+            tokens = tokens[:self.max_len - 1] + ['[SEP]']
+            instruction_ids = instruction_ids[:self.max_len - 1] + [instruction_ids[-1]]
+            # Filter jump_info to only include jumps within truncated sequence
+            jump_info = [(idx, target) for idx, target in jump_info if idx < self.max_len]
         
         # Convert to IDs
         input_ids = self.tokenizer.convert_tokens_to_ids(tokens)
