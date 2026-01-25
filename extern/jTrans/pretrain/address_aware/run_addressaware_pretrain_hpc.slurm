@@ -2,7 +2,7 @@
 #SBATCH --job-name=addr_pretrain
 #SBATCH --output=/work/kliu14/jtransdata/log/%x_%j.out
 #SBATCH --gres=gpu:4
-#SBATCH --cpus-per-task=16
+#SBATCH --cpus-per-task=12
 #SBATCH --time=3-00:00:00
 #SBATCH --partition=gpu4
 #SBATCH --account=loni_insembed01
