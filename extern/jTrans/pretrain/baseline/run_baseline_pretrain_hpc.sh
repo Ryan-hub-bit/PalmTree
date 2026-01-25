@@ -14,7 +14,7 @@ DATA_RATIO="${1:-1.0}"
 # Use all available GPUs (default: 0,1,2,3 for 4 GPUs)
 # SLURM will set CUDA_VISIBLE_DEVICES automatically, but if running locally, set it here
 if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
-    export CUDA_VISIBLE_DEVICES=0,1，2，3
+    export CUDA_VISIBLE_DEVICES=0,1,2,3
 fi
 echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
 # Uncomment for debugging (makes CUDA synchronous, slower)
@@ -41,7 +41,7 @@ python3 train_baseline.py \
   --train_path /work/kliu14/jtransdata/baseline_pretrain.txt \
   --tokenizer_path . \
   --output_dir /work/kliu14/jtransoutput/baseline_pretrain \
-  --batch_size 100 \
+  --batch_size 128 \
   --learning_rate 1e-4 \
   --num_epochs 10 \
   --warmup_steps 10000 \
