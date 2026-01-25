@@ -9,7 +9,7 @@
 #          ./run_addressaware_pretrain.sh 1.0  # Use 100% of data (default)
 
 # Data ratio (default: 1.0 = 100% of data)
-DATA_RATIO="${1:-0.0001}"
+DATA_RATIO="${1:-1.0}"
 
 # Use all available GPUs (default: 0,1,2,3 for 4 GPUs)
 # SLURM will set CUDA_VISIBLE_DEVICES automatically, but if running locally, set it here
@@ -54,5 +54,5 @@ python3 train_addressaware.py \
   --num_hidden_layers 12 \
   --num_attention_heads 12 \
   --save_every 1 \
-  --num_workers 16 \
+  --num_workers 12 \
   --data_ratio "$DATA_RATIO"
