@@ -1,64 +1,91 @@
 #!/bin/bash
 
-# Activate conda environment
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate jtrans
+# Evaluate baseline pools with finetuned model
+#
+# Usage:
+#   ./run_baseline_pool_evaluation.sh <model_checkpoint> <vocab_path>
+#
+# Example:
+#   ./run_baseline_pool_evaluation.sh \
+#       /home/kun/Document/AAE/output/jtrans/baseline_pretrain/best_model.pth \
+#       /home/kun/Document/AAE/strupos/vocab.txt
+
+set -e
+
+if [ "$#" -lt 2 ]; then
+    echo "Usage: $0 <model_checkpoint> <vocab_path> [pool_size] [opt_pair]"
+    echo ""
+    echo "Arguments:"
+    echo "  model_checkpoint  Path to finetuned model checkpoint (required)"
+    echo "  vocab_path        Path to vocabulary file (required)"
+    echo "  pool_size         Optional: 100, 1000, or 10000 (evaluate specific size only)"
+    echo "  opt_pair          Optional: O0_vs_O3, O1_vs_O3, or O2_vs_O3"
+    echo ""
+    echo "Examples:"
+    echo "  # Evaluate all pools"
+    echo "  $0 output/baseline/model.pth strupos/vocab.txt"
+    echo ""
+    echo "  # Evaluate only 1000-size pools"
+    echo "  $0 output/baseline/model.pth strupos/vocab.txt 1000"
+    echo ""
+    echo "  # Evaluate only O0->O3 pairs with 10000 pool size"
+    echo "  $0 output/baseline/model.pth strupos/vocab.txt 10000 O0_vs_O3"
+    exit 1
+fi
+
+MODEL_CHECKPOINT=$1
+VOCAB_PATH=$2
+POOL_SIZE=${3:-""}
+OPT_PAIR=${4:-""}
 
 # Configuration
-DATA_DIR="/data/kun/jtransdata"
+POOL_DIR="/data/kun/jtrans/baseline/eval/pools"
+FUNC_BLOCKS="/data/kun/jtrans/baseline/eval/func_blocks_baseline.json"
+MAX_LEN=100
+BATCH_SIZE=64
+DEVICE="cuda"
 
-# Baseline model configuration
-BASELINE_MODEL="/home/kun/Document/AAE/output/jtrans/baseline_finetune/finetune_epoch_5"
-BASELINE_TOKENIZER="/home/kun/Document/AAE/extern/jTrans/pretrain/baseline"
-FUNC_BLOCKS_BASELINE="${DATA_DIR}/func_blocks_baseline.json"
+# Build command
+CMD="python3 evaluate_baseline_pools.py \
+    --model $MODEL_CHECKPOINT \
+    --vocab $VOCAB_PATH \
+    --pool-dir $POOL_DIR \
+    --func-blocks $FUNC_BLOCKS \
+    --max-len $MAX_LEN \
+    --batch-size $BATCH_SIZE \
+    --device $DEVICE"
 
-# Address-aware model configuration
-ADDRESSAWARE_MODEL="/home/kun/Document/AAE/output/jtrans/addressware_finetune"
-ADDRESSAWARE_TOKENIZER="/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware"
-FUNC_BLOCKS_ADDRESSAWARE="${DATA_DIR}/func_blocks_addr.json"
+# Add optional filters
+if [ -n "$POOL_SIZE" ]; then
+    CMD="$CMD --pool-size $POOL_SIZE"
+fi
 
-POOL_DIR="${DATA_DIR}/fair_pools"
-OUTPUT_DIR="${DATA_DIR}/fair_pool_results"
+if [ -n "$OPT_PAIR" ]; then
+    CMD="$CMD --opt-pair $OPT_PAIR"
+fi
 
-mkdir -p "${OUTPUT_DIR}"
+echo "=========================================="
+echo "Baseline Pool Evaluation"
+echo "=========================================="
+echo "Model:        $MODEL_CHECKPOINT"
+echo "Vocab:        $VOCAB_PATH"
+echo "Pool Dir:     $POOL_DIR"
+echo "Func Blocks:  $FUNC_BLOCKS"
+echo "Max Length:   $MAX_LEN"
+echo "Batch Size:   $BATCH_SIZE"
+echo "Device:       $DEVICE"
+if [ -n "$POOL_SIZE" ]; then
+    echo "Pool Size:    $POOL_SIZE"
+fi
+if [ -n "$OPT_PAIR" ]; then
+    echo "Opt Pair:     $OPT_PAIR"
+fi
+echo "=========================================="
+echo ""
 
-# Evaluate each pool configuration
-for POOL_SIZE in 100 1000 10000; do
-    for OPT_PAIR in "O0_vs_O3" "O1_vs_O3" "O2_vs_O3"; do
-        echo "=================================================="
-        echo "Evaluating: Pool Size=${POOL_SIZE}, Opt Pair=${OPT_PAIR}"
-        echo "=================================================="
-        
-        POOL_FILE="${POOL_DIR}/pool_${POOL_SIZE}_${OPT_PAIR}.json"
-        QUERY_FILE="${POOL_DIR}/query_pool_${POOL_SIZE}_${OPT_PAIR}.json"
-        
-        if [ ! -f "${POOL_FILE}" ]; then
-            echo "Pool file not found: ${POOL_FILE}"
-            continue
-        fi
-        
-        if [ ! -f "${QUERY_FILE}" ]; then
-            echo "Query file not found: ${QUERY_FILE}"
-            continue
-        fi
-        
-        # Evaluate baseline model
-        echo ""
-        echo "Evaluating BASELINE model..."
-        BASELINE_OUTPUT="${OUTPUT_DIR}/baseline_${POOL_SIZE}_${OPT_PAIR}.txt"
-        
-        python evaluate_baseline_with_pools.py \
-            --model_path "${BASELINE_MODEL}" \
-            --tokenizer "${BASELINE_TOKENIZER}" \
-            --func_blocks "${FUNC_BLOCKS_BASELINE}" \
-            --pool_file "${POOL_FILE}" \
-            --query_file "${QUERY_FILE}" \
-            --max_length 512 \
-            --output_file "${BASELINE_OUTPUT}"
-    done
-done
+# Run evaluation
+eval $CMD
 
-echo "=================================================="
-echo "All evaluations complete!"
-echo "Results saved to: ${OUTPUT_DIR}"
-echo "=================================================="
+echo ""
+echo "Evaluation complete!"
+echo "Results saved to: $POOL_DIR/evaluation_results.json"

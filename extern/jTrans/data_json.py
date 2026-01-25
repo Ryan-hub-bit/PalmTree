@@ -157,7 +157,7 @@ class FunctionDataset_CL_JSON(torch.utils.data.Dataset):
     Compatible with original FunctionDataset_CL interface.
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path, 
-                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True):
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, target_opt=None):
         functions, ebds = load_paired_data_json(
             func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd
         )
@@ -165,6 +165,16 @@ class FunctionDataset_CL_JSON(torch.utils.data.Dataset):
         self.ebds = ebds
         self.tokenizer = tokenizer
         self.opt = opt
+        self.target_opt = target_opt
+        
+        # Validate target_opt
+        if self.target_opt is not None:
+            if self.target_opt not in opt:
+                raise ValueError(f"target_opt '{self.target_opt}' must be in opt list {opt}")
+            self.source_opts = [o for o in opt if o != self.target_opt]
+            if len(self.source_opts) == 0:
+                raise ValueError(f"Need at least one source opt besides target_opt '{self.target_opt}'")
+            print(f"Training mode: {self.source_opts} -> {self.target_opt}")
     
     def __getitem__(self, idx):
         """Return (anchor, positive, negative) triplet."""
@@ -194,7 +204,8 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
     Pre-tokenized dataset version for JSON data.
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
-                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0):
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0,
+                 target_opt=None):
         functions, ebds = load_paired_data_json(
             func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )
@@ -233,6 +244,16 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
         
         self.ebds = ebds
         self.opt = opt
+        self.target_opt = target_opt
+        
+        # Validate target_opt
+        if self.target_opt is not None:
+            if self.target_opt not in opt:
+                raise ValueError(f"target_opt '{self.target_opt}' must be in opt list {opt}")
+            self.source_opts = [o for o in opt if o != self.target_opt]
+            if len(self.source_opts) == 0:
+                raise ValueError(f"Need at least one source opt besides target_opt '{self.target_opt}'")
+            print(f"Training mode: {self.source_opts} -> {self.target_opt}")
         
         print(f"Pre-tokenized {len(self.tokenized_datas)} function groups")
     
@@ -253,24 +274,68 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
         return torch.tensor(segment_labels, dtype=torch.long)
     
     def __getitem__(self, idx):
-        """Return tokenized (anchor, positive, negative) triplet."""
+        """Return tokenized (anchor, positive, negative) triplet.
+        
+        Strategy (Hard Negative Mining):
+        - If target_opt is set (e.g., 'O3'):
+            * anchor: random opt from source opts (O0/O1/O2)
+            * positive: target_opt from same function (O3)
+            * negative: same opt as anchor from different function
+        - If target_opt is None:
+            * anchor: random opt from function A
+            * positive: different opt from same function A
+            * negative: SAME opt as anchor from different function B
+        
+        This forces the model to distinguish different functions at the same opt level.
+        """
         pairs = self.tokenized_datas[idx]
         
-        # Select anchor and positive from same function
-        pos = random.randint(0, len(pairs) - 1)
-        pos2 = random.randint(0, len(pairs) - 1)
+        if self.target_opt is not None:
+            # Targeted training mode: Ox -> target_opt
+            target_idx = self.opt.index(self.target_opt)
+            
+            # Select anchor from source opts (excluding target_opt)
+            source_indices = [i for i in range(len(pairs)) if i != target_idx and i < len(self.opt)]
+            if len(source_indices) == 0:
+                # Fallback if no source opts available in this function
+                anchor_idx = random.randint(0, len(pairs) - 1)
+            else:
+                anchor_idx = random.choice(source_indices)
+            anchor = pairs[anchor_idx]
+            
+            # Positive is always target_opt from same function
+            if target_idx < len(pairs):
+                positive = pairs[target_idx]
+            else:
+                # Fallback if target_opt not available
+                pos_idx = random.randint(0, len(pairs) - 1)
+                while pos_idx == anchor_idx and len(pairs) > 1:
+                    pos_idx = random.randint(0, len(pairs) - 1)
+                positive = pairs[pos_idx]
+        else:
+            # Original random mode: all opt combinations
+            anchor_idx = random.randint(0, len(pairs) - 1)
+            anchor = pairs[anchor_idx]
+            
+            # Select positive from different opt of same function
+            pos_idx = random.randint(0, len(pairs) - 1)
+            if len(pairs) > 1:
+                while pos_idx == anchor_idx:
+                    pos_idx = random.randint(0, len(pairs) - 1)
+            positive = pairs[pos_idx]
         
-        # Select negative from different function
-        neg_idx = random.randint(0, len(self.tokenized_datas) - 1)
-        while neg_idx == idx:
-            neg_idx = random.randint(0, len(self.tokenized_datas) - 1)
+        # Select negative from different function with SAME opt as anchor
+        neg_func_idx = random.randint(0, len(self.tokenized_datas) - 1)
+        while neg_func_idx == idx:
+            neg_func_idx = random.randint(0, len(self.tokenized_datas) - 1)
         
-        neg_pairs = self.tokenized_datas[neg_idx]
-        neg_pos = random.randint(0, len(neg_pairs) - 1)
-        
-        anchor = pairs[pos]
-        positive = pairs[pos2]
-        negative = neg_pairs[neg_pos]
+        neg_pairs = self.tokenized_datas[neg_func_idx]
+        # Try to use same opt index as anchor, fallback to random if not available
+        if anchor_idx < len(neg_pairs):
+            neg_idx = anchor_idx
+        else:
+            neg_idx = random.randint(0, len(neg_pairs) - 1)
+        negative = neg_pairs[neg_idx]
         
         return (
             anchor['input_ids'], positive['input_ids'], negative['input_ids'],
@@ -316,6 +381,16 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
         self.ebds = ebds
         self.opt = opt
         self.tokenizer = tokenizer
+        self.target_opt = target_opt
+        
+        # Validate target_opt
+        if self.target_opt is not None:
+            if self.target_opt not in opt:
+                raise ValueError(f"target_opt '{self.target_opt}' must be in opt list {opt}")
+            self.source_opts = [o for o in opt if o != self.target_opt]
+            if len(self.source_opts) == 0:
+                raise ValueError(f"Need at least one source opt besides target_opt '{self.target_opt}'")
+            print(f"Training mode: {self.source_opts} -> {self.target_opt}")
         
         print(f"Pre-processed {len(self.processed_datas)} address-aware function groups")
     
@@ -500,6 +575,18 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
         """
         Return address-aware (anchor, positive, negative) triplet.
         
+        Strategy (Hard Negative Mining):
+        - If target_opt is set (e.g., 'O3'):
+            * anchor: random opt from source opts (O0/O1/O2)
+            * positive: target_opt from same function (O3)
+            * negative: same opt as anchor from different function
+        - If target_opt is None:
+            * anchor: random opt from function A
+            * positive: different opt from same function A
+            * negative: SAME opt as anchor from different function B
+        
+        This forces the model to distinguish different functions at the same opt level.
+        
         Returns tuple of:
             - input_ids (3 tensors)
             - attention_mask (3 tensors)
@@ -511,21 +598,52 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
         """
         pairs = self.processed_datas[idx]
         
-        # Select anchor and positive from same function
-        pos = random.randint(0, len(pairs) - 1)
-        pos2 = random.randint(0, len(pairs) - 1)
+        if self.target_opt is not None:
+            # Targeted training mode: Ox -> target_opt
+            target_idx = self.opt.index(self.target_opt)
+            
+            # Select anchor from source opts (excluding target_opt)
+            source_indices = [i for i in range(len(pairs)) if i != target_idx and i < len(self.opt)]
+            if len(source_indices) == 0:
+                # Fallback if no source opts available in this function
+                anchor_idx = random.randint(0, len(pairs) - 1)
+            else:
+                anchor_idx = random.choice(source_indices)
+            anchor = pairs[anchor_idx]
+            
+            # Positive is always target_opt from same function
+            if target_idx < len(pairs):
+                positive = pairs[target_idx]
+            else:
+                # Fallback if target_opt not available
+                pos_idx = random.randint(0, len(pairs) - 1)
+                while pos_idx == anchor_idx and len(pairs) > 1:
+                    pos_idx = random.randint(0, len(pairs) - 1)
+                positive = pairs[pos_idx]
+        else:
+            # Original random mode: all opt combinations
+            anchor_idx = random.randint(0, len(pairs) - 1)
+            anchor = pairs[anchor_idx]
+            
+            # Select positive from different opt of same function
+            pos_idx = random.randint(0, len(pairs) - 1)
+            if len(pairs) > 1:
+                while pos_idx == anchor_idx:
+                    pos_idx = random.randint(0, len(pairs) - 1)
+            positive = pairs[pos_idx]
         
-        # Select negative from different function
-        neg_idx = random.randint(0, len(self.processed_datas) - 1)
-        while neg_idx == idx:
-            neg_idx = random.randint(0, len(self.processed_datas) - 1)
+        # Select negative from different function with SAME opt as anchor
+        neg_func_idx = random.randint(0, len(self.processed_datas) - 1)
+        while neg_func_idx == idx:
+            neg_func_idx = random.randint(0, len(self.processed_datas) - 1)
         
-        neg_pairs = self.processed_datas[neg_idx]
-        neg_pos = random.randint(0, len(neg_pairs) - 1)
-        
-        anchor = pairs[pos]
-        positive = pairs[pos2]
-        negative = neg_pairs[neg_pos]
+        neg_pairs = self.processed_datas[neg_func_idx]
+        # Try to use same opt index as anchor, fallback to random if not available
+        if anchor_idx < len(neg_pairs):
+            neg_idx = anchor_idx
+        else:
+            neg_idx = random.randint(0, len(neg_pairs) - 1)
+        negative = neg_pairs[neg_idx]
         
         return (
             anchor['input_ids'], positive['input_ids'], negative['input_ids'],

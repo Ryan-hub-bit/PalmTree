@@ -97,7 +97,7 @@ def train_dp(model, args, train_set, valid_set, logger):
     etc=0
     for epoch in range(args.epoch):
         model.train()
-        triplet_loss=Triplet_COS_Loss(margin=0.2)
+        triplet_loss=Triplet_COS_Loss(margin=args.triplet_margin)
         train_iterator = tqdm(train_dataloader)
         
         for i, batch_data in enumerate(train_iterator):
@@ -171,6 +171,10 @@ def train_dp(model, args, train_set, valid_set, logger):
             loss = triplet_loss(anchor, pos, neg)
 
             loss.backward()
+            
+            # Gradient clipping for stability
+            if args.max_grad_norm > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
             optimizer.step()
             if (i+1) % args.log_every == 0:
@@ -426,6 +430,15 @@ if __name__ == '__main__':
                         help='use cached embeddings for evaluation')
     parser.add_argument("--embedding_cache_dir", type=str, default=None, 
                         help='directory to cache embeddings')
+    parser.add_argument("--triplet_margin", type=float, default=0.5,
+                        help='margin for triplet loss (higher = stricter separation)')
+    parser.add_argument("--max_grad_norm", type=float, default=1.0,
+                        help='max gradient norm for clipping (0 = no clipping)')
+    parser.add_argument("--target_opt", type=str, default=None,
+                        help='target optimization level for positive samples (e.g., O3). '
+                             'If set, anchor will be randomly selected from other opts (O0/O1/O2), '
+                             'and positive will always be this opt from the same function. '
+                             'Useful for training specifically for Ox->O3 retrieval tasks.')
 
     args = parser.parse_args()
 
@@ -542,11 +555,13 @@ if __name__ == '__main__':
             # Address-aware uses hierarchical position embeddings
             ft_train_dataset = FunctionDataset_CL_AddressAware_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio,
+                target_opt=args.target_opt
             )
             ft_valid_dataset = FunctionDataset_CL_AddressAware_JSON(
                 tokenizer, args.func_blocks, args.ground_truth,
-                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio
+                opt=['O0','O1','O2','O3'], add_ebd=True, data_ratio=args.data_ratio,
+                target_opt=args.target_opt
             )
         else:
             # Baseline uses standard token sequences
