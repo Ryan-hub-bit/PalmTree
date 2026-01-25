@@ -185,13 +185,16 @@ class VarPositionalEmbedding(nn.Module):
         batch_size, seq_len = var_offsets.shape
         device = var_offsets.device
         
-        # Create mask for var tokens (offset >= 0)
-        var_mask = (var_offsets >= 0).unsqueeze(-1)  # [batch, seq, 1]
+        # Create mask for var tokens (offset != -1, sentinel value for non-var)
+        var_mask = (var_offsets != -1).unsqueeze(-1)  # [batch, seq, 1]
         
-        # Use raw offset values, clamped to max_offset
+        # Use raw offset values, clamped to [-max_offset, max_offset]
         # This preserves exact differences for nearby offsets (e.g., var(16) vs var(22))
+        # and supports negative offsets for local variables (e.g., var(-49) for [rbp-0x31])
         offsets_float = var_offsets.float()
-        offsets_float = torch.clamp(offsets_float, min=0.0, max=float(self.max_offset))
+        offsets_float = torch.clamp(offsets_float, min=-float(self.max_offset), max=float(self.max_offset))
+        # Set sentinel value -1 to 0 to avoid affecting the MLP
+        offsets_float = torch.where(var_offsets == -1, torch.zeros_like(offsets_float), offsets_float)
         encoded = offsets_float.unsqueeze(-1)  # [batch, seq, 1]
         
         # Project through MLP

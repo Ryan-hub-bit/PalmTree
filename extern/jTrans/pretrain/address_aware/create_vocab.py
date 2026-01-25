@@ -164,15 +164,15 @@ def create_vocab(data_files, vocab_path, max_size=10000, min_freq=2, logger=None
 
 
 if __name__ == "__main__":
-    # Data files from /data/kun/jtransdata/
-    train_dataset = "/data/kun/jtransdata/addr_pretrain.txt"
+    # Data files from /data/kun/jtrans/
+    train_dataset = "/data/kun/jtrans/addressaware/addr_pretrain.txt"
     
     vocab_path = "/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware/vocab_addr.pkl"
     
     print("=" * 60)
     print("Creating Vocabulary from Address-Aware Training Data")
     print("=" * 60)
-    print(f"Using WordVocab with max_size=10000, min_freq=50")
+    print(f"Using WordVocab with max_size=10000, min_freq=2")
     print(f"Output: {vocab_path} (pickle format)")
     print()
     

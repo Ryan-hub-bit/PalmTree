@@ -44,9 +44,9 @@ python3 train_addressaware.py \
   --train_path /work/kliu14/jtransdata/addr_pretrain.txt \
   --vocab_path ./vocab_addr.pkl \
   --output_dir /work/kliu14/jtransoutput/addressaware_pretrain \
-  --batch_size 256 \
+  --batch_size 128 \
   --learning_rate 1e-4 \
-  --num_epochs 10 \
+  --num_epochs 20 \
   --warmup_steps 10000 \
   --max_len 512 \
   --token_mask_prob 0.15 \

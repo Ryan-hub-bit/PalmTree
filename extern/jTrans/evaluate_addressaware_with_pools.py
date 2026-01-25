@@ -244,11 +244,11 @@ def tokenize_function(func_str, tokenizer, max_length=512):
         
         tokens, positions, var_offsets = _parse_instruction(inst_text)
         
-        # All tokens in segment 1 (PRETRAIN style, not per-instruction segments)
         all_tokens.extend(tokens)
         all_positions.extend(positions)
         all_var_offsets.extend(var_offsets)
-        all_segments.extend([1] * len(tokens))
+        inst_segment = inst_idx + 1
+        all_segments.extend([inst_segment] * len(tokens))
         
         # NO <eos> after each instruction
     

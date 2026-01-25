@@ -26,10 +26,14 @@ fi
 # ============================================================================
 # Configuration - all paths and settings
 # ============================================================================
-BINARY_DIR="/data/kun/jtrans/small_train"
-EXTRACT_DIR="/data/kun/jtrans/baseline/extract"
-STRIP_DIR="/data/kun/jtrans/small_train_strip"  # Stripped binaries with same names
-OUTPUT_DIR="/data/kun/jtrans/baseline"
+# BINARY_DIR="/data/kun/jtrans/small_train"
+# EXTRACT_DIR="/data/kun/jtrans/baseline/extract"
+# STRIP_DIR="/data/kun/jtrans/small_train_strip"  # Stripped binaries with same names
+# OUTPUT_DIR="/data/kun/jtrans/baseline"
+BINARY_DIR="/data/kun/jtrans/small_test"
+EXTRACT_DIR="/data/kun/jtrans/baseline/eval/extract"
+STRIP_DIR="/data/kun/jtrans/small_test_strip"  # Stripped binaries with same names
+OUTPUT_DIR="/data/kun/jtrans/baseline/eval"
 IDA_PATH="./ida-pro-9.0/idat"
 PROCESS_SCRIPT="$(pwd)/process.py"
 
