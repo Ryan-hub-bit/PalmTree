@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=instr_pretrain
-#SBATCH --output=/work/kliu14/jtrans/log/%x_%j.out
+#SBATCH --output=/work/kliu14/jtransdata/log/%x_%j.out
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=10
 #SBATCH --time=2-00:00:00

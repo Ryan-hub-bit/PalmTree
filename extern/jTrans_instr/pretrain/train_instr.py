@@ -424,8 +424,9 @@ def main():
             checkpoint_dir = os.path.join(args.output_dir, f'checkpoint_epoch_{epoch + 1}')
             os.makedirs(checkpoint_dir, exist_ok=True)
             
-            # Save model
-            model.bert.save_pretrained(checkpoint_dir)
+            # Save model (handle DataParallel wrapping)
+            model_to_save = model.module if hasattr(model, 'module') else model
+            model_to_save.bert.save_pretrained(checkpoint_dir)
             
             # Save training info
             training_info = {
@@ -457,7 +458,9 @@ def main():
             best_model_dir = os.path.join(args.output_dir, 'best_model')
             os.makedirs(best_model_dir, exist_ok=True)
             
-            model.bert.save_pretrained(best_model_dir)
+            # Save model (handle DataParallel wrapping)
+            model_to_save = model.module if hasattr(model, 'module') else model
+            model_to_save.bert.save_pretrained(best_model_dir)
             
             best_info = {
                 'epoch': epoch + 1,
