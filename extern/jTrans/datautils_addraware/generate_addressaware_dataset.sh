@@ -134,7 +134,17 @@ export IDA_PATH
 
 # Count binaries efficiently
 echo "Counting binaries..."
-total_binaries=$(find "$STRIPPED_DIR" -maxdepth 1 -type f ! -name "*.i64" ! -name "*.id0" ! -name "*.id1" ! -name "*.id2" ! -name "*.nam" ! -name "*.til" | wc -l)
+# Exclude all IDA-generated files and processed outputs
+# IDA database: .idb, .i64, .id0, .id1, .id2, .nam, .til, .asm
+# Script outputs: *_functions.txt, *_functions.pkl, .strip
+# Build artifacts: .o, .a, .so.*, .log, .txt
+total_binaries=$(find "$STRIPPED_DIR" -maxdepth 1 -type f \
+    ! -name "*.idb" ! -name "*.i64" ! -name "*.id0" ! -name "*.id1" ! -name "*.id2" \
+    ! -name "*.nam" ! -name "*.til" ! -name "*.asm" \
+    ! -name "*_functions.txt" ! -name "*_functions.pkl" \
+    ! -name "*.strip" ! -name "*.log" ! -name "*.txt" \
+    ! -name "*.o" ! -name "*.a" \
+    | wc -l)
 
 echo "Found $total_binaries binary files to process"
 echo ""
@@ -148,7 +158,13 @@ fi
 processed=0
 failed=0
 
-find "$STRIPPED_DIR" -maxdepth 1 -type f ! -name "*.i64" ! -name "*.id0" ! -name "*.id1" ! -name "*.id2" ! -name "*.nam" ! -name "*.til" | while read -r binary; do
+find "$STRIPPED_DIR" -maxdepth 1 -type f \
+    ! -name "*.idb" ! -name "*.i64" ! -name "*.id0" ! -name "*.id1" ! -name "*.id2" \
+    ! -name "*.nam" ! -name "*.til" ! -name "*.asm" \
+    ! -name "*_functions.txt" ! -name "*_functions.pkl" \
+    ! -name "*.strip" ! -name "*.log" ! -name "*.txt" \
+    ! -name "*.o" ! -name "*.a" \
+    | while read -r binary; do
     binary_name=$(basename "$binary")
     processed=$((processed + 1))
     

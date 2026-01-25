@@ -387,19 +387,22 @@ def clean_ida_disasm(ea):
                 base_reg_name = idaapi.get_reg_name(base_reg_id, 8)
                 offset = operand.addr
                 
-                # Use IDA's stack variable detection to be precise
-                # idaapi.is_stkvar() checks if this operand references a stack variable
-                flags = idc.get_full_flags(ea)
-                is_stack_var = idaapi.is_stkvar(flags, i)
-                
-                if is_stack_var:
-                    # IDA confirmed this is a stack variable
-                    # IDA uses unsigned offsets, so both local vars (rbp-XX) and 
-                    # parameters (rbp+XX) appear as positive values
+                # rbp (frame pointer) always accesses stack variables
+                if base_reg_name in ['rbp', 'ebp']:
+                    # Stack variable - format as var_XXh
+                    # IDA uses unsigned offsets for both local vars and parameters
                     op = f"[{base_reg_name}+var_{offset:X}h]"
                 else:
-                    # Not a stack variable - could be [rax+disp], [rdi+offset], etc.
-                    op = f"[{base_reg_name}+disp]"
+                    # For other registers (including rsp), check if it's actually a stack variable
+                    flags = idc.get_full_flags(ea)
+                    is_stack_var = idaapi.is_stkvar(flags, i)
+                    
+                    if is_stack_var:
+                        # IDA confirmed this is a stack variable
+                        op = f"[{base_reg_name}+var_{offset:X}h]"
+                    else:
+                        # Not a stack variable - generic displacement
+                        op = f"[{base_reg_name}+disp]"
             else:
                 op = "[unknown+disp]"
                 
@@ -423,7 +426,8 @@ def clean_ida_disasm(ea):
             if op_value != idaapi.BADADDR and op_value != 0:
                 op = hex(op_value)
             else:
-                op = ".plt"
+                # Invalid address - use IDA's original output as fallback
+                op = idc.print_operand(ea, i)
                 
         else:
             # Fallback
