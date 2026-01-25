@@ -10,7 +10,6 @@ Tasks:
 Usage:
     python train_baseline.py \\
         --train_path /path/to/train.txt \\
-        --test_path /path/to/test.txt \\
         --tokenizer_path /path/to/tokenizer \\
         --output_dir ./output_baseline \\
         --batch_size 32 \\
@@ -216,8 +215,6 @@ def main():
     # Data paths
     parser.add_argument('--train_path', type=str, required=True,
                        help='Path to training data')
-    parser.add_argument('--test_path', type=str, required=True,
-                       help='Path to test data')
     parser.add_argument('--tokenizer_path', type=str, required=True,
                        help='Path to tokenizer directory')
     
@@ -279,7 +276,6 @@ def main():
     logger.info("jTrans BASELINE Pretraining (MLM + JTP)")
     logger.info("=" * 80)
     logger.info(f"Train data: {args.train_path}")
-    logger.info(f"Test data: {args.test_path}")
     logger.info(f"Device: {device}")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.learning_rate}")
@@ -300,9 +296,8 @@ def main():
     
     # Create dataloaders
     logger.info("Creating dataloaders...")
-    train_loader, test_loader = create_baseline_dataloaders(
+    train_loader = create_baseline_dataloaders(
         train_path=args.train_path,
-        test_path=args.test_path,
         tokenizer=tokenizer,
         batch_size=args.batch_size,
         max_len=args.max_len,
@@ -311,7 +306,6 @@ def main():
         num_workers=args.num_workers
     )
     logger.info(f"Train batches: {len(train_loader)}")
-    logger.info(f"Test batches: {len(test_loader)}")
     
     # Create model
     logger.info("Creating baseline model...")
@@ -342,7 +336,7 @@ def main():
     )
     
     # Training loop
-    best_val_loss = float('inf')
+    best_train_loss = float('inf')
     training_history = []
     
     logger.info("\nStarting training...")
@@ -359,13 +353,6 @@ def main():
         logger.info(f"Train - Loss: {train_loss:.4f}, MLM: {train_mlm_loss:.4f} (acc: {train_mlm_acc:.4f}), "
                    f"JTP: {train_jtp_loss:.4f} (acc: {train_jtp_acc:.4f})")
         
-        # Validate
-        val_loss, val_mlm_loss, val_jtp_loss, val_mlm_acc, val_jtp_acc = validate_epoch(
-            model, test_loader, device, logger
-        )
-        logger.info(f"Val - Loss: {val_loss:.4f}, MLM: {val_mlm_loss:.4f} (acc: {val_mlm_acc:.4f}), "
-                   f"JTP: {val_jtp_loss:.4f} (acc: {val_jtp_acc:.4f})")
-        
         # Save history
         training_history.append({
             'epoch': epoch + 1,
@@ -373,12 +360,7 @@ def main():
             'train_mlm_loss': train_mlm_loss,
             'train_jtp_loss': train_jtp_loss,
             'train_mlm_acc': train_mlm_acc,
-            'train_jtp_acc': train_jtp_acc,
-            'val_loss': val_loss,
-            'val_mlm_loss': val_mlm_loss,
-            'val_jtp_loss': val_jtp_loss,
-            'val_mlm_acc': val_mlm_acc,
-            'val_jtp_acc': val_jtp_acc
+            'train_jtp_acc': train_jtp_acc
         })
         
         # Save checkpoint
@@ -396,9 +378,6 @@ def main():
                 'train_loss': train_loss,
                 'train_mlm_loss': train_mlm_loss,
                 'train_jtp_loss': train_jtp_loss,
-                'val_loss': val_loss,
-                'val_mlm_loss': val_mlm_loss,
-                'val_jtp_loss': val_jtp_loss,
                 'architecture': {
                     'hidden_size': args.hidden_size,
                     'num_hidden_layers': args.num_hidden_layers,
@@ -411,9 +390,9 @@ def main():
             
             logger.info(f"✓ Checkpoint saved to {checkpoint_dir}")
         
-        # Save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        # Save best model (based on training loss)
+        if train_loss < best_train_loss:
+            best_train_loss = train_loss
             best_model_dir = os.path.join(args.output_dir, 'best_model')
             os.makedirs(best_model_dir, exist_ok=True)
             
@@ -422,9 +401,9 @@ def main():
             best_info = {
                 'epoch': epoch + 1,
                 'mode': 'baseline',
-                'best_val_loss': best_val_loss,
-                'val_mlm_acc': val_mlm_acc,
-                'val_jtp_acc': val_jtp_acc,
+                'best_train_loss': best_train_loss,
+                'train_mlm_acc': train_mlm_acc,
+                'train_jtp_acc': train_jtp_acc,
                 'architecture': {
                     'hidden_size': args.hidden_size,
                     'num_hidden_layers': args.num_hidden_layers,
@@ -435,7 +414,7 @@ def main():
             with open(os.path.join(best_model_dir, 'training_info.json'), 'w') as f:
                 json.dump(best_info, f, indent=2)
             
-            logger.info(f"✓ Best model saved! Val loss: {best_val_loss:.4f}")
+            logger.info(f"✓ Best model saved! Val loss: {best_train_loss:.4f}")
     
     # Save training history
     history_file = os.path.join(args.output_dir, 'training_history.json')
@@ -444,7 +423,7 @@ def main():
     
     logger.info("\n" + "=" * 80)
     logger.info("Training completed!")
-    logger.info(f"Best validation loss: {best_val_loss:.4f}")
+    logger.info(f"Best validation loss: {best_train_loss:.4f}")
     logger.info(f"Training history saved to {history_file}")
     logger.info("=" * 80)
 

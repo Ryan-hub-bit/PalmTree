@@ -246,7 +246,6 @@ class BaselinePretrainingDataset(Dataset):
 
 def create_baseline_dataloaders(
     train_path,
-    test_path,
     tokenizer,
     batch_size=32,
     max_len=512,
@@ -255,11 +254,10 @@ def create_baseline_dataloaders(
     num_workers=4
 ):
     """
-    Create train and test dataloaders for baseline pretraining.
+    Create train dataloader for baseline pretraining.
     
     Args:
         train_path: Path to training data
-        test_path: Path to test data
         tokenizer: jTrans tokenizer
         batch_size: Batch size
         max_len: Maximum sequence length
@@ -268,19 +266,10 @@ def create_baseline_dataloaders(
         num_workers: Number of data loading workers
         
     Returns:
-        train_loader, test_loader
+        train_loader
     """
     train_dataset = BaselinePretrainingDataset(
         data_path=train_path,
-        tokenizer=tokenizer,
-        max_len=max_len,
-        mlm_probability=mlm_probability,
-        jtp_probability=jtp_probability,
-        on_memory=True
-    )
-    
-    test_dataset = BaselinePretrainingDataset(
-        data_path=test_path,
         tokenizer=tokenizer,
         max_len=max_len,
         mlm_probability=mlm_probability,
@@ -296,12 +285,4 @@ def create_baseline_dataloaders(
         pin_memory=True
     )
     
-    test_loader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        pin_memory=True
-    )
-    
-    return train_loader, test_loader
+    return train_loader
