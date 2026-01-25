@@ -71,8 +71,8 @@ if __name__ == '__main__':
     
     for target in target_list:
         filename = os.path.basename(target)
-        filename_strip = filename + '.strip'
-        ida_input = os.path.join(strip_path, filename_strip)
+        # Use same filename in strip directory (no .strip suffix)
+        ida_input = os.path.join(strip_path, filename)
 
         # Run strip and check for errors
         strip_cmd = ['strip', '-s', target, '-o', ida_input]
