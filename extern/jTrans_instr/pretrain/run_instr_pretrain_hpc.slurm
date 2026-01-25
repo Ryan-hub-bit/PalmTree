@@ -21,6 +21,6 @@ conda activate /work/kliu14/.conda/envs/jtrans
 # ./run_instr_pretrain_hpc.sh 0.01   # 1% of data
 # ./run_instr_pretrain_hpc.sh 0.1    # 10% of data
 # ./run_instr_pretrain_hpc.sh 1.0    # 100% of data (full training)
-./run_instr_pretrain_hpc.sh 1.0
+./run_instr_pretrain_hpc.sh
 
 echo "Done!"
