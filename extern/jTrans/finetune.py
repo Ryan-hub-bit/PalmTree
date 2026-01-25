@@ -57,8 +57,8 @@ def train_dp(model, args, train_set, valid_set, logger):
     device = torch.device("cuda")
     model.to(device)
     logger.info("Finished Initialization...")
-    train_dataloader = DataLoader(train_set, batch_size=args.batch_size, num_workers=4, shuffle=True, prefetch_factor=2)
-    valid_dataloader = DataLoader(valid_set, batch_size=args.eval_batch_size, num_workers=4, shuffle=True, prefetch_factor=2)
+    train_dataloader = DataLoader(train_set, batch_size=args.batch_size, num_workers=2, shuffle=True, prefetch_factor=1)
+    valid_dataloader = DataLoader(valid_set, batch_size=args.eval_batch_size, num_workers=2, shuffle=True, prefetch_factor=1)
 
     no_decay = ["bias", "LayerNorm.weight"]
     optimizer_grouped_parameters = []
@@ -99,7 +99,6 @@ def train_dp(model, args, train_set, valid_set, logger):
         model.train()
         triplet_loss=Triplet_COS_Loss(margin=0.2)
         train_iterator = tqdm(train_dataloader)
-        loss_list = []
         
         for i, batch_data in enumerate(train_iterator):
             t1=time.time()
@@ -172,7 +171,6 @@ def train_dp(model, args, train_set, valid_set, logger):
             loss = triplet_loss(anchor, pos, neg)
 
             loss.backward()
-            loss_list.append(loss)
 
             optimizer.step()
             if (i+1) % args.log_every == 0:

@@ -3,15 +3,24 @@ import os
 import subprocess
 import multiprocessing
 import time
-from util.pairdata import pairdata
+import argparse
 
-# Configuration
-ida_path = "./ida-pro-9.0/idat"  # 32-bit IDA
+# Parse command line arguments
+parser = argparse.ArgumentParser(description='Run IDA Pro batch extraction')
+parser.add_argument('--binary-dir', required=True, help='Directory containing binaries')
+parser.add_argument('--extract-dir', required=True, help='Output directory for pickle files')
+parser.add_argument('--strip-path', required=True, help='Directory for stripped binaries')
+parser.add_argument('--ida-path', default='./ida-pro-9.0/idat', help='Path to IDA Pro')
+parser.add_argument('--process-script', default='./process.py', help='Path to process.py script')
+args = parser.parse_args()
+
+# Configuration from arguments
+ida_path = args.ida_path
 work_dir = os.path.abspath('.')
-dataset_dir = '/data/kun/jtransdata/small_train'
-strip_path = os.environ.get('STRIP_PATH', '/data/kun/jtransdata/small_train_strip')
-script_path = os.path.abspath("./process.py")
-SAVE_ROOT = "/data/kun/jtransdata/extract"
+dataset_dir = os.path.abspath(args.binary_dir)
+strip_path = os.path.abspath(args.strip_path)
+script_path = os.path.abspath(args.process_script)
+SAVE_ROOT = os.path.abspath(args.extract_dir)
 
 # Create all necessary directories
 os.makedirs(SAVE_ROOT, exist_ok=True)
@@ -62,8 +71,8 @@ if __name__ == '__main__':
     
     for target in target_list:
         filename = os.path.basename(target)
-        filename_strip = filename + '.strip'
-        ida_input = os.path.join(strip_path, filename_strip)
+        # Use same filename in strip directory (no .strip suffix)
+        ida_input = os.path.join(strip_path, filename)
 
         # Run strip and check for errors
         strip_cmd = ['strip', '-s', target, '-o', ida_input]
@@ -92,11 +101,7 @@ if __name__ == '__main__':
     pool.join()
     
     print('\n[*] Features Extracting Done')
-    print(f'[*] Processed {success_count} binaries')
-    
-    # Pair the data
-    print('\n[*] Running pairdata to organize extracted features...')
-    pairdata(SAVE_ROOT)
+    print(f'[*] Processed {len(target_list)} binaries')
     
     end = time.time()
     print(f"[*] Total Time: {end - start:.2f} seconds")

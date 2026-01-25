@@ -28,7 +28,7 @@ python3 train_baseline.py \
     --vocab /data/kun/jtransdata/vocab_baseline.txt \
     --output_dir /home/kun/Document/AAE/output/jtrans/baseline_pretrain \
     --batch_size 32 \
-    --epochs 100 \
+    --epochs 10 \
     --lr 1e-4 \
     --mask_prob 0.15 \
     --save_best \

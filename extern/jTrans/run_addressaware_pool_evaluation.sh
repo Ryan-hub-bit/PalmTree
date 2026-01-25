@@ -8,7 +8,7 @@ conda activate jtrans
 DATA_DIR="/data/kun/jtransdata"
 
 # Address-aware model configuration
-ADDRESSAWARE_MODEL="/home/kun/Document/AAE/output/jtrans/addressaware_finetune/finetune_epoch_2"
+ADDRESSAWARE_MODEL="/home/kun/Document/AAE/output/jtrans/addressaware_finetune/finetune_epoch_1"
 ADDRESSAWARE_TOKENIZER="/home/kun/Document/AAE/extern/jTrans/pretrain/address_aware"
 FUNC_BLOCKS_ADDRESSAWARE="${DATA_DIR}/func_blocks_addr.json"
 

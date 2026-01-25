@@ -528,6 +528,7 @@ def process_file_ida(fpath: str, out_dir: str):
     print(f"[INFO] Found {len(all_functions)} functions")
     
     func_data = []  # List of (func_name, func_start, func_end, instructions)
+    skipped_segments = 0  # Counter for skipped segments
     
     for idx, func_ea in enumerate(all_functions):
         if idx % 100 == 0:
@@ -535,6 +536,12 @@ def process_file_ida(fpath: str, out_dir: str):
         
         func = ida_funcs.get_func(func_ea)
         if not func:
+            continue
+        
+        # Filter out functions in .plt, extern, .init, .fini segments (same as baseline)
+        segm_name = idc.get_segm_name(func_ea)
+        if segm_name in ['.plt', 'extern', '.init', '.fini']:
+            skipped_segments += 1
             continue
         
         func_start = func.start_ea
@@ -617,7 +624,7 @@ def process_file_ida(fpath: str, out_dir: str):
                 written += 1
     
     print(f"[DONE] {out_file} (wrote {written} functions)")
-    print(f"[INFO] Skipped: {skipped_empty} empty, {skipped_small} < {MIN_INSTRUCTIONS} instructions")
+    print(f"[INFO] Skipped: {skipped_empty} empty, {skipped_small} < {MIN_INSTRUCTIONS} instructions, {skipped_segments} in filtered segments (.plt, .init, .fini, extern)")
     print(f"[INFO] Position encoding:")
     print(f"  CODE: func_in_binary:bb_in_function:inst_in_bb")
     print(f"  DATA: section_in_binary:addr_in_section:0.0")

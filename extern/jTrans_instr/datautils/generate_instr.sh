@@ -11,7 +11,8 @@ echo ""
 echo "This script will:"
 echo "  1. Delete old incomplete pickle files"
 echo "  2. Run IDA Pro on ALL binaries to generate instruction-level extractions"
-echo "  3. Generate instruction-level function dataset with ground truth"
+echo "  3. Generate pretraining text file (instr_pretrain.txt)"
+echo "  4. Generate instruction-level function dataset with ground truth"
 echo ""
 echo "WARNING: This will take several hours/days depending on dataset size!"
 echo ""
@@ -23,9 +24,12 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
 fi
 
 # Configuration
-BINARY_DIR="/data/kun/jtransdata/small_train"
-EXTRACT_DIR="/data/kun/jtrans_instr/extract"
-OUTPUT_DIR="/data/kun/jtrans_instr"
+BINARY_DIR="/data/kun/jtrans/small_train"
+STRIP_DIR="/data/kun/jtrans/small_train_strip"
+EXTRACT_DIR="/data/kun/jtrans/instr/extract"
+OUTPUT_DIR="/data/kun/jtrans/instr"
+IDA_PATH="./ida-pro-9.0/idat"
+PROCESS_SCRIPT="$(pwd)/process_instr.py"
 
 echo ""
 echo "========================================================================"
@@ -96,8 +100,13 @@ else
     echo "Found $total_binaries binaries to process"
     echo ""
 
-    # Run IDA extraction
-    python3 run_instr.py
+    # Run IDA extraction with arguments
+    python3 run_instr.py \
+        --binary-dir "$BINARY_DIR" \
+        --extract-dir "$EXTRACT_DIR" \
+        --strip-path "$STRIP_DIR" \
+        --ida-path "$IDA_PATH" \
+        --process-script "$PROCESS_SCRIPT"
 
     echo ""
     echo "✓ IDA extraction complete"
@@ -109,25 +118,68 @@ fi
 
 echo ""
 echo "========================================================================"
-echo "Step 3/3: Generating instruction-level function dataset"
+echo "Step 3/4: Generating pretraining text file (instr_pretrain.txt)"
 echo "========================================================================"
+
+PRETRAIN_FILE="$OUTPUT_DIR/instr_pretrain.txt"
+
+echo "Converting pickle files to pretraining format..."
+echo "Output: $PRETRAIN_FILE"
+echo ""
+
+python3 convert_pkl_to_text.py \
+    "$EXTRACT_DIR" \
+    "$PRETRAIN_FILE" \
+    --min-instructions 5 \
+    --max-instructions 512
+
+if [ -f "$PRETRAIN_FILE" ]; then
+    line_count=$(wc -l < "$PRETRAIN_FILE")
+    echo "✓ Generated $PRETRAIN_FILE ($line_count functions)"
+else
+    echo "ERROR: Failed to generate pretrain file"
+    exit 1
+fi
+
+echo ""
+echo "========================================================================"
+echo "Step 4/4: Generating instruction-level function dataset (JSON)"
+echo "========================================================================"
+
+echo "Creating finetuning dataset with ground truth..."
+echo ""
 
 python3 create_instr_dataset.py \
     "$EXTRACT_DIR" \
     "$OUTPUT_DIR" \
     --binary-dir "$BINARY_DIR"
 
+if [ -f "$OUTPUT_DIR/func_blocks_instr.json" ]; then
+    func_count=$(python3 -c "import json; print(len(json.load(open('$OUTPUT_DIR/func_blocks_instr.json'))))" 2>/dev/null || echo "?")
+    echo "✓ Generated func_blocks_instr.json ($func_count functions)"
+fi
+
+if [ -f "$OUTPUT_DIR/ground_truth_instr.json" ]; then
+    pair_count=$(python3 -c "import json; print(json.load(open('$OUTPUT_DIR/ground_truth_instr.json'))['total_pairs'])" 2>/dev/null || echo "?")
+    echo "✓ Generated ground_truth_instr.json ($pair_count groups)"
+fi
+
 echo ""
 echo "========================================================================"
 echo "COMPLETE!"
 echo "========================================================================"
 echo ""
-echo "Instruction-level dataset files:"
-echo "  - $OUTPUT_DIR/func_blocks_instr.json"
-echo "  - $OUTPUT_DIR/ground_truth_instr.json"
+echo "Generated files in: $OUTPUT_DIR"
+echo ""
+echo "Pretraining:"
+echo "  - instr_pretrain.txt"
+echo ""
+echo "Finetuning/Evaluation:"
+echo "  - func_blocks_instr.json"
+echo "  - ground_truth_instr.json"
 echo ""
 echo "Next steps:"
-echo "  1. Verify the instruction-level format (instr_addr_{i})"
-echo "  2. Run jTrans_instr finetuning"
-echo "  3. Run evaluation with fair comparison pools"
+echo "  1. Pretrain: Use instr_pretrain.txt for pretraining"
+echo "  2. Finetune: Use func_blocks_instr.json for finetuning"
+echo "  3. Evaluate: Use ground_truth_instr.json for evaluation"
 echo ""

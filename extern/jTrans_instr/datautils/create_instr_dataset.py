@@ -285,6 +285,11 @@ def process_pickle_file(pkl_path, binary_dir):
         if func_name not in function_names:
             continue
         
+        # Skip small functions (< 5 instructions) - same as baseline
+        asm_list = func_data.get('asm', [])
+        if len(asm_list) < 5:
+            continue
+        
         # Tokenize function with instruction-level addressing
         tokenized = tokenize_function_instr(func_data)
         
