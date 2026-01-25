@@ -41,7 +41,7 @@ python3 train_baseline.py \
   --train_path /work/kliu14/jtransdata/baseline_pretrain.txt \
   --tokenizer_path . \
   --output_dir /work/kliu14/jtransoutput/baseline_pretrain \
-  --batch_size 256 \
+  --batch_size 128 \
   --learning_rate 1e-4 \
   --num_epochs 10 \
   --warmup_steps 10000 \
@@ -54,3 +54,5 @@ python3 train_baseline.py \
   --save_every 1 \
   --num_workers 16 \
   --data_ratio "$DATA_RATIO"
+
+echo "Done!"
