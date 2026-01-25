@@ -14,7 +14,7 @@ DATA_RATIO="${1:-0.0001}"
 # Use all available GPUs (default: 0,1,2,3 for 4 GPUs)
 # SLURM will set CUDA_VISIBLE_DEVICES automatically, but if running locally, set it here
 if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
-    export CUDA_VISIBLE_DEVICES=0,1,2,3
+    export CUDA_VISIBLE_DEVICES=0,1
 fi
 echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
 # Uncomment for debugging (makes CUDA synchronous, slower)
