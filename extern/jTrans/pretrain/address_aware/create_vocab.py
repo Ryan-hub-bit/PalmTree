@@ -52,12 +52,8 @@ def preprocess_line(line):
     # Additional token-level filtering and normalization
     normalized_tokens = []
     for tok in tokens:
-        # Filter out jump table labels: (jpt_XXXX or jpt_XXXX
-        if tok.startswith('(jpt_') or tok.startswith('jpt_'):
-            continue
-        
-        # Filter out IDA auto-generated labels: unk_XXXX, loc_XXXX, locret_XXXX, sub_XXXX
-        if re.match(r'^(unk|loc|locret|sub|byte|word|dword|qword|xmmword|ymmword|zmmword|stru)_[0-9A-Fa-f]+$', tok):
+        # Filter out jump table labels: (jpt_XXXX
+        if tok.startswith('(jpt_'):
             continue
         
         # Filter out raw hex addresses: 0xXXXX (these shouldn't be in tokenized output)
@@ -73,10 +69,6 @@ def preprocess_line(line):
         if re.match(r'^[0-9A-Fa-f]+h\)$', tok):
             normalized_tokens.append('imm')
             continue
-        
-        # Remove trailing closing parenthesis from function names: varll_new) -> varll_new
-        if tok.endswith(')') and not tok.startswith('(') and '(' not in tok[:-1]:
-            tok = tok[:-1]
         
         # Remove segment prefixes: ds:dword_0 -> dword_0
         if re.match(r'^[cdefgs]s:', tok):

@@ -338,14 +338,16 @@ def build_function_inline(func_instructions, ctx: dict):
 
 def clean_ida_disasm(ea):
     """
-    Get clean raw assembly text WITHOUT IDA's symbol inference.
-    Build operands from numeric values only - no struct fields, no variable names, no debug symbols.
+    Get clean disassembly WITHOUT using IDA's symbol inference.
+    Strategy: Build operands from scratch using only numeric values and operand types.
+    This avoids all IDA-inferred names: struct fields (pw_name, st_size), 
+    variable names (dataset, src, dest), and debug symbols.
     
-    Simple output:
+    Operand construction:
     - o_imm: -> "imm"
-    - o_reg: -> register name (rax, rbx, etc.)
+    - o_reg: -> register name from idc.get_operand_value()
     - o_displ: -> [base_reg+var_XXh] or [base_reg+disp]
-    - o_phrase: -> [base_reg] or [base_reg+disp]
+    - o_phrase: -> [base_reg+disp] 
     - o_mem/o_near/o_far: -> hex address
     """
     # Get mnemonic
@@ -353,11 +355,7 @@ def clean_ida_disasm(ea):
     if not mnem:
         return None
     
-    # Decode instruction
-    insn = idaapi.insn_t()
-    idaapi.decode_insn(insn, ea)
-    
-    # Get operands
+    # Get operands - up to 6 operands max
     operands = []
     for i in range(6):
         op_type = idc.get_operand_type(ea, i)
@@ -365,76 +363,96 @@ def clean_ida_disasm(ea):
             break
             
         op_value = idc.get_operand_value(ea, i)
+        
+        # Build operand string based on type, without using print_operand
         op = None
         
         if op_type == idc.o_reg:
-            # Register - get name
+            # Register operand - get register name by ID
             reg_id = op_value
-            reg_name = idaapi.get_reg_name(reg_id, 8)
+            reg_name = idaapi.get_reg_name(reg_id, idaapi.get_dtype_size(idc.get_operand_type(ea, i)))
             if not reg_name:
+                # Fallback: use a minimal print_operand just for register names
                 reg_name = idc.print_operand(ea, i)
             op = reg_name
             
         elif op_type == idc.o_imm:
-            # Immediate
+            # Immediate value
             op = "imm"
             
         elif op_type == idc.o_displ:
-            # Displacement: [base+offset]
+            # Displacement: [base_reg + offset]
+            # This includes stack variables and memory accesses with base register
+            # Get base register
+            # Use idaapi to get detailed operand info
+            insn = idaapi.insn_t()
+            idaapi.decode_insn(insn, ea)
             if i < len(insn.ops):
                 operand = insn.ops[i]
+                # Get base register
                 base_reg_id = operand.reg
-                base_reg_name = idaapi.get_reg_name(base_reg_id, 8)
+                base_reg_name = idaapi.get_reg_name(base_reg_id, 8) if base_reg_id != 0xFFFF else "unknown"
+                
+                # Get offset/displacement value
                 offset = operand.addr
                 
-                # Use IDA's stack variable detection to be precise
-                # idaapi.is_stkvar() checks if this operand references a stack variable
-                flags = idc.get_full_flags(ea)
-                is_stack_var = idaapi.is_stkvar(flags, i)
-                
-                if is_stack_var:
-                    # IDA confirmed this is a stack variable
-                    # IDA uses unsigned offsets, so both local vars (rbp-XX) and 
-                    # parameters (rbp+XX) appear as positive values
-                    op = f"[{base_reg_name}+var_{offset:X}h]"
+                # Determine if it's a stack variable (typically rbp or rsp based)
+                if base_reg_name in ['rbp', 'rsp', 'ebp', 'esp']:
+                    # Stack variable - use var_ format
+                    if offset > 0:
+                        op = f"[{base_reg_name}+var_{offset:X}h]"
+                    else:
+                        op = f"[{base_reg_name}+var_0]"
                 else:
-                    # Not a stack variable - could be [rax+disp], [rdi+offset], etc.
+                    # Regular displacement - use disp marker
                     op = f"[{base_reg_name}+disp]"
             else:
+                # Fallback
                 op = "[unknown+disp]"
                 
         elif op_type == idc.o_phrase:
-            # Memory phrase: [base] or [base+index*scale]
+            # Memory phrase: [base_reg] or [base+index*scale]
+            insn = idaapi.insn_t()
+            idaapi.decode_insn(insn, ea)
             if i < len(insn.ops):
                 operand = insn.ops[i]
                 base_reg_id = operand.reg
-                base_reg_name = idaapi.get_reg_name(base_reg_id, 8)
+                base_reg_name = idaapi.get_reg_name(base_reg_id, 8) if base_reg_id != 0xFFFF else "unknown"
                 
-                # Check for index register (SIB)
+                # Check if there's an index register (SIB byte)
                 if hasattr(operand, 'specflag1') and operand.specflag1:
+                    # Has index register - get it from phrase structure
+                    # For now, use disp as a placeholder for complex addressing
                     op = f"[{base_reg_name}+disp]"
                 else:
+                    # Simple phrase
                     op = f"[{base_reg_name}]"
             else:
                 op = "[unknown]"
                 
         elif op_type in [idc.o_near, idc.o_mem, idc.o_far]:
-            # Address reference
+            # Code or data address reference
             if op_value != idaapi.BADADDR and op_value != 0:
                 op = hex(op_value)
             else:
-                op = ".plt"
+                # Try minimal fallback
+                op = ".plt"  # Unresolvable external
                 
         else:
-            # Fallback
+            # Other types - minimal fallback to print_operand but strip known symbols
             op_str = idc.print_operand(ea, i)
-            op = op_str if op_str else "unknown"
+            if op_str:
+                # Remove common IDA artifacts but keep basic structure
+                op = op_str
+            else:
+                op = "unknown"
         
         if op:
             operands.append(op)
     
-    # Build result
+    # Build clean disassembly
     result = f"{mnem} {', '.join(operands)}" if operands else mnem
+    
     return result
 
 
