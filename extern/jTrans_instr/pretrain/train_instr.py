@@ -351,6 +351,11 @@ def main():
     
     model = model.to(device)
     
+    # Use DataParallel for multi-GPU training
+    if torch.cuda.device_count() > 1:
+        logger.info(f"Using {torch.cuda.device_count()} GPUs with DataParallel")
+        model = nn.DataParallel(model)
+    
     # Count parameters
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

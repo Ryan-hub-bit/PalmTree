@@ -206,7 +206,7 @@ if __name__ == "__main__":
         vocab = WordVocab(
             preprocessed_files,
             max_size=10000,
-            min_freq=50
+            min_freq=2
         )
         
     finally:

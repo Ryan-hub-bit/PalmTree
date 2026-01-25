@@ -9,7 +9,7 @@
 #          ./run_instr_pretrain_hpc.sh 1.0    # Use 100% of data (default)
 
 # Data ratio (default: 1.0 = 100% of data)
-DATA_RATIO="${1:-1.0}"  # Changed from 0.0001 to 1.0 for full training
+DATA_RATIO="${1:-0.00001}"  # Changed from 0.0001 to 1.0 for full training
 
 # Use all available GPUs (default: 0,1,2,3 for 4 GPUs)
 # SLURM will set CUDA_VISIBLE_DEVICES automatically, but if running locally, set it here
@@ -21,9 +21,9 @@ echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
 # export CUDA_LAUNCH_BLOCKING=1
 
 # Paths (modify these to match your HPC setup)
-TRAIN_PATH="/work/kliu14/jtrans_instr/instr_pretrain.txt"
+TRAIN_PATH="/work/kliu14/jtransdata/instr_pretrain.txt"
 TOKENIZER_PATH="/home/kliu14/AAE/extern/jTrans_instr/jtrans_tokenizer"
-OUTPUT_DIR="/work/kliu14/jtrans_instr/jtrans_instr_pretrain_output"
+OUTPUT_DIR="/work/kliu14/jtransdata/instr_output"
 
 # Model architecture
 HIDDEN_SIZE=768
@@ -33,7 +33,7 @@ INTERMEDIATE_SIZE=3072
 MAX_INSTRUCTIONS=201
 
 # Training hyperparameters
-BATCH_SIZE=100  # Reduced from 256 to avoid OOM. Increase gradually if you have more GPU memory
+BATCH_SIZE=128  # Reduced from 256 to avoid OOM. Increase gradually if you have more GPU memory
 LEARNING_RATE=1e-4
 NUM_EPOCHS=10
 WARMUP_STEPS=10000

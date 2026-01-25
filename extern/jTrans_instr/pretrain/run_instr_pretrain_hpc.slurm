@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=instr_pretrain
 #SBATCH --output=/work/kliu14/jtrans_instr/log/%x_%j.out
-#SBATCH --gres=gpu:2
-#SBATCH --cpus-per-task=8
-#SBATCH --time=3-00:00:00
-#SBATCH --partition=gpu2
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=10
+#SBATCH --time=2-00:00:00
+#SBATCH --partition=gpu4
 #SBATCH --account=loni_insembed01
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK

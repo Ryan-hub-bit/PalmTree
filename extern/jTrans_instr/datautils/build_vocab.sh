@@ -8,7 +8,7 @@ echo "Build jTrans_instr Vocabulary"
 echo "========================================================================"
 
 # Configuration
-INPUT_FILE="/data/kun/jtrans_instr/instr_pretrain.txt"
+INPUT_FILE="/data/kun/jtrans/instr/instr_pretrain.txt"
 OUTPUT_FILE="/home/kun/Document/AAE/extern/jTrans_instr/jtrans_tokenizer/vocab.txt"
 
 echo ""
@@ -29,7 +29,7 @@ cd "$(dirname "$0")"
 python3 build_vocab.py \
     --input-file "$INPUT_FILE" \
     --output-file "$OUTPUT_FILE" \
-    --min-freq 1
+    --min-freq 2
 
 echo ""
 echo "========================================================================"
