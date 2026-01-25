@@ -37,7 +37,8 @@ class BaselinePretrainingDataset(Dataset):
         mlm_probability=0.15,
         jtp_probability=0.20,
         convert_jump_addr=True,
-        on_memory=True
+        on_memory=True,
+        data_ratio=1.0
     ):
         """
         Args:
@@ -48,6 +49,7 @@ class BaselinePretrainingDataset(Dataset):
             jtp_probability: Probability of masking jump tokens
             convert_jump_addr: Whether to convert jump addresses to JUMP_ADDR_X
             on_memory: Load all data into memory
+            data_ratio: Ratio of data to use (0.0-1.0)
         """
         self.data_path = data_path
         self.tokenizer = tokenizer
@@ -56,6 +58,7 @@ class BaselinePretrainingDataset(Dataset):
         self.jtp_probability = jtp_probability
         self.convert_jump_addr = convert_jump_addr
         self.on_memory = on_memory
+        self.data_ratio = data_ratio
         
         # Special tokens
         self.pad_token_id = tokenizer.pad_token_id
@@ -68,6 +71,12 @@ class BaselinePretrainingDataset(Dataset):
         if on_memory:
             with open(data_path, 'r', encoding='utf-8') as f:
                 self.lines = [line.strip() for line in f if line.strip()]
+            # Apply data_ratio
+            if data_ratio < 1.0:
+                import math
+                num_samples = max(1, int(math.ceil(len(self.lines) * data_ratio)))
+                self.lines = self.lines[:num_samples]
+                print(f"Using {num_samples}/{len(self.lines)} samples (ratio={data_ratio})")
         else:
             # Count lines for __len__
             with open(data_path, 'r', encoding='utf-8') as f:
@@ -251,7 +260,8 @@ def create_baseline_dataloaders(
     max_len=512,
     mlm_probability=0.15,
     jtp_probability=0.20,
-    num_workers=4
+    num_workers=4,
+    data_ratio=1.0
 ):
     """
     Create train dataloader for baseline pretraining.
@@ -264,6 +274,7 @@ def create_baseline_dataloaders(
         mlm_probability: MLM masking probability
         jtp_probability: JTP masking probability
         num_workers: Number of data loading workers
+        data_ratio: Ratio of data to use (0.0-1.0)
         
     Returns:
         train_loader
@@ -274,7 +285,8 @@ def create_baseline_dataloaders(
         max_len=max_len,
         mlm_probability=mlm_probability,
         jtp_probability=jtp_probability,
-        on_memory=True
+        on_memory=True,
+        data_ratio=data_ratio
     )
     
     train_loader = DataLoader(

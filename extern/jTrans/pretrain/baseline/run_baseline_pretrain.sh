@@ -24,13 +24,15 @@ echo "=========================================="
 
 # For pretraining, we use single file for all data
 python3 train_baseline.py \
-    --train_data /data/kun/jtransdata/baseline_pretrain.pkl \
-    --vocab /data/kun/jtransdata/vocab_baseline.txt \
+    --train_path /data/kun/jtransdata/baseline_pretrain.txt \
+    --tokenizer_path . \
     --output_dir /home/kun/Document/AAE/output/jtrans/baseline_pretrain \
     --batch_size 32 \
-    --epochs 10 \
-    --lr 1e-4 \
-    --mask_prob 0.15 \
-    --save_best \
+    --num_epochs 10 \
+    --learning_rate 1e-4 \
+    --mlm_probability 0.15 \
+    --jtp_probability 0.20 \
+    --max_len 512 \
+    --save_every 1 \
     --data_ratio "$DATA_RATIO"
 

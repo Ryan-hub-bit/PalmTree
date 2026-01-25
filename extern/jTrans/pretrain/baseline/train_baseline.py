@@ -245,6 +245,8 @@ def main():
                        help='MLM masking probability')
     parser.add_argument('--jtp_probability', type=float, default=0.20,
                        help='JTP masking probability')
+    parser.add_argument('--data_ratio', type=float, default=1.0,
+                       help='Ratio of training data to use (0.0-1.0, default: 1.0 = 100%%)')
     
     # Output
     parser.add_argument('--output_dir', type=str, default='./output_baseline',
@@ -303,7 +305,8 @@ def main():
         max_len=args.max_len,
         mlm_probability=args.mlm_probability,
         jtp_probability=args.jtp_probability,
-        num_workers=args.num_workers
+        num_workers=args.num_workers,
+        data_ratio=args.data_ratio
     )
     logger.info(f"Train batches: {len(train_loader)}")
     
