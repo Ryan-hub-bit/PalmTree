@@ -20,12 +20,12 @@ OUTPUT_PATH="/work/kliu14/jtransoutput/addressaware_finetune"
 BATCH_SIZE=16
 EVAL_BATCH_SIZE=32
 LR=2e-5
-EPOCHS=2
+EPOCHS=10
 WARMUP=500
 TRIPLET_MARGIN=0.5
 MAX_GRAD_NORM=1.0
 WEIGHT_DECAY=0.01
-DATA_RATIO=0.00001  # Use full dataset (change to smaller value for testing)
+DATA_RATIO=1.0  # Use full dataset (change to smaller value for testing)
 
 # Optional: Target optimization level (O0, O1, O2, O3)
 # Uncomment to train for specific Ox→O3 retrieval task
