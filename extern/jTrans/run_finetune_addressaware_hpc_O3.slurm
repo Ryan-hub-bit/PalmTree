@@ -38,7 +38,7 @@ nvidia-smi
 echo "=========================================="
 
 # Run the training script
-bash run_finetune_addressaware_hpc.sh
+bash run_finetune_addressaware_hpc_O3.sh
 
 # Print completion info
 echo "=========================================="

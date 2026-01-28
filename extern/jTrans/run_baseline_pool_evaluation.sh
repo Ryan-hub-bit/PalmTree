@@ -7,8 +7,8 @@
 #
 # Example:
 #   ./run_baseline_pool_evaluation.sh \
-#       /home/kun/Document/AAE/output/jtrans/baseline_pretrain/best_model.pth \
-#       /home/kun/Document/AAE/strupos/vocab.txt
+#       /home/kun/Document/AAE/output/jtrans/baseline_finetune/finetune_epoch_10 \
+#       /home/kun/Document/AAE/extern/jTrans/pretrain/baseline/vocab.txt
 
 set -e
 
@@ -23,13 +23,14 @@ if [ "$#" -lt 2 ]; then
     echo ""
     echo "Examples:"
     echo "  # Evaluate all pools"
-    echo "  $0 output/baseline/model.pth strupos/vocab.txt"
+    echo "  # Evaluate all pools with finetuned model"
+    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_10 extern/jTrans/pretrain/baseline/vocab.txt"
     echo ""
     echo "  # Evaluate only 1000-size pools"
-    echo "  $0 output/baseline/model.pth strupos/vocab.txt 1000"
+    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_10 extern/jTrans/pretrain/baseline/vocab.txt 1000"
     echo ""
     echo "  # Evaluate only O0->O3 pairs with 10000 pool size"
-    echo "  $0 output/baseline/model.pth strupos/vocab.txt 10000 O0_vs_O3"
+    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_10 extern/jTrans/pretrain/baseline/vocab.txt 10000 O0_vs_O3"
     exit 1
 fi
 
@@ -39,9 +40,9 @@ POOL_SIZE=${3:-""}
 OPT_PAIR=${4:-""}
 
 # Configuration
-POOL_DIR="/data/kun/jtrans/baseline/eval/pools"
+POOL_DIR="/data/kun/jtrans/baseline/eval/pools_filtered"
 FUNC_BLOCKS="/data/kun/jtrans/baseline/eval/func_blocks_baseline.json"
-MAX_LEN=100
+MAX_LEN=512  # Same as finetune
 BATCH_SIZE=64
 DEVICE="cuda"
 
