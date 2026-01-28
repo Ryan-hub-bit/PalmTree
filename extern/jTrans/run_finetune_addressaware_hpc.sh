@@ -12,7 +12,7 @@ FUNC_BLOCKS="$DATA_DIR/func_blocks_addr.json"
 GROUND_TRUTH="$DATA_DIR/ground_truth_addr.json"
 
 # Model paths
-TOKENIZER="/work/kliu14/AAE/extern/jTrans/pretrain/address_aware"
+TOKENIZER="/home/kliu14/AAE/extern/jTrans/pretrain/address_aware"
 MODEL_PATH="/work/kliu14/jtransoutput/addressaware_pretrain/checkpoint_epoch_14"
 OUTPUT_PATH="/work/kliu14/jtransoutput/addressaware_finetune"
 
