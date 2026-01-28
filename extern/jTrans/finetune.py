@@ -100,6 +100,9 @@ def train_dp(model, args, train_set, valid_set, logger):
         triplet_loss=Triplet_COS_Loss(margin=args.triplet_margin)
         train_iterator = tqdm(train_dataloader)
         
+        # Initialize gradient accumulation tracking
+        accumulation_steps = 0
+        
         for i, batch_data in enumerate(train_iterator):
             t1=time.time()
             
@@ -122,7 +125,9 @@ def train_dp(model, args, train_set, valid_set, logger):
                 bb_pos1, bb_pos2, bb_pos3 = bb_pos1.cuda(), bb_pos2.cuda(), bb_pos3.cuda()
                 var_offsets1, var_offsets2, var_offsets3 = var_offsets1.cuda(), var_offsets2.cuda(), var_offsets3.cuda()
                 
-                optimizer.zero_grad()
+                # Zero gradients only at start of accumulation cycle
+                if accumulation_steps == 0:
+                    optimizer.zero_grad()
                 
                 # Address-aware model forward (wrapped to return pooler_output)
                 output1 = model(
@@ -157,7 +162,9 @@ def train_dp(model, args, train_set, valid_set, logger):
                 input_ids2, attention_mask2, token_type_ids2 = seq2.cuda(), mask2.cuda(), seg2.cuda()
                 input_ids3, attention_mask3, token_type_ids3 = seq3.cuda(), mask3.cuda(), seg3.cuda()
 
-                optimizer.zero_grad()
+                # Zero gradients only at start of accumulation cycle
+                if accumulation_steps == 0:
+                    optimizer.zero_grad()
 
                 output1 = model(input_ids=input_ids1, attention_mask=attention_mask1, token_type_ids=token_type_ids1)
                 anchor = output1.pooler_output
@@ -169,14 +176,23 @@ def train_dp(model, args, train_set, valid_set, logger):
                 neg = output3.pooler_output
 
             loss = triplet_loss(anchor, pos, neg)
-
+            
+            # Scale loss for gradient accumulation
+            loss = loss / args.gradient_accumulation_steps
             loss.backward()
             
-            # Gradient clipping for stability
-            if args.max_grad_norm > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+            # Increment accumulation counter
+            accumulation_steps += 1
+            
+            # Update weights only after accumulating enough gradients
+            if accumulation_steps == args.gradient_accumulation_steps:
+                # Gradient clipping for stability
+                if args.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
-            optimizer.step()
+                optimizer.step()
+                accumulation_steps = 0  # Reset counter
+            
             if (i+1) % args.log_every == 0:
                 global_steps += 1
                 tmp_lr = optimizer.param_groups[0]["lr"]
@@ -434,6 +450,8 @@ if __name__ == '__main__':
                         help='margin for triplet loss (higher = stricter separation)')
     parser.add_argument("--max_grad_norm", type=float, default=1.0,
                         help='max gradient norm for clipping (0 = no clipping)')
+    parser.add_argument("--gradient_accumulation_steps", type=int, default=1,
+                        help='number of gradient accumulation steps (effective batch size = batch_size * gradient_accumulation_steps)')
     parser.add_argument("--target_opt", type=str, default=None,
                         help='target optimization level for positive samples (e.g., O3). '
                              'If set, anchor will be randomly selected from other opts (O0/O1/O2), '

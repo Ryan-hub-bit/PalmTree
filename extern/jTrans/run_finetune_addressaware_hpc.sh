@@ -17,8 +17,9 @@ MODEL_PATH="/work/kliu14/jtransoutput/addressaware_pretrain/checkpoint_epoch_14"
 OUTPUT_PATH="/work/kliu14/jtransoutput/addressaware_finetune"
 
 # Training hyperparameters
-BATCH_SIZE=8           # REDUCED from 16 (address-aware needs more memory)
-EVAL_BATCH_SIZE=16     # REDUCED from 32
+BATCH_SIZE=2           # REDUCED to 2 to avoid OOM (was 8)
+EVAL_BATCH_SIZE=4      # REDUCED to 4 to avoid OOM (was 16)
+GRADIENT_ACCUMULATION=4  # Accumulate gradients to maintain effective batch size of 8
 LR=2e-5
 EPOCHS=10
 WARMUP=500
@@ -47,8 +48,9 @@ mkdir -p "$OUTPUT_PATH"
 LOG_FILE="$OUTPUT_PATH/finetune_$(date +%Y%m%d_%H%M%S).log"
 
 # Memory optimization settings for address-aware model
-export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,max_split_size_mb:128
 export CUDA_LAUNCH_BLOCKING=0  # Async execution for better performance
+export OMP_NUM_THREADS=3  # Limit CPU threads per process
 
 #===========================================
 # Training
@@ -65,6 +67,8 @@ echo "=========================================="
 echo "Hyperparameters:"
 echo "  Batch size: $BATCH_SIZE"
 echo "  Eval batch size: $EVAL_BATCH_SIZE"
+echo "  Gradient accumulation: $GRADIENT_ACCUMULATION"
+echo "  Effective batch size: $((BATCH_SIZE * GRADIENT_ACCUMULATION))"
 echo "  Learning rate: $LR"
 echo "  Epochs: $EPOCHS"
 echo "  Warmup steps: $WARMUP"
@@ -91,6 +95,7 @@ CMD="python finetune.py \
     --output_path $OUTPUT_PATH \
     --batch_size $BATCH_SIZE \
     --eval_batch_size $EVAL_BATCH_SIZE \
+    --gradient_accumulation_steps $GRADIENT_ACCUMULATION \
     --lr $LR \
     --epoch $EPOCHS \
     --weight_decay $WEIGHT_DECAY \

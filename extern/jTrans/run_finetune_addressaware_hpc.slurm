@@ -5,6 +5,7 @@
 #SBATCH --partition=gpu4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=12
+#SBATCH --mem=128G
 #SBATCH --account=loni_insembed01
 
 #===========================================
