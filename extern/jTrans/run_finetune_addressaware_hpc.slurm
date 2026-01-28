@@ -12,10 +12,10 @@
 #===========================================
 
 # Set working directory
-cd /work/kliu14/AAE/extern/jTrans
+cd /home/kliu14/AAE/extern/jTrans
 
 # Create log directory
-mkdir -p /work/kliu14/jtrans/log
+mkdir -p /work/kliu14/jtransdata/log
 
 source ~/.bashrc 
 source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh

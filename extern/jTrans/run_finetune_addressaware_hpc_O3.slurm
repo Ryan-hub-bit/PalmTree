@@ -12,15 +12,15 @@
 #===========================================
 
 # Set working directory
-cd /work/kliu14/AAE/extern/jTrans
+cd /home/kliu14/AAE/extern/jTrans
 
 # Create log directory
-mkdir -p /work/kliu14/jtrans/log
-
+mkdir -p /work/kliu14/jtransdata/log
 
 source ~/.bashrc 
 source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
 conda activate /work/kliu14/.conda/envs/jtrans
+
 
 # Print job info
 echo "=========================================="
@@ -38,7 +38,7 @@ nvidia-smi
 echo "=========================================="
 
 # Run the training script
-bash run_finetune_addressaware_hpc_O3.sh
+bash run_finetune_addressaware_hpc.sh
 
 # Print completion info
 echo "=========================================="

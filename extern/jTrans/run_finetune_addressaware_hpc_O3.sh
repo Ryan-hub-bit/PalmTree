@@ -7,35 +7,34 @@
 #===========================================
 
 # Data paths (HPC storage)
-DATA_DIR="/work/kliu14/jtrans/addressaware"
+DATA_DIR="/work/kliu14/jtransdata"
 FUNC_BLOCKS="$DATA_DIR/func_blocks_addr.json"
 GROUND_TRUTH="$DATA_DIR/ground_truth_addr.json"
 
 # Model paths
 TOKENIZER="/work/kliu14/AAE/extern/jTrans/pretrain/address_aware"
-MODEL_PATH="/work/kliu14/jtrans/output/addressaware_pretrain/checkpoint_epoch_14"
-OUTPUT_PATH="/work/kliu14/jtrans/output/addressaware_finetune"
+MODEL_PATH="/work/kliu14/jtransoutput/addressaware_pretrain/checkpoint_epoch_14"
+OUTPUT_PATH="/work/kliu14/jtransoutput/addressaware_finetune_O3"
 
 # Training hyperparameters
 BATCH_SIZE=16
 EVAL_BATCH_SIZE=32
 LR=2e-5
-EPOCHS=20
+EPOCHS=2
 WARMUP=500
 TRIPLET_MARGIN=0.5
 MAX_GRAD_NORM=1.0
 WEIGHT_DECAY=0.01
-DATA_RATIO=1.0  # Use full dataset (change to smaller value for testing)
+DATA_RATIO=0.00001  # Use full dataset (change to smaller value for testing)
 
 # Optional: Target optimization level (O0, O1, O2, O3)
 # Uncomment to train for specific Ox→O3 retrieval task
-TARGET_OPT="O3"
+# TARGET_OPT="O3"
 
 #===========================================
 # Setup
 #===========================================
 
-# Activate conda environment
 source ~/.bashrc 
 source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
 conda activate /work/kliu14/.conda/envs/jtrans
@@ -97,7 +96,7 @@ CMD="python finetune.py \
     --data_ratio $DATA_RATIO"
 
 # Add target_opt if specified
-if [ -n "$TARGET_OPT" ]; thenextern/jTrans/run_finetune_addressaware_hpc.slurm
+if [ -n "$TARGET_OPT" ]; then
     CMD="$CMD --target_opt $TARGET_OPT"
 fi
 
