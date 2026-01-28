@@ -29,7 +29,7 @@ DATA_RATIO=1.0  # Use full dataset (change to smaller value for testing)
 
 # Optional: Target optimization level (O0, O1, O2, O3)
 # Uncomment to train for specific Ox→O3 retrieval task
-# TARGET_OPT="O3"
+TARGET_OPT="O3"
 
 #===========================================
 # Setup
