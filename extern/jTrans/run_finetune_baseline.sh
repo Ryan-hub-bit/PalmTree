@@ -24,4 +24,3 @@ python finetune.py \
   --max_grad_norm 1.0 \
   --freeze_cnt 10 \
   --data_ratio 1.0
-

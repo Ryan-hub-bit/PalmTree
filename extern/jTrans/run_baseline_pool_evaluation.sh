@@ -8,7 +8,7 @@
 # Example:
 #   ./run_baseline_pool_evaluation.sh \
 #       /home/kun/Document/AAE/output/jtrans/baseline_finetune/finetune_epoch_10 \
-#       /home/kun/Document/AAE/extern/jTrans/pretrain/baseline/vocab.txt
+#       /home/kun/Document/AAE/extern/jTrans/pretrain/baseline
 
 set -e
 
@@ -24,13 +24,13 @@ if [ "$#" -lt 2 ]; then
     echo "Examples:"
     echo "  # Evaluate all pools"
     echo "  # Evaluate all pools with finetuned model"
-    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_10 extern/jTrans/pretrain/baseline/vocab.txt"
+    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_3 extern/jTrans/pretrain/baseline"
     echo ""
     echo "  # Evaluate only 1000-size pools"
-    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_10 extern/jTrans/pretrain/baseline/vocab.txt 1000"
+    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_3 extern/jTrans/pretrain/baseline 1000"
     echo ""
     echo "  # Evaluate only O0->O3 pairs with 10000 pool size"
-    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_10 extern/jTrans/pretrain/baseline/vocab.txt 10000 O0_vs_O3"
+    echo "  $0 output/jtrans/baseline_finetune/finetune_epoch_3 extern/jTrans/pretrain/baseline 10000 O0_vs_O3"
     exit 1
 fi
 

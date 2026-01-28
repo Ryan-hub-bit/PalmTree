@@ -17,8 +17,8 @@ MODEL_PATH="/work/kliu14/jtransoutput/addressaware_pretrain/checkpoint_epoch_14"
 OUTPUT_PATH="/work/kliu14/jtransoutput/addressaware_finetune"
 
 # Training hyperparameters
-BATCH_SIZE=16
-EVAL_BATCH_SIZE=32
+BATCH_SIZE=8           # REDUCED from 16 (address-aware needs more memory)
+EVAL_BATCH_SIZE=16     # REDUCED from 32
 LR=2e-5
 EPOCHS=10
 WARMUP=500
@@ -45,6 +45,10 @@ mkdir -p "$OUTPUT_PATH"
 
 # Log file
 LOG_FILE="$OUTPUT_PATH/finetune_$(date +%Y%m%d_%H%M%S).log"
+
+# Memory optimization settings for address-aware model
+export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
+export CUDA_LAUNCH_BLOCKING=0  # Async execution for better performance
 
 #===========================================
 # Training

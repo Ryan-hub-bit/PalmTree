@@ -180,11 +180,12 @@ def train_dp(model, args, train_set, valid_set, logger):
             if (i+1) % args.log_every == 0:
                 global_steps += 1
                 tmp_lr = optimizer.param_groups[0]["lr"]
-                # logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss}")
-                train_iterator.set_description(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss}")
+                loss_val = loss.item()  # CRITICAL: Extract scalar to prevent memory leak
+                # logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss_val}")
+                train_iterator.set_description(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss_val:.4f}")
                 if WANDB:
                     wandb.log({
-                        'triplet loss' : loss,
+                        'triplet loss' : loss_val,
                         'lr' : tmp_lr,
                         'global_step' : global_steps,
                     })
@@ -298,20 +299,19 @@ class BinBertModel(BertModel):
         super().__init__(config)
         self.config = config
         
-        # Baseline model: position_embeddings = word_embeddings (share weights)
-        # This replicates the pretraining behavior
-        self.embeddings.position_embeddings.weight = self.embeddings.word_embeddings.weight
+        # Baseline model: position_embeddings = word_embeddings (share the entire layer)
+        # This replicates the pretraining behavior from model_baseline.py
+        # Uses NORMAL sequential position_ids (0, 1, 2, 3...), NOT input_ids!
+        self.embeddings.position_embeddings = self.embeddings.word_embeddings
         
     def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None, **kwargs):
-        # Use input_ids as position_ids to index into the shared embedding matrix
-        if position_ids is None:
-            position_ids = input_ids.clone()
-        
+        # Use normal BERT forward (sequential position_ids: 0, 1, 2, 3...)
+        # The position_ids index into word_embeddings (because we shared the layers)
         return super().forward(
             input_ids=input_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
-            position_ids=position_ids,
+            position_ids=position_ids,  # None = BertModel creates sequential [0, 1, 2, ...]
             **kwargs
         )
 

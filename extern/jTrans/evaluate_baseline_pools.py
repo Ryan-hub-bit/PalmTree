@@ -17,83 +17,101 @@ from tqdm import tqdm
 import argparse
 import sys
 import os
-import pickle
-
-# Add project paths
-project_root = Path(__file__).parent.parent
-sys.path.insert(0, str(project_root / 'strupos'))
-
-from vocab import TorchVocab
+from transformers import BertTokenizer
 
 
 def load_vocab(vocab_path):
-    """Load vocabulary"""
-    print(f"Loading vocabulary from: {vocab_path}")
-    with open(vocab_path, 'rb') as f:
-        vocab = pickle.load(f)
-    print(f"Vocabulary size: {len(vocab)}")
-    return vocab
+    """Load vocabulary using BertTokenizer (same as pretrain/finetune)"""
+    print(f"Loading tokenizer from: {vocab_path}")
+    tokenizer = BertTokenizer.from_pretrained(vocab_path)
+    print(f"Vocabulary size: {len(tokenizer)}")
+    return tokenizer
 
 
-def load_model(checkpoint_path, vocab, device='cuda'):
-    """Load finetuned model"""
+class BinBertModel(torch.nn.Module):
+    """
+    Baseline jTrans BERT model matching pretrain behavior.
+    CRITICAL: position_embeddings = word_embeddings (shared layer, not just weights)
+    Uses NORMAL sequential position_ids (0,1,2,3...), NOT input_ids!
+    """
+    def __init__(self, config):
+        super().__init__()
+        from transformers import BertModel
+        self.bert = BertModel(config)
+        self.config = config
+        
+        # jTrans trick: Share the entire embedding layer (same as pretrain)
+        # This is different from just sharing weights!
+        self.bert.embeddings.position_embeddings = self.bert.embeddings.word_embeddings
+        
+    def forward(self, input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None, **kwargs):
+        # Use normal BertModel forward pass (sequential position_ids: 0, 1, 2, 3...)
+        # The trick is that position_ids index into word_embeddings, not a separate position matrix
+        return self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            token_type_ids=token_type_ids,
+            position_ids=position_ids,  # None = BertModel creates sequential [0, 1, 2, ...]
+            **kwargs
+        )
+    
+    def load_state_dict(self, state_dict, strict=True):
+        """Load state dict into wrapped bert model"""
+        return self.bert.load_state_dict(state_dict, strict=strict)
+
+
+def load_model(checkpoint_path, tokenizer, device='cuda'):
+    """Load finetuned baseline model (BinBertModel from finetune.py)"""
     print(f"Loading model from: {checkpoint_path}")
     
-    # Import here to avoid circular dependency
-    from model import IMCModel
+    from transformers import BertConfig
+    import json
+    import os
     
-    # Create a simple config object
-    class ModelConfig:
-        def __init__(self):
-            self.vocab_size = len(vocab)
-            self.hidden = 768
-            self.n_layers = 12
-            self.attn_heads = 12
-            self.dropout = 0.1
+    # Load config
+    config_path = os.path.join(checkpoint_path, 'config.json')
+    with open(config_path, 'r') as f:
+        config_dict = json.load(f)
     
-    config = ModelConfig()
+    config = BertConfig(**config_dict)
     
-    # Load model
-    model = IMCModel(config).to(device)
+    # Create BinBertModel (same as finetune.py) - CRITICAL for correct embeddings!
+    model = BinBertModel(config).to(device)
     
-    # Load checkpoint
-    checkpoint = torch.load(checkpoint_path, map_location=device)
-    if 'model_state_dict' in checkpoint:
-        model.load_state_dict(checkpoint['model_state_dict'])
-    else:
-        model.load_state_dict(checkpoint)
+    # Load weights
+    weights_path = os.path.join(checkpoint_path, 'pytorch_model.bin')
+    state_dict = torch.load(weights_path, map_location=device)
+    model.load_state_dict(state_dict, strict=False)
     
     model.eval()
-    print(f"Model loaded successfully")
+    print(f"Model loaded successfully (BinBertModel with position_ids=input_ids)")
+    print(f"  Vocab size: {config.vocab_size}")
+    print(f"  Hidden size: {config.hidden_size}")
+    print(f"  Layers: {config.num_hidden_layers}")
     return model, config
 
 
-def tokenize_function(func_block, vocab, max_len=100):
-    """Tokenize function block using vocabulary"""
-    # Parse tokens from func_block['tokens']
-    tokens_str = func_block['tokens']
-    tokens = tokens_str.split('\t')  # Instructions separated by tab
+def tokenize_function(func_block, tokenizer, max_len=512):
+    """Tokenize function block using BertTokenizer (EXACTLY same as finetune)"""
+    # Get token string (same as finetune data_json.py line 133)
+    func_str = func_block['tokens']
     
-    # Flatten all tokens from all instructions
-    all_tokens = []
-    for instr in tokens:
-        instr_tokens = instr.split()
-        all_tokens.extend(instr_tokens)
+    # Use encode_plus just like finetune does (adds [CLS] and [SEP] automatically)
+    encoded = tokenizer.encode_plus(
+        func_str,
+        max_length=max_len,
+        padding='max_length',
+        truncation=True,
+        return_tensors='pt'
+    )
     
-    # Convert to vocab indices
-    token_ids = []
-    for token in all_tokens[:max_len]:
-        token_ids.append(vocab.stoi.get(token, vocab.stoi.get('<unk>', 1)))
+    # Extract token IDs
+    token_ids = encoded['input_ids'].squeeze(0).tolist()
     
-    # Pad to max_len
-    pad_idx = vocab.stoi.get('<pad>', 0)
-    while len(token_ids) < max_len:
-        token_ids.append(pad_idx)
-    
-    return token_ids[:max_len]
+    return token_ids
 
 
-def generate_embeddings(model, func_ids, func_blocks, vocab, device, max_len=100, batch_size=32):
+def generate_embeddings(model, func_ids, func_blocks, tokenizer, device, max_len=512, batch_size=32, model_vocab_size=None):
     """Generate embeddings for a list of function IDs"""
     embeddings = []
     
@@ -102,17 +120,41 @@ def generate_embeddings(model, func_ids, func_blocks, vocab, device, max_len=100
             batch_ids = func_ids[i:i+batch_size]
             
             # Tokenize batch
-            batch_tokens = []
+            batch_input_ids = []
+            batch_attention_mask = []
+            batch_token_type_ids = []
+            
             for fid in batch_ids:
-                token_ids = tokenize_function(func_blocks[fid], vocab, max_len)
-                batch_tokens.append(token_ids)
+                token_ids = tokenize_function(func_blocks[fid], tokenizer, max_len)
+                
+                # CRITICAL: Clamp token IDs to model's vocab size to prevent CUDA assertion errors
+                if model_vocab_size is not None:
+                    token_ids = [min(tid, model_vocab_size - 1) for tid in token_ids]
+                
+                batch_input_ids.append(token_ids)
+                
+                # Create attention mask (1 for real tokens, 0 for padding)
+                attention_mask = [1 if tid != tokenizer.pad_token_id else 0 for tid in token_ids]
+                batch_attention_mask.append(attention_mask)
+                
+                # Create token_type_ids (all 0s for baseline, like finetune)
+                token_type_ids = [0] * max_len
+                batch_token_type_ids.append(token_type_ids)
             
-            # Convert to tensor
-            input_tensor = torch.tensor(batch_tokens, dtype=torch.long).to(device)
+            # Convert to tensors
+            input_ids = torch.tensor(batch_input_ids, dtype=torch.long).to(device)
+            attention_mask = torch.tensor(batch_attention_mask, dtype=torch.long).to(device)
+            token_type_ids = torch.tensor(batch_token_type_ids, dtype=torch.long).to(device)
             
-            # Get embeddings (model returns CLS token embedding)
-            outputs = model(input_tensor)
-            batch_embeddings = outputs.cpu().numpy()
+            # Get embeddings from BinBertModel (same as finetune)
+            outputs = model(
+                input_ids=input_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids
+            )
+            # BertModel returns: (last_hidden_state, pooler_output)
+            # We use pooler_output which is the [CLS] token representation
+            batch_embeddings = outputs.pooler_output.cpu().numpy()
             embeddings.append(batch_embeddings)
     
     # Concatenate all batches
@@ -169,7 +211,7 @@ def calculate_metrics(similarity_matrix, ground_truth, k_values=[1, 5, 10]):
     }
 
 
-def evaluate_pool(model, pool_file, query_file, func_blocks, vocab, device, max_len=100, batch_size=32):
+def evaluate_pool(model, pool_file, query_file, func_blocks, tokenizer, device, max_len=512, batch_size=32, model_vocab_size=None):
     """Evaluate on a single pool/query pair"""
     # Load pool and query
     with open(pool_file, 'r') as f:
@@ -186,10 +228,10 @@ def evaluate_pool(model, pool_file, query_file, func_blocks, vocab, device, max_
     
     # Generate embeddings
     print("  Generating pool embeddings...")
-    pool_embeddings = generate_embeddings(model, pool_ids, func_blocks, vocab, device, max_len, batch_size)
+    pool_embeddings = generate_embeddings(model, pool_ids, func_blocks, tokenizer, device, max_len, batch_size, model_vocab_size)
     
     print("  Generating query embeddings...")
-    query_embeddings = generate_embeddings(model, query_ids, func_blocks, vocab, device, max_len, batch_size)
+    query_embeddings = generate_embeddings(model, query_ids, func_blocks, tokenizer, device, max_len, batch_size, model_vocab_size)
     
     # Compute similarity
     print("  Computing similarities...")
@@ -227,11 +269,21 @@ def main():
     
     args = parser.parse_args()
     
-    # Load vocabulary
-    vocab = load_vocab(args.vocab)
+    # Load tokenizer (same as pretrain/finetune)
+    tokenizer = load_vocab(args.vocab)
     
     # Load model
-    model, config = load_model(args.model, vocab, args.device)
+    model, config = load_model(args.model, tokenizer, args.device)
+    
+    # Get model's actual vocab size (might differ from tokenizer)
+    model_vocab_size = config.vocab_size
+    tokenizer_vocab_size = len(tokenizer)
+    
+    print(f"\nVocab size check:")
+    print(f"  Tokenizer vocab size: {tokenizer_vocab_size}")
+    print(f"  Model vocab size: {model_vocab_size}")
+    if tokenizer_vocab_size != model_vocab_size:
+        print(f"  WARNING: Vocab size mismatch! Will clamp token IDs to [0, {model_vocab_size-1}]")
     
     # Load function blocks
     print(f"\nLoading function blocks from: {args.func_blocks}")
@@ -267,8 +319,8 @@ def main():
             continue
         
         # Evaluate
-        metrics = evaluate_pool(model, pool_file, query_file, func_blocks, vocab, 
-                               args.device, args.max_len, args.batch_size)
+        metrics = evaluate_pool(model, pool_file, query_file, func_blocks, tokenizer, 
+                               args.device, args.max_len, args.batch_size, model_vocab_size)
         
         # Store results
         result = {
