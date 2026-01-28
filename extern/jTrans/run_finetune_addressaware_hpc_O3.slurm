@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=finetune_addraware_O3
 #SBATCH --output=/work/kliu14/jtrans/log/finetune_addressaware_O3_%j.out
-#SBATCH --error=/work/kliu14/jtrans/log/finetune_addressaware_O3_%j.err
 #SBATCH --time=3-00:00:00
 #SBATCH --partition=gpu4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=12
+#SBATCH --account=loni_insembed01
 
 #===========================================
 # Address-Aware Model Fine-tuning (SLURM)
@@ -16,6 +16,11 @@ cd /work/kliu14/AAE/extern/jTrans
 
 # Create log directory
 mkdir -p /work/kliu14/jtrans/log
+
+
+source ~/.bashrc 
+source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
+conda activate /work/kliu14/.conda/envs/jtrans
 
 # Print job info
 echo "=========================================="

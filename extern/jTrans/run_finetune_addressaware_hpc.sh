@@ -35,9 +35,10 @@ DATA_RATIO=0.00001  # Use full dataset (change to smaller value for testing)
 # Setup
 #===========================================
 
-# Activate conda environment
-source ~/anaconda3/etc/profile.d/conda.sh
-conda activate jtrans
+source ~/.bashrc 
+source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
+conda activate /work/kliu14/.conda/envs/jtrans
+
 
 # Create output directory
 mkdir -p "$OUTPUT_PATH"
