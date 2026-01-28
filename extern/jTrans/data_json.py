@@ -355,7 +355,7 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
     Compatible with AddressAwareJTransForMLM model.
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
-                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0):
+                 opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0, target_opt=None):
         functions, ebds = load_paired_data_json(
             func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )

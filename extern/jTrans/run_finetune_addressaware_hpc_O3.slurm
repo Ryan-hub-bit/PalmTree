@@ -1,0 +1,41 @@
+#!/bin/bash
+#SBATCH --job-name=finetune_addraware_O3
+#SBATCH --output=/work/kliu14/jtrans/log/finetune_addressaware_O3_%j.out
+#SBATCH --error=/work/kliu14/jtrans/log/finetune_addressaware_O3_%j.err
+#SBATCH --time=3-00:00:00
+#SBATCH --partition=gpu4
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=12
+
+#===========================================
+# Address-Aware Model Fine-tuning (SLURM)
+#===========================================
+
+# Set working directory
+cd /work/kliu14/AAE/extern/jTrans
+
+# Create log directory
+mkdir -p /work/kliu14/jtrans/log
+
+# Print job info
+echo "=========================================="
+echo "SLURM Job Information"
+echo "=========================================="
+echo "Job ID: $SLURM_JOB_ID"
+echo "Job name: $SLURM_JOB_NAME"
+echo "Node: $SLURM_NODELIST"
+echo "Start time: $(date)"
+echo "=========================================="
+
+# Print GPU info
+echo "GPU Information:"
+nvidia-smi
+echo "=========================================="
+
+# Run the training script
+bash run_finetune_addressaware_hpc_O3.sh
+
+# Print completion info
+echo "=========================================="
+echo "Job completed at: $(date)"
+echo "=========================================="

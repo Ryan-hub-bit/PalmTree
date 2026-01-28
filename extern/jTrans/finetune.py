@@ -453,13 +453,14 @@ if __name__ == '__main__':
     if args.model_type == 'addressaware':
         # Load address-aware BERT encoder (pretrain only saves bert.state_dict())
         from pretrain.address_aware.address_embedding import AddressAwareBERTEmbedding
-        import pickle
         
-        # Load vocab for address vs daddr distinction
-        vocab_path = os.path.join(args.tokenizer, 'vocab_addr.pkl')
-        with open(vocab_path, 'rb') as f:
-            vocab = pickle.load(f)
-        vocab_stoi = vocab.stoi  # string to index mapping
+        # Load vocab for address vs daddr distinction from vocab.txt
+        vocab_path = os.path.join(args.tokenizer, 'vocab.txt')
+        vocab_stoi = {}
+        with open(vocab_path, 'r', encoding='utf-8') as f:
+            for idx, line in enumerate(f):
+                token = line.strip()
+                vocab_stoi[token] = idx
         
         # Load config
         import json
