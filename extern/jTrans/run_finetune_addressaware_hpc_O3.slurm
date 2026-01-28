@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=finetune_addraware_O3
-#SBATCH --output=/work/kliu14/jtrans/log/finetune_addressaware_O3_%j.out
+#SBATCH --output=/work/kliu14/jtransdata/log/finetune_addressaware_O3_%j.out
 #SBATCH --time=3-00:00:00
 #SBATCH --partition=gpu4
 #SBATCH --gres=gpu:4
