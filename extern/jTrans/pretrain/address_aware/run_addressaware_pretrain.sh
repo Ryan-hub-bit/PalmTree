@@ -9,12 +9,12 @@
 #          ./run_addressaware_pretrain.sh 1.0  # Use 100% of data (default)
 
 # Data ratio (default: 1.0 = 100% of data)
-DATA_RATIO="${1:-1.0}"
+DATA_RATIO="${1:-0.00001}"
 
 # Use both available GPUs
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 # Uncomment for debugging (makes CUDA synchronous, slower)
-export CUDA_LAUNCH_BLOCKING=1
+export CUDA_LAUNCH_BLOCKING=0
 
 # Activate conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
@@ -41,12 +41,12 @@ print(f"Special tokens: <pad>={vocab.stoi.get('<pad>')}, <unk>={vocab.stoi.get('
 VOCABCHECK
 
 python3 train_addressaware.py \
-    --train_path /data/kun/jtransdata/addr_pretrain.txt \
+    --train_path /data/kun/jtrans/addressaware/addr_pretrain.txt \
     --vocab_path ./vocab_addr.pkl \
     --output_dir /home/kun/Document/AAE/output/jtrans/addressaware_pretrain \
     --batch_size 64 \
     --learning_rate 1e-4 \
-    --num_epochs 12 \
+    --num_epochs 2 \
     --warmup_steps 10000 \
     --max_len 512 \
     --token_mask_prob 0.15 \
