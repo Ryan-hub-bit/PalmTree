@@ -24,3 +24,9 @@
 2026-01-29 16:39:49,517 - __main__ - INFO - Skipping evaluation (training only mode)
 2026-01-29 16:39:49,517 - __main__ - INFO - Saving Model ...
 2026-01-29 16:39:49,935 - __main__ - INFO - Model saved to /home/kun/Document/AAE/output/jtrans/baseline_finetune/finetune_epoch_6
+2026-01-29 20:13:05,112 - __main__ - INFO - Skipping evaluation (training only mode)
+2026-01-29 20:13:05,112 - __main__ - INFO - Saving Model ...
+2026-01-29 20:13:05,572 - __main__ - INFO - Model saved to /home/kun/Document/AAE/output/jtrans/baseline_finetune/finetune_epoch_7
+2026-01-29 23:53:19,566 - __main__ - INFO - Skipping evaluation (training only mode)
+2026-01-29 23:53:19,566 - __main__ - INFO - Saving Model ...
+2026-01-29 23:53:19,970 - __main__ - INFO - Model saved to /home/kun/Document/AAE/output/jtrans/baseline_finetune/finetune_epoch_8

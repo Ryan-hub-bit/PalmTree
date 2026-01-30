@@ -19,21 +19,20 @@ conda activate jtrans
 # - Target opt O3 (train specifically for Ox→O3 retrieval task)
 
 python finetune.py \
-    --model_type addressaware \
-    --data_type json \
-    --func_blocks /data/kun/jtrans/addressaware/func_blocks_addr.json \
-    --ground_truth /data/kun/jtrans/addressaware/ground_truth_addr.json \
-    --tokenizer /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware \
-    --model_path /home/kun/Document/AAE/output/jtrans/addressaware_pretrain/checkpoint_epoch_14 \
-    --output_path /home/kun/Document/AAE/output/jtrans/addressaware_finetune \
-    --batch_size 16 \
-    --eval_batch_size 32 \
-    --lr 2e-5 \
-    --epoch 20 \
-    --weight_decay 0.01 \
-    --warmup 500 \
-    --triplet_margin 0.5 \
-    --max_grad_norm 1.0 \
-    --data_ratio 0.00001
-    #--target_opt O3 \
-    
+  --model_type addressaware \
+  --data_type json \
+  --func_blocks /data/kun/jtrans/addressaware/func_blocks_addr.json \
+  --ground_truth /data/kun/jtrans/addressaware/ground_truth_addr.json \
+  --tokenizer /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware \
+  --model_path /home/kun/Document/AAE/output/jtrans/addressaware_pretrain/checkpoint_epoch_14 \
+  --output_path /home/kun/Document/AAE/output/jtrans/addressaware_finetune \
+  --batch_size 16 \
+  --eval_batch_size 32 \
+  --lr 2e-5 \
+  --epoch 2 \
+  --weight_decay 0.01 \
+  --warmup 500 \
+  --triplet_margin 0.5 \
+  --max_grad_norm 1.0 \
+  --data_ratio 0.00001
+#--target_opt O3 \

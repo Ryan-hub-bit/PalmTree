@@ -48,10 +48,10 @@ DEVICE="cuda"
 
 # Build command
 CMD="python3 evaluate_baseline_pools.py \
-    --model $MODEL_CHECKPOINT \
-    --vocab $VOCAB_PATH \
-    --pool-dir $POOL_DIR \
-    --func-blocks $FUNC_BLOCKS \
+    --model \"$MODEL_CHECKPOINT\" \
+    --vocab \"$VOCAB_PATH\" \
+    --pool-dir \"$POOL_DIR\" \
+    --func-blocks \"$FUNC_BLOCKS\" \
     --max-len $MAX_LEN \
     --batch-size $BATCH_SIZE \
     --device $DEVICE"
