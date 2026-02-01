@@ -17,7 +17,7 @@ python finetune.py \
   --batch_size 16 \
   --eval_batch_size 64 \
   --lr 2e-5 \
-  --epoch 10 \
+  --epoch 2 \
   --weight_decay 0.01 \
   --warmup 500 \
   --triplet_margin 0.5 \

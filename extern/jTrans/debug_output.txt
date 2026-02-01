@@ -1,0 +1,30 @@
+==========================================
+Running Address-Aware Debug Script
+==========================================
+Model: /home/kun/Document/AAE/output/jtrans/addressaware_finetune_sincos/finetune_epoch_2
+Vocab: /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware
+
+Traceback (most recent call last):
+  File "debug_addressaware_evaluation.py", line 21, in <module>
+    from model import AddressAwareBERTEmbedding
+ModuleNotFoundError: No module named 'model'
+
+==========================================
+Debug Complete!
+==========================================
+
+Analysis Steps:
+1. Check STEP 1: Are address tokens properly tokenized?
+2. Check STEP 2: Is vocab_stoi loaded in the model?
+3. Check STEP 3: Are embeddings diverse (std > 0.01)?
+4. Check STEP 4: Do ground truth pairs have high similarity (>0.5)?
+5. Check STEP 5: Do random pairs have low similarity (<0.5)?
+
+If ground truth pairs have LOW similarity:
+  → Model hasn't learned to recognize similar functions
+  → Check if training converged, loss went down
+  → May need more training epochs or different hyperparameters
+
+If random pairs have HIGH similarity:
+  → Embedding collapse - all functions mapped to similar vectors
+  → Check model architecture, learning rate, normalization

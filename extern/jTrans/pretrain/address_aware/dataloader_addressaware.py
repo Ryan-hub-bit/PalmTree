@@ -133,6 +133,7 @@ class AddressAwareDataset(Dataset):
         if operands_text:
             for operand in operands_text.split():
                 nested_match = self.nested_addr_pattern.match(operand)
+                daddr_match = self.daddr_pattern.match(operand)
                 var_match = self.var_pattern.match(operand)
                 
                 if nested_match:
@@ -142,6 +143,14 @@ class AddressAwareDataset(Dataset):
                     tokens.append('address')
                     positions.append((nested_binary_pos, nested_function_pos, nested_bb_pos))
                     var_offsets.append(-1)  # address is not a var, use -1 as sentinel
+                elif daddr_match:
+                    # Data address (memory operand, data flow)
+                    daddr_binary_pos = float(daddr_match.group(2))
+                    daddr_function_pos = float(daddr_match.group(3))
+                    daddr_bb_pos = float(daddr_match.group(4))
+                    tokens.append('daddr')
+                    positions.append((daddr_binary_pos, daddr_function_pos, daddr_bb_pos))
+                    var_offsets.append(-1)  # daddr is not a var, use -1 as sentinel
                 elif var_match:
                     # Extract var offset from var(0xXX)
                     var_hex = var_match.group(1)

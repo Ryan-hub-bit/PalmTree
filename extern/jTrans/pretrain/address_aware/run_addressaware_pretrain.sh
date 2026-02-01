@@ -9,12 +9,12 @@
 #          ./run_addressaware_pretrain.sh 1.0  # Use 100% of data (default)
 
 # Data ratio (default: 1.0 = 100% of data)
-DATA_RATIO="${1:-0.00001}"
+DATA_RATIO="${1:-1.0}"
 
 # Use both available GPUs
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=0,1
 # Uncomment for debugging (makes CUDA synchronous, slower)
-export CUDA_LAUNCH_BLOCKING=0
+export CUDA_LAUNCH_BLOCKING=0,1
 
 # Activate conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
