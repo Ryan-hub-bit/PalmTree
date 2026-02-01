@@ -437,14 +437,14 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
                 var_offsets.append(-1)
                 continue
             
-            # Check for daddr() pattern
+            # Check for daddr() pattern - data address (uses separate MLP in embedding layer)
             daddr_match = self.daddr_pattern.match(part)
             if daddr_match:
                 binary_pos = float(daddr_match.group(2))
                 function_pos = float(daddr_match.group(3))
                 bb_pos = float(daddr_match.group(4))
                 
-                tokens.append('daddr')
+                tokens.append('daddr')  # Keep 'daddr' - embedding layer distinguishes from 'address'
                 positions.append((binary_pos, function_pos, bb_pos))
                 var_offsets.append(-1)
                 continue

@@ -119,7 +119,7 @@ def load_model(checkpoint_path, vocab_path, device='cuda'):
     
     # Load weights
     weights_path = os.path.join(checkpoint_path, 'pytorch_model.bin')
-    state_dict = torch.load(weights_path, map_location=device)
+    state_dict = torch.load(weights_path, map_location=device, weights_only=False)
     bert_model.load_state_dict(state_dict)
     
     # Wrap for evaluation
@@ -135,55 +135,221 @@ def load_model(checkpoint_path, vocab_path, device='cuda'):
 
 
 def tokenize_function(func_block, tokenizer, max_len=512):
-    """Tokenize function block using addressaware format"""
-    # Get token string (support both 'tokens' and 'instructions')
-    func_str = func_block.get('tokens') or func_block.get('instructions', '')
+    """
+    Tokenize function block using addressaware format.
     
-    # Use encode_plus
-    encoded = tokenizer.encode_plus(
-        func_str,
-        max_length=max_len,
-        padding='max_length',
-        truncation=True,
-        return_tensors='pt'
-    )
+    CRITICAL: MATCH PRETRAIN!
+    - Always use 'instructions' field (raw format with address annotations)
+    - Parse address/daddr patterns inline
+    - Both address() and daddr() become 'address' token
+    """
+    # MATCH PRETRAIN: Always use 'instructions' field
+    func_str = func_block.get('instructions', '')
     
-    # Extract token IDs
-    token_ids = encoded['input_ids'].squeeze(0).tolist()
+    if not func_str:
+        print(f"Warning: Function {func_block.get('id')} missing 'instructions' field")
+        return {
+            'token_ids': [tokenizer.pad_token_id] * max_len,
+            'attention_mask': [0] * max_len,
+            'token_type_ids': [0] * max_len,
+            'binary_pos': [-1.0] * max_len,
+            'function_pos': [-1.0] * max_len,
+            'bb_pos': [-1.0] * max_len,
+            'var_offsets': [-1] * max_len
+        }
     
-    # Get address info if available
-    binary_pos = func_block.get('binary_pos', [0] * max_len)
-    function_pos = func_block.get('function_pos', [0] * max_len)
-    bb_pos = func_block.get('bb_pos', [0] * max_len)
-    var_offsets = func_block.get('var_offsets', [0] * max_len)
-    
-    # Pad or truncate to max_len
-    if len(binary_pos) < max_len:
-        binary_pos = binary_pos + [0] * (max_len - len(binary_pos))
-    else:
-        binary_pos = binary_pos[:max_len]
-    
-    if len(function_pos) < max_len:
-        function_pos = function_pos + [0] * (max_len - len(function_pos))
-    else:
-        function_pos = function_pos[:max_len]
-        
-    if len(bb_pos) < max_len:
-        bb_pos = bb_pos + [0] * (max_len - len(bb_pos))
-    else:
-        bb_pos = bb_pos[:max_len]
-        
-    if len(var_offsets) < max_len:
-        var_offsets = var_offsets + [0] * (max_len - len(var_offsets))
-    else:
-        var_offsets = var_offsets[:max_len]
+    # Parse address-aware function (SAME as pretrain)
+    result = _parse_address_aware_function(func_str, tokenizer, max_len)
     
     return {
-        'token_ids': token_ids,
-        'binary_pos': binary_pos,
-        'function_pos': function_pos,
-        'bb_pos': bb_pos,
-        'var_offsets': var_offsets
+        'token_ids': result['input_ids'].tolist() if hasattr(result['input_ids'], 'tolist') else result['input_ids'],
+        'attention_mask': result['attention_mask'].tolist() if hasattr(result['attention_mask'], 'tolist') else result['attention_mask'],
+        'token_type_ids': result['token_type_ids'].tolist() if hasattr(result['token_type_ids'], 'tolist') else result['token_type_ids'],
+        'binary_pos': result['binary_pos'].tolist() if hasattr(result['binary_pos'], 'tolist') else result['binary_pos'],
+        'function_pos': result['function_pos'].tolist() if hasattr(result['function_pos'], 'tolist') else result['function_pos'],
+        'bb_pos': result['bb_pos'].tolist() if hasattr(result['bb_pos'], 'tolist') else result['bb_pos'],
+        'var_offsets': result['var_offsets'].tolist() if hasattr(result['var_offsets'], 'tolist') else result['var_offsets']
+    }
+
+
+def _parse_instruction(inst_text):
+    """
+    Parse a single address-aware instruction.
+    Format: opcode(0xADDR:bnorm:fnorm:bbnorm) operand1 operand2 ...
+    
+    Returns:
+        tokens: List of token strings
+        positions: List of (binary_pos, function_pos, bb_pos) tuples
+        var_offsets: List of var offset values (-1 for non-var tokens)
+    """
+    import re
+    
+    addr_pattern = re.compile(r'(\w+)\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+    nested_addr_pattern = re.compile(r'address\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+    daddr_pattern = re.compile(r'daddr\((0x[0-9a-fA-F]+):([0-9.]+):([0-9.]+):([0-9.]+)\)')
+    var_pattern = re.compile(r'var\((0x[0-9a-fA-F]+)\)')
+    
+    tokens = []
+    positions = []
+    var_offsets = []
+    
+    parts = inst_text.split()
+    
+    for part in parts:
+        if not part or part.isspace():
+            continue
+        
+        # Check for opcode with address: opcode(0xADDR:bnorm:fnorm:bbnorm)
+        opcode_match = addr_pattern.match(part)
+        if opcode_match:
+            opcode = opcode_match.group(1)
+            binary_norm = float(opcode_match.group(3))
+            function_norm = float(opcode_match.group(4))
+            bb_norm = float(opcode_match.group(5))
+            
+            tokens.append(opcode)
+            positions.append((binary_norm, function_norm, bb_norm))
+            var_offsets.append(-1)
+            continue
+        
+        # Check for address() pattern
+        addr_match = nested_addr_pattern.match(part)
+        if addr_match:
+            binary_norm = float(addr_match.group(2))
+            function_norm = float(addr_match.group(3))
+            bb_norm = float(addr_match.group(4))
+            
+            tokens.append('address')
+            positions.append((binary_norm, function_norm, bb_norm))
+            var_offsets.append(-1)
+            continue
+        
+        # Check for daddr() pattern - data address (uses separate MLP in embedding layer)
+        daddr_match = daddr_pattern.match(part)
+        if daddr_match:
+            binary_norm = float(daddr_match.group(2))
+            function_norm = float(daddr_match.group(3))
+            bb_norm = float(daddr_match.group(4))
+            
+            tokens.append('daddr')  # Keep 'daddr' - embedding layer distinguishes from 'address'
+            positions.append((binary_norm, function_norm, bb_norm))
+            var_offsets.append(-1)
+            continue
+        
+        # Check for var() pattern
+        var_match = var_pattern.match(part)
+        if var_match:
+            hex_offset = var_match.group(1)
+            offset_val = int(hex_offset, 16)
+            
+            # Handle 64-bit negative offsets (two's complement)
+            if offset_val > 0x7FFFFFFFFFFFFFFF:
+                offset_val = offset_val - 0x10000000000000000
+            
+            tokens.append('var')
+            positions.append((-1.0, -1.0, -1.0))
+            var_offsets.append(offset_val)
+            continue
+        
+        # Regular token (no address info)
+        tokens.append(part)
+        positions.append((-1.0, -1.0, -1.0))
+        var_offsets.append(-1)
+    
+    return tokens, positions, var_offsets
+
+
+def _parse_address_aware_function(func_str, tokenizer, max_length):
+    """
+    Parse an entire address-aware function string (SAME as finetune).
+    Format: inst1\tinst2\tinst3...
+    
+    Returns dict with:
+        - input_ids: Token IDs (LongTensor)
+        - attention_mask: Attention mask
+        - token_type_ids: Segment labels
+        - binary_pos: Binary position embeddings (FloatTensor)
+        - function_pos: Function position embeddings (FloatTensor)
+        - bb_pos: Basic block position embeddings (FloatTensor)
+        - var_offsets: Variable offset values (LongTensor)
+    """
+    instructions = func_str.split('\t')
+    
+    all_tokens = []
+    all_positions = []
+    all_var_offsets = []
+    all_segments = []
+    
+    # Add <sos> at beginning (segment 1) - MATCH FINETUNE
+    all_tokens.append('<sos>')
+    all_positions.append((-1.0, -1.0, -1.0))
+    all_var_offsets.append(-1)
+    all_segments.append(1)
+    
+    for inst_idx, inst_text in enumerate(instructions):
+        inst_text = inst_text.strip()
+        if not inst_text:
+            continue
+        
+        tokens, positions, var_offsets = _parse_instruction(inst_text)
+        
+        # Segment label = instruction number (1-indexed) - MATCH FINETUNE
+        inst_segment = inst_idx + 1
+        all_tokens.extend(tokens)
+        all_positions.extend(positions)
+        all_var_offsets.extend(var_offsets)
+        all_segments.extend([inst_segment] * len(tokens))
+    
+    # Add <eos> at the end (gets last instruction's segment) - MATCH FINETUNE
+    last_segment = inst_idx + 1 if instructions else 1
+    all_tokens.append('<eos>')
+    all_positions.append((-1.0, -1.0, -1.0))
+    all_var_offsets.append(-1)
+    all_segments.append(last_segment)
+    
+    # Convert tokens to IDs using tokenizer's vocabulary
+    token_ids = []
+    unk_token_id = tokenizer.unk_token_id if tokenizer.unk_token_id is not None else 1
+    for tok in all_tokens:
+        token_id = tokenizer.convert_tokens_to_ids(tok)
+        if token_id is None:
+            token_id = unk_token_id
+        token_ids.append(token_id)
+    
+    # Truncate or pad to max_length
+    if len(token_ids) > max_length:
+        token_ids = token_ids[:max_length]
+        all_positions = all_positions[:max_length]
+        all_var_offsets = all_var_offsets[:max_length]
+        all_segments = all_segments[:max_length]
+    else:
+        padding_len = max_length - len(token_ids)
+        pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+        token_ids += [pad_token_id] * padding_len
+        all_positions += [(-1.0, -1.0, -1.0)] * padding_len
+        all_var_offsets += [-1] * padding_len
+        all_segments += [0] * padding_len
+    
+    # Clamp segment labels to valid range [0, 255]
+    all_segments = [min(seg, 255) for seg in all_segments]
+    
+    # Create attention mask
+    pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else 0
+    attention_mask = [1 if tid != pad_token_id else 0 for tid in token_ids]
+    
+    # Split positions into separate lists
+    binary_pos = [p[0] for p in all_positions]
+    function_pos = [p[1] for p in all_positions]
+    bb_pos = [p[2] for p in all_positions]
+    
+    return {
+        'input_ids': torch.LongTensor(token_ids),
+        'attention_mask': torch.LongTensor(attention_mask),
+        'token_type_ids': torch.LongTensor(all_segments),
+        'binary_pos': torch.FloatTensor(binary_pos),
+        'function_pos': torch.FloatTensor(function_pos),
+        'bb_pos': torch.FloatTensor(bb_pos),
+        'var_offsets': torch.LongTensor(all_var_offsets)
     }
 
 
@@ -234,9 +400,9 @@ def generate_embeddings(model, func_ids, func_blocks, tokenizer, device, max_len
             token_ids = torch.tensor(batch_data['token_ids'], dtype=torch.long).to(device)
             attention_mask = torch.tensor(batch_data['attention_mask'], dtype=torch.long).to(device)
             token_type_ids = torch.tensor(batch_data['token_type_ids'], dtype=torch.long).to(device)
-            binary_pos = torch.tensor(batch_data['binary_pos'], dtype=torch.long).to(device)
-            function_pos = torch.tensor(batch_data['function_pos'], dtype=torch.long).to(device)
-            bb_pos = torch.tensor(batch_data['bb_pos'], dtype=torch.long).to(device)
+            binary_pos = torch.tensor(batch_data['binary_pos'], dtype=torch.float).to(device)
+            function_pos = torch.tensor(batch_data['function_pos'], dtype=torch.float).to(device)
+            bb_pos = torch.tensor(batch_data['bb_pos'], dtype=torch.float).to(device)
             var_offsets = torch.tensor(batch_data['var_offsets'], dtype=torch.long).to(device)
             
             # Get embeddings from AddressAware model

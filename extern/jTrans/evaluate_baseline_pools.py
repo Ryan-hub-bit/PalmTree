@@ -80,7 +80,7 @@ def load_model(checkpoint_path, tokenizer, device='cuda'):
     
     # Load weights
     weights_path = os.path.join(checkpoint_path, 'pytorch_model.bin')
-    state_dict = torch.load(weights_path, map_location=device)
+    state_dict = torch.load(weights_path, map_location=device, weights_only=False)
     model.load_state_dict(state_dict, strict=False)
     
     model.eval()

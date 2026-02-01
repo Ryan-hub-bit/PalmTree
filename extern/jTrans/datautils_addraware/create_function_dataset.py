@@ -17,6 +17,12 @@ from collections import Counter, defaultdict
 import subprocess
 
 
+# Address parsing patterns (same as dataloader)
+ADDR_PATTERN = re.compile(r'^(\S+?)\(0x([0-9a-f]+):([0-9.]+):([0-9.]+):([0-9.]+)\)', re.IGNORECASE)
+NESTED_ADDR_PATTERN = re.compile(r'^(?:address|daddr)\(0x([0-9a-f]+):([0-9.]+):([0-9.]+):([0-9.]+)\)', re.IGNORECASE)
+VAR_PATTERN = re.compile(r'^var\(0x([0-9a-f]+)\)', re.IGNORECASE)
+
+
 def parse_filename(filepath):
     """Parse filename to extract binary name and optimization level."""
     filename = Path(filepath).name
@@ -152,6 +158,110 @@ def smart_merge_function(function_line, top_symbols):
     return processed
 
 
+def parse_instruction(inst_text):
+    """
+    Parse a single instruction and extract tokens + positions.
+    Same logic as dataloader_addressaware.py
+    
+    Returns:
+        tokens: List of token strings
+        positions: List of (binary_pos, function_pos, bb_pos) tuples
+        var_offsets: List of var offset values (-1 for non-var tokens)
+    """
+    tokens = []
+    positions = []
+    var_offsets = []
+    
+    # Match opcode with address
+    match = ADDR_PATTERN.match(inst_text)
+    if not match:
+        return [inst_text], [(-1.0, -1.0, -1.0)], [-1]
+    
+    opcode = match.group(1)
+    binary_pos = float(match.group(3))
+    function_pos = float(match.group(4))
+    bb_pos = float(match.group(5))
+    
+    tokens.append(opcode)
+    positions.append((binary_pos, function_pos, bb_pos))
+    var_offsets.append(-1)
+    
+    # Parse operands
+    operands_text = inst_text[match.end():].strip()
+    if operands_text:
+        for operand in operands_text.split():
+            nested_match = NESTED_ADDR_PATTERN.match(operand)
+            var_match = VAR_PATTERN.match(operand)
+            
+            if nested_match:
+                nested_binary_pos = float(nested_match.group(2))
+                nested_function_pos = float(nested_match.group(3))
+                nested_bb_pos = float(nested_match.group(4))
+                tokens.append('address')
+                positions.append((nested_binary_pos, nested_function_pos, nested_bb_pos))
+                var_offsets.append(-1)
+            elif var_match:
+                var_hex = var_match.group(1)
+                var_offset_value = int(var_hex, 16)
+                
+                # Handle 64-bit negative offsets
+                if var_offset_value > 0x7FFFFFFFFFFFFFFF:
+                    var_offset_value = var_offset_value - 0x10000000000000000
+                
+                tokens.append('var')
+                positions.append((-1.0, -1.0, -1.0))
+                var_offsets.append(var_offset_value)
+            else:
+                tokens.append(operand)
+                positions.append((-1.0, -1.0, -1.0))
+                var_offsets.append(-1)
+    
+    return tokens, positions, var_offsets
+
+
+def parse_function_line(function_line):
+    """
+    Parse a complete function line (tab-separated instructions).
+    
+    Returns:
+        tokens: Space-separated token string
+        binary_pos: List of binary position values
+        function_pos: List of function position values
+        bb_pos: List of basic block position values
+        var_offsets: List of var offset values
+        num_instructions: Number of tokens
+    """
+    instructions = [inst.strip() for inst in function_line.split('\t') if inst.strip()]
+    
+    all_tokens = []
+    all_binary_pos = []
+    all_function_pos = []
+    all_bb_pos = []
+    all_var_offsets = []
+    
+    for inst_text in instructions:
+        tokens, positions, var_offsets = parse_instruction(inst_text)
+        
+        all_tokens.extend(tokens)
+        for bp, fp, bbp in positions:
+            all_binary_pos.append(bp)
+            all_function_pos.append(fp)
+            all_bb_pos.append(bbp)
+        all_var_offsets.extend(var_offsets)
+    
+    # Join tokens with space
+    tokens_str = ' '.join(all_tokens)
+    
+    return {
+        'tokens': tokens_str,
+        'binary_pos': all_binary_pos,
+        'function_pos': all_function_pos,
+        'bb_pos': all_bb_pos,
+        'var_offsets': all_var_offsets,
+        'num_instructions': len(all_tokens)
+    }
+
+
 def create_function_blocks(export_dir, binary_dir, top_symbols):
     """
     Create func_blocks.json with all functions.
@@ -214,13 +324,16 @@ def create_function_blocks(export_dir, binary_dir, top_symbols):
                     # Apply smart merge
                     processed_line = smart_merge_function(line, top_symbols)
                     
+                    # Parse the function line to extract tokens and positions
+                    parsed = parse_function_line(processed_line)
+                    
                     # Determine function name
                     if function_names and line_idx < len(function_names):
                         func_name = function_names[line_idx]
                     else:
                         func_name = f"func_{line_idx}"
                     
-                    # Create function block
+                    # Create function block with parsed data
                     func_blocks[func_id] = {
                         'id': func_id,
                         'binary_name': binary_name,
@@ -228,7 +341,13 @@ def create_function_blocks(export_dir, binary_dir, top_symbols):
                         'optimization_level': opt,
                         'file_hash': opt_info['hash'],
                         'line_index': line_idx,
-                        'instructions': processed_line
+                        'instructions': processed_line,  # Keep original for reference
+                        'tokens': parsed['tokens'],  # Parsed token string
+                        'binary_pos': parsed['binary_pos'],
+                        'function_pos': parsed['function_pos'],
+                        'bb_pos': parsed['bb_pos'],
+                        'var_offsets': parsed['var_offsets'],
+                        'num_instructions': parsed['num_instructions']
                     }
                     
                     # Store in mapping for ground truth
