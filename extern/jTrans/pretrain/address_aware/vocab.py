@@ -164,22 +164,24 @@ class WordVocab(Vocab):
 
     @staticmethod
     def load_vocab(vocab_path: str) -> 'WordVocab':
-        """Load vocabulary from pickle file.
+        """Load vocabulary from pickle or text file.
         
-        If the file is not a valid pickle (e.g., old text format),
-        raises an error with helpful message.
+        If the file is a pickle, load it directly.
+        If the file is a text file, build vocab from it.
         """
         try:
             with open(vocab_path, "rb") as f:
                 return pickle.load(f)
         except (pickle.UnpicklingError, UnicodeDecodeError) as e:
-            # File exists but is not a pickle file (probably old text format)
-            raise ValueError(
-                f"Vocabulary file '{vocab_path}' exists but is not a valid pickle file. "
-                f"It may be an old text-based vocabulary. "
-                f"Please delete it and let the script create a new one, or use create_vocab.py. "
-                f"Original error: {e}"
-            )
+            # File exists but is not a pickle file - try loading as text
+            print(f"Loading vocabulary from text file: {vocab_path}")
+            counter = Counter()
+            with open(vocab_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    token = line.strip()
+                    if token:
+                        counter[token] += 1
+            return WordVocab(counter, max_size=None, min_freq=1)
 
 
 def build():

@@ -9,7 +9,7 @@
 #          ./run_addressaware_pretrain.sh 1.0  # Use 100% of data (default)
 
 # Data ratio (default: 1.0 = 100% of data)
-DATA_RATIO="${1:-1.0}"
+DATA_RATIO="${1:-0.000001}"
 
 # Use both available GPUs
 export CUDA_VISIBLE_DEVICES=0,1
@@ -32,17 +32,22 @@ echo "=========================================="
 # Debug: Check vocab size before training
 echo "Checking vocabulary..."
 python3 << 'VOCABCHECK'
-import pickle
-vocab = pickle.load(open('./vocab_addr.pkl', 'rb'))
-print(f"Vocabulary file: ./vocab_addr.pkl")
-print(f"Vocabulary size: {len(vocab)}")
-print(f"Max token ID: {max(vocab.stoi.values())}")
-print(f"Special tokens: <pad>={vocab.stoi.get('<pad>')}, <unk>={vocab.stoi.get('<unk>')}, <mask>={vocab.stoi.get('<mask>')}")
+# Load vocab from txt file
+vocab_dict = {'<pad>': 0, '<unk>': 1, '<mask>': 2}
+with open('./vocab.txt', 'r') as f:
+    for line in f:
+        token = line.strip()
+        if token and token not in vocab_dict:
+            vocab_dict[token] = len(vocab_dict)
+print(f"Vocabulary file: ./vocab.txt")
+print(f"Vocabulary size: {len(vocab_dict)}")
+print(f"Max token ID: {max(vocab_dict.values())}")
+print(f"Special tokens: <pad>={vocab_dict.get('<pad>')}, <unk>={vocab_dict.get('<unk>')}, <mask>={vocab_dict.get('<mask>')}")
 VOCABCHECK
 
 python3 train_addressaware.py \
     --train_path /data/kun/jtrans/addressaware/addr_pretrain.txt \
-    --vocab_path ./vocab_addr.pkl \
+    --vocab_path ./vocab.txt \
     --output_dir /home/kun/Document/AAE/output/jtrans/addressaware_pretrain \
     --batch_size 64 \
     --learning_rate 1e-4 \

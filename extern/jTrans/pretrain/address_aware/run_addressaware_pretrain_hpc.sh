@@ -43,7 +43,7 @@ VOCABCHECK
 python3 train_addressaware.py \
   --train_path /work/kliu14/jtransdata/addr_pretrain.txt \
   --vocab_path ./vocab_addr.pkl \
-  --output_dir /work/kliu14/jtransoutput/addressaware_pretrain_sincos \
+  --output_dir /work/kliu14/jtransoutput/addressaware_pretrain \
   --batch_size 128 \
   --learning_rate 1e-4 \
   --num_epochs 20 \
