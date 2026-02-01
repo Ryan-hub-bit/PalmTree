@@ -115,7 +115,8 @@ class AddressPositionalEmbedding(nn.Module):
         
         # Stack the 3 position values as a single input vector
         # [batch_size, seq_len, 3] where each position is in [0, 1]
-        positions = torch.stack([binary_pos, function_pos, bb_pos], dim=-1)
+        # Convert to float for MLP processing
+        positions = torch.stack([binary_pos.float(), function_pos.float(), bb_pos.float()], dim=-1)
         
         # Determine which tokens are 'address' vs 'daddr'
         # Get indices for 'address' and 'daddr' tokens from vocab

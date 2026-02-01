@@ -6,8 +6,8 @@
 # 3. Each query has only one unique GT in pool (unambiguous)
 
 python3 create_filtered_baseline_pools.py \
-    --func-blocks /data/kun/jtrans/baseline/func_blocks_baseline.json \
-    --ground-truth /data/kun/jtrans/baseline/ground_truth_baseline.json \
+    --func-blocks /data/kun/jtrans/baseline/eval/func_blocks_baseline.json \
+    --ground-truth /data/kun/jtrans/baseline/eval/ground_truth_baseline.json \
     --output-dir /data/kun/jtrans/baseline/eval/pools_filtered \
     --min-instructions 11
 

@@ -3,7 +3,7 @@
 # Optimized for Recall@1 performance
 
 # Set GPUs (use GPU 0 and 1 for multi-GPU training)
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=1
 
 # Activate conda environment
 source ~/anaconda3/etc/profile.d/conda.sh
@@ -34,6 +34,6 @@ python finetune.py \
     --warmup 500 \
     --triplet_margin 0.5 \
     --max_grad_norm 1.0 \
-    --data_ratio 0.00001
+    --data_ratio 1.0 \
     #--target_opt O3 \
     

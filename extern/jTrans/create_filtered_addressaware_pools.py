@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Create filtered baseline evaluation pools
+Create filtered addressaware evaluation pools
 
 Filtering strategy:
 1. Exclude trivial functions with instruction count <= 10
@@ -47,7 +47,7 @@ def create_filtered_pools(func_blocks_path, ground_truth_path, output_dir,
         filter_trivial_pairs: Whether to filter O2=O3 identical pairs
     """
     print("="*80)
-    print("Creating Filtered Baseline Evaluation Pools")
+    print("Creating Filtered AddressAware Evaluation Pools")
     print("="*80)
     
     # Load data
@@ -89,21 +89,27 @@ def create_filtered_pools(func_blocks_path, ground_truth_path, output_dir,
             low_func = func_blocks[low_id]
             high_func = func_blocks[high_id]
             
-            # Filter 1: Too few instructions
-            # Use stored num_instructions field (already computed by create_baseline_dataset.py)
-            low_num_instr = low_func.get('num_instructions', 0)
-            high_num_instr = high_func.get('num_instructions', 0)
+            # Get instructions (token sequences)
+            # Support both 'tokens' (old format) and 'instructions' (new format)
+            low_tokens = low_func.get('tokens') or low_func.get('instructions', '')
+            high_tokens = high_func.get('tokens') or high_func.get('instructions', '')
             
-            if low_num_instr < min_instructions or high_num_instr < min_instructions:
+            # Check if tokens are empty
+            if not low_tokens or not high_tokens:
                 trivial_count += 1
                 continue
             
-            # Get tokens for subsequent hash computation
-            low_tokens = low_func.get('tokens', '')
-            high_tokens = high_func.get('tokens', '')
+            # Filter 1: Too few instructions
+            # Calculate instruction count from tokens if not stored
+            low_num_instr = low_func.get('num_instructions')
+            if low_num_instr is None:
+                low_num_instr = len(low_tokens.split())
             
-            # Check if tokens are empty (for debugging)
-            if not low_tokens or not high_tokens:
+            high_num_instr = high_func.get('num_instructions')
+            if high_num_instr is None:
+                high_num_instr = len(high_tokens.split())
+            
+            if low_num_instr < min_instructions or high_num_instr < min_instructions:
                 trivial_count += 1
                 continue
             
@@ -312,13 +318,13 @@ def create_filtered_pools(func_blocks_path, ground_truth_path, output_dir,
 if __name__ == '__main__':
     import argparse
     
-    parser = argparse.ArgumentParser(description='Create filtered baseline pools')
+    parser = argparse.ArgumentParser(description='Create filtered addressaware pools')
     parser.add_argument('--func-blocks', type=str,
-                        default='/data/kun/jtrans/baseline/eval/func_blocks_baseline.json')
+                        default='/data/kun/jtrans/addressaware/eval/func_blocks_addr.json')
     parser.add_argument('--ground-truth', type=str,
-                        default='/data/kun/jtrans/baseline/eval/ground_truth_baseline.json')
+                        default='/data/kun/jtrans/addressaware/eval/ground_truth_addr.json')
     parser.add_argument('--output-dir', type=str,
-                        default='/data/kun/jtrans/baseline/eval/pools_filtered')
+                        default='/data/kun/jtrans/addressaware/eval/pools_filtered')
     parser.add_argument('--min-instructions', type=int, default=11,
                         help='Minimum instruction count (filter trivial functions), default 11')
     
