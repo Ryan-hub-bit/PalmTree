@@ -39,7 +39,7 @@ class AddressAwareJTransForMLM(nn.Module):
             hidden_dropout_prob=dropout,
             attention_probs_dropout_prob=dropout,
             max_position_embeddings=max_len,
-            type_vocab_size=2,
+            type_vocab_size=256,  # Must match segment_types in AddressAwareBERTEmbedding
         )
         
         # Create base BERT model

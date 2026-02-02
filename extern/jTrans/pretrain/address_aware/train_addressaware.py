@@ -579,7 +579,7 @@ def main():
                 'num_hidden_layers': args.num_hidden_layers,
                 'num_attention_heads': args.num_attention_heads,
                 'max_position_embeddings': args.max_len,
-                'type_vocab_size': 2,
+                'type_vocab_size': 256,  # Must match segment_types in AddressAwareBERTEmbedding
                 'model_type': 'address_aware_jtrans'
             }
             with open(os.path.join(checkpoint_dir, 'config.json'), 'w') as f:

@@ -167,21 +167,46 @@ class WordVocab(Vocab):
         """Load vocabulary from pickle or text file.
         
         If the file is a pickle, load it directly.
-        If the file is a text file, build vocab from it.
+        If the file is a text file (vocab.txt format: one token per line), build vocab from it.
         """
         try:
             with open(vocab_path, "rb") as f:
                 return pickle.load(f)
         except (pickle.UnpicklingError, UnicodeDecodeError) as e:
-            # File exists but is not a pickle file - try loading as text
+            # File exists but is not a pickle file - try loading as text vocab file
+            # Format: one token per line (vocab.txt style)
             print(f"Loading vocabulary from text file: {vocab_path}")
-            counter = Counter()
+            
+            # Read tokens from file (one per line)
+            tokens = []
             with open(vocab_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     token = line.strip()
                     if token:
-                        counter[token] += 1
-            return WordVocab(counter, max_size=None, min_freq=1)
+                        tokens.append(token)
+            
+            # Build vocab directly using parent Vocab class (not WordVocab which expects corpus)
+            # First 5 tokens should be special tokens: <pad>, <unk>, <eos>, <sos>, <mask>
+            counter = Counter()
+            for token in tokens:
+                counter[token] = 1  # All tokens have frequency 1 (they're already selected)
+            
+            # Use parent Vocab class directly to avoid WordVocab's corpus parsing
+            vocab = Vocab.__new__(WordVocab)
+            vocab.pad_index = 0
+            vocab.unk_index = 1
+            vocab.eos_index = 2
+            vocab.sos_index = 3
+            vocab.mask_index = 4
+            vocab.freqs = counter
+            
+            # Build itos from the ordered token list (preserving file order)
+            vocab.itos = tokens
+            vocab.stoi = {tok: i for i, tok in enumerate(tokens)}
+            vocab.vectors = None
+            
+            print(f"Loaded {len(vocab)} tokens from text file")
+            return vocab
 
 
 def build():
