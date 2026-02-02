@@ -208,7 +208,6 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         
         # Move to device
         token_ids = token_ids_cpu.to(device)
-        attention_mask = batch['attention_mask'].to(device)
         token_type_ids = batch['segment_label'].to(device)
         mlm_labels = batch['bert_label'].to(device)
         
@@ -227,10 +226,9 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         
         optimizer.zero_grad()
         
-        # Forward pass
+        # Forward pass (no longer needs attention_mask parameter)
         mlm_logits, jtp_logits = model(
             token_ids=token_ids,
-            attention_mask=attention_mask,
             token_type_ids=token_type_ids,
             binary_pos=binary_pos,
             function_pos=function_pos,
@@ -306,7 +304,6 @@ def validate_epoch(model, dataloader, device, logger):
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Validation"):
             token_ids = batch['bert_input'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
             token_type_ids = batch['segment_label'].to(device)
             mlm_labels = batch['bert_label'].to(device)
             
@@ -323,7 +320,6 @@ def validate_epoch(model, dataloader, device, logger):
             
             mlm_logits, jtp_logits = model(
                 token_ids=token_ids,
-                attention_mask=attention_mask,
                 token_type_ids=token_type_ids,
                 binary_pos=binary_pos,
                 function_pos=function_pos,

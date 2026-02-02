@@ -1,17 +1,18 @@
 """
 Address-Aware jTrans Model
 
-Integrates hierarchical address embeddings (binary/function/bb positions)
-with separate daddr vocabulary and var offset tracking.
-
-Key difference from baseline:
-- Uses AddressAwareBERTEmbedding instead of position=word embedding
-- Supports daddr, var, and imm tokens with proper semantic encoding
+Self-contained implementation using strupos-style architecture.
+No HuggingFace dependencies - uses our own TransformerBlock implementation.
 """
 
 import torch
 import torch.nn as nn
-from transformers import BertModel, BertConfig
+import sys
+import os
+
+# Add parent directory to path to import transformer_components
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+from transformer_components import TransformerBlock
 from address_embedding import AddressAwareBERTEmbedding
 
 
@@ -28,25 +29,10 @@ class AddressAwareJTransForMLM(nn.Module):
         
         self.hidden = hidden
         self.vocab_size = vocab_size
+        self.max_len = max_len
         
-        # Create BERT config
-        config = BertConfig(
-            vocab_size=vocab_size,
-            hidden_size=hidden,
-            num_hidden_layers=n_layers,
-            num_attention_heads=attn_heads,
-            intermediate_size=hidden * 4,
-            hidden_dropout_prob=dropout,
-            attention_probs_dropout_prob=dropout,
-            max_position_embeddings=max_len,
-            type_vocab_size=2,
-        )
-        
-        # Create base BERT model
-        self.bert = BertModel(config, add_pooling_layer=False)
-        
-        # Replace standard embeddings with address-aware embeddings
-        self.bert.embeddings = AddressAwareBERTEmbedding(
+        # Address-aware embedding layer
+        self.embeddings = AddressAwareBERTEmbedding(
             vocab_size=vocab_size,
             embed_size=hidden,
             dropout=dropout,
@@ -56,6 +42,12 @@ class AddressAwareJTransForMLM(nn.Module):
             segment_types=256,  # Support up to 256 instructions per sequence
             vocab_stoi=None  # Will be set by train script after vocab is loaded
         )
+        
+        # Transformer blocks (self-contained implementation)
+        self.transformer_blocks = nn.ModuleList([
+            TransformerBlock(hidden, attn_heads, hidden * 4, dropout)
+            for _ in range(n_layers)
+        ])
         
         # MLM head (predicts masked tokens)
         self.mlm_head = nn.Sequential(
@@ -74,14 +66,13 @@ class AddressAwareJTransForMLM(nn.Module):
             nn.Linear(hidden, max_len)
         )
     
-    def forward(self, token_ids, attention_mask, token_type_ids, 
+    def forward(self, token_ids, token_type_ids, 
                 binary_pos, function_pos, bb_pos, var_offsets=None):
         """
         Forward pass.
         
         Args:
             token_ids: [batch_size, seq_len]
-            attention_mask: [batch_size, seq_len]
             token_type_ids: [batch_size, seq_len]
             binary_pos: [batch_size, seq_len] normalized [0,1] positions
             function_pos: [batch_size, seq_len] normalized [0,1] positions
@@ -92,9 +83,11 @@ class AddressAwareJTransForMLM(nn.Module):
             mlm_logits: [batch_size, seq_len, vocab_size]
             jtp_logits: [batch_size, seq_len, max_len]
         """
+        # Create attention mask (mask out padding tokens)
+        mask = (token_ids > 0).unsqueeze(1).repeat(1, token_ids.size(1), 1).unsqueeze(1)
+        
         # Get embeddings with address awareness
-        # AddressAwareBERTEmbedding expects: token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets
-        embeddings = self.bert.embeddings(
+        x = self.embeddings(
             token_ids,
             token_type_ids,
             binary_pos,
@@ -103,19 +96,15 @@ class AddressAwareJTransForMLM(nn.Module):
             var_offsets
         )
         
-        # Pass through transformer
-        outputs = self.bert.encoder(
-            embeddings,
-            attention_mask=attention_mask.unsqueeze(1).unsqueeze(2)
-        )
-        
-        sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
+        # Pass through transformer blocks
+        for transformer in self.transformer_blocks:
+            x = transformer.forward(x, mask)
         
         # MLM predictions
-        mlm_logits = self.mlm_head(sequence_output)
+        mlm_logits = self.mlm_head(x)
         
         # JTP predictions
-        jtp_logits = self.jtp_head(sequence_output)
+        jtp_logits = self.jtp_head(x)
         
         return mlm_logits, jtp_logits
 
