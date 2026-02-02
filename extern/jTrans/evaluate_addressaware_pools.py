@@ -98,6 +98,11 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
     state_dict = torch.load(weights_path, map_location=device)
     bert_model.load_state_dict(state_dict)
     
+    # CRITICAL: Re-set vocab_stoi after loading state_dict
+    # load_state_dict() restores parameters/buffers but NOT Python attributes like vocab_stoi
+    bert_model.embeddings.vocab_stoi = vocab_stoi
+    print(f"  vocab_stoi restored (address={vocab_stoi.get('address')}, daddr={vocab_stoi.get('daddr')})")
+    
     # Wrap model
     model = AddressAwareBertWrapper(bert_model).to(device)
     model.eval()
@@ -185,39 +190,86 @@ def parse_address_aware_function(func_str, max_len=512):
 
 
 def tokenize_function(func_block, tokenizer, vocab_stoi, max_len=512):
-    """Tokenize address-aware function block"""
+    """
+    Tokenize address-aware function block.
+    
+    CRITICAL: Must match pretrain/finetune format:
+    - Use <sos> and <eos> (NOT [CLS] and [SEP])
+    - Generate instruction-level segment labels (1, 2, 3, ...)
+    - Use <pad> for padding (NOT [PAD])
+    """
     func_str = func_block['tokens']
     
-    # Parse address-aware tokens
-    tokens, binary_pos, function_pos, bb_pos, var_offsets = parse_address_aware_function(func_str, max_len)
+    # Split by tabs to get instructions (matching pretrain format)
+    instructions = func_str.split('\t') if '\t' in func_str else [func_str]
     
-    # Add [CLS] and [SEP]
-    tokens = ['[CLS]'] + tokens + ['[SEP]']
-    binary_pos = [-1.0] + binary_pos + [-1.0]
-    function_pos = [-1.0] + function_pos + [-1.0]
-    bb_pos = [-1.0] + bb_pos + [-1.0]
-    var_offsets = [-1] + var_offsets + [-1]
+    all_tokens = []
+    all_binary_pos = []
+    all_function_pos = []
+    all_bb_pos = []
+    all_var_offsets = []
+    all_segments = []
+    
+    # Add <sos> at beginning (segment 1) - MATCH PRETRAIN
+    all_tokens.append('<sos>')
+    all_binary_pos.append(-1.0)
+    all_function_pos.append(-1.0)
+    all_bb_pos.append(-1.0)
+    all_var_offsets.append(-1)
+    all_segments.append(1)
+    
+    for inst_idx, inst_text in enumerate(instructions):
+        inst_text = inst_text.strip()
+        if not inst_text:
+            continue
+        
+        # Parse this instruction
+        tokens, binary_pos, function_pos, bb_pos, var_offsets = parse_address_aware_function(inst_text, max_len)
+        
+        # Segment label = instruction number (1-indexed)
+        inst_segment = inst_idx + 1
+        
+        all_tokens.extend(tokens)
+        all_binary_pos.extend(binary_pos)
+        all_function_pos.extend(function_pos)
+        all_bb_pos.extend(bb_pos)
+        all_var_offsets.extend(var_offsets)
+        all_segments.extend([inst_segment] * len(tokens))
+    
+    # Add <eos> at end (gets last instruction's segment) - MATCH PRETRAIN
+    last_segment = inst_idx + 1 if instructions else 1
+    all_tokens.append('<eos>')
+    all_binary_pos.append(-1.0)
+    all_function_pos.append(-1.0)
+    all_bb_pos.append(-1.0)
+    all_var_offsets.append(-1)
+    all_segments.append(last_segment)
     
     # Truncate if needed
-    if len(tokens) > max_len:
-        tokens = tokens[:max_len-1] + ['[SEP]']
-        binary_pos = binary_pos[:max_len-1] + [-1.0]
-        function_pos = function_pos[:max_len-1] + [-1.0]
-        bb_pos = bb_pos[:max_len-1] + [-1.0]
-        var_offsets = var_offsets[:max_len-1] + [-1]
+    if len(all_tokens) > max_len:
+        all_tokens = all_tokens[:max_len]
+        all_binary_pos = all_binary_pos[:max_len]
+        all_function_pos = all_function_pos[:max_len]
+        all_bb_pos = all_bb_pos[:max_len]
+        all_var_offsets = all_var_offsets[:max_len]
+        all_segments = all_segments[:max_len]
     
-    # Convert tokens to IDs
-    token_ids = [vocab_stoi.get(t, vocab_stoi.get('[UNK]', 1)) for t in tokens]
+    # Convert tokens to IDs (use <unk> for unknown, not [UNK])
+    token_ids = [vocab_stoi.get(t, vocab_stoi.get('<unk>', 1)) for t in all_tokens]
     
-    # Pad to max_len
+    # Pad to max_len (use <pad>, not [PAD])
     padding_len = max_len - len(token_ids)
-    token_ids += [vocab_stoi.get('[PAD]', 0)] * padding_len
-    binary_pos += [-1.0] * padding_len
-    function_pos += [-1.0] * padding_len
-    bb_pos += [-1.0] * padding_len
-    var_offsets += [-1] * padding_len
+    token_ids += [vocab_stoi.get('<pad>', 0)] * padding_len
+    all_binary_pos += [-1.0] * padding_len
+    all_function_pos += [-1.0] * padding_len
+    all_bb_pos += [-1.0] * padding_len
+    all_var_offsets += [-1] * padding_len
+    all_segments += [0] * padding_len  # Padding gets segment 0
     
-    return token_ids, binary_pos, function_pos, bb_pos, var_offsets
+    # Clamp segment labels to valid range [0, 255] (segment_types=256)
+    all_segments = [min(seg, 255) for seg in all_segments]
+    
+    return token_ids, all_binary_pos, all_function_pos, all_bb_pos, all_var_offsets, all_segments
 
 
 def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len=512, batch_size=32):
@@ -236,8 +288,10 @@ def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, dev
             batch_var_offsets = []
             batch_attention_mask = []
             
+            batch_segments = []
+            
             for fid in batch_ids:
-                token_ids, bin_pos, func_pos, bb_p, var_off = tokenize_function(
+                token_ids, bin_pos, func_pos, bb_p, var_off, segments = tokenize_function(
                     func_blocks[fid], tokenizer, vocab_stoi, max_len
                 )
                 
@@ -246,9 +300,10 @@ def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, dev
                 batch_function_pos.append(func_pos)
                 batch_bb_pos.append(bb_p)
                 batch_var_offsets.append(var_off)
+                batch_segments.append(segments)
                 
-                # Create attention mask
-                attention_mask = [1 if tid != vocab_stoi.get('[PAD]', 0) else 0 for tid in token_ids]
+                # Create attention mask (use <pad> not [PAD])
+                attention_mask = [1 if tid != vocab_stoi.get('<pad>', 0) else 0 for tid in token_ids]
                 batch_attention_mask.append(attention_mask)
             
             # Convert to tensors
@@ -258,7 +313,7 @@ def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, dev
             bb_pos = torch.tensor(batch_bb_pos, dtype=torch.float).to(device)
             var_offsets = torch.tensor(batch_var_offsets, dtype=torch.long).to(device)
             attention_mask = torch.tensor(batch_attention_mask, dtype=torch.long).to(device)
-            token_type_ids = torch.zeros_like(input_ids)
+            token_type_ids = torch.tensor(batch_segments, dtype=torch.long).to(device)  # Proper segment labels!
             
             # Get embeddings
             batch_embeddings = model(

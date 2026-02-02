@@ -494,7 +494,7 @@ if __name__ == '__main__':
             num_attention_heads=config_dict['num_attention_heads'],
             intermediate_size=config_dict['hidden_size'] * 4,
             max_position_embeddings=config_dict['max_position_embeddings'],
-            type_vocab_size=config_dict.get('type_vocab_size', 2),
+            type_vocab_size=config_dict.get('type_vocab_size', 256),  # Default 256 to match segment_types
         )
         
         bert_model = BertModel(config, add_pooling_layer=False)
@@ -515,6 +515,12 @@ if __name__ == '__main__':
         weights_path = os.path.join(args.model_path, 'pytorch_model.bin')
         state_dict = torch.load(weights_path, map_location='cpu')
         bert_model.load_state_dict(state_dict)
+        
+        # CRITICAL: Re-set vocab_stoi after loading state_dict
+        # load_state_dict() restores parameters/buffers but NOT Python attributes like vocab_stoi
+        # This is needed for address vs daddr distinction in AddressPositionalEmbedding
+        bert_model.embeddings.vocab_stoi = vocab_stoi
+        logger.info(f"✓ Restored vocab_stoi mapping (address={vocab_stoi.get('address')}, daddr={vocab_stoi.get('daddr')})")
         
         # Wrap for finetuning
         model = AddressAwareBertWrapper(bert_model)
