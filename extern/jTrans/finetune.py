@@ -334,12 +334,24 @@ class BinBertModel(BertModel):
 
 class AddressAwareBertWrapper(nn.Module):
     """
-    Wrapper for address-aware BERT encoder to match BERT interface for finetuning.
-    Extracts [CLS] token as pooled output.
+    Wrapper for address-aware BERT encoder for function similarity finetuning.
+    Extracts [CLS] token and projects to lower-dimensional embedding space.
     """
-    def __init__(self, bert_model):
+    def __init__(self, bert_model, hidden_size=768, embedding_dim=256, use_projection=True, dropout=0.1):
         super().__init__()
         self.bert = bert_model  # The BERT model with AddressAwareBERTEmbedding
+        self.use_projection = use_projection
+        self.hidden_size = hidden_size
+        self.embedding_dim = embedding_dim
+        
+        # Projection layer for task-specific feature learning (like dstask/funcsim)
+        if use_projection:
+            self.projection = nn.Sequential(
+                nn.Linear(hidden_size, hidden_size),
+                nn.GELU(),
+                nn.Dropout(dropout),
+                nn.Linear(hidden_size, embedding_dim)
+            )
         
     def forward(self, token_ids, attention_mask, token_type_ids,
                 binary_pos, function_pos, bb_pos, var_offsets=None):
@@ -348,7 +360,7 @@ class AddressAwareBertWrapper(nn.Module):
         
         Returns:
             Dict with:
-                - pooler_output: [batch_size, hidden_size]
+                - pooler_output: [batch_size, embedding_dim] (if projection) or [batch_size, hidden_size]
                 - last_hidden_state: [batch_size, seq_len, hidden_size]
         """
         # Get embeddings
@@ -368,7 +380,12 @@ class AddressAwareBertWrapper(nn.Module):
         )
         
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
-        pooler_output = sequence_output[:, 0, :]  # CLS token
+        pooler_output = sequence_output[:, 0, :]  # CLS token [batch_size, hidden]
+        
+        # Project to lower dimension and normalize (for better similarity computation)
+        if self.use_projection:
+            pooler_output = self.projection(pooler_output)  # [batch_size, embedding_dim]
+            pooler_output = F.normalize(pooler_output, p=2, dim=1)  # L2 normalize
         
         # Return as dict (compatible with DataParallel)
         return {
@@ -378,15 +395,16 @@ class AddressAwareBertWrapper(nn.Module):
     
     def save_pretrained(self, save_directory):
         """
-        Save the model to a directory (compatible with HuggingFace interface).
+        Save the entire model (BERT + projection layer) to a directory.
+        Saves wrapper state_dict to include projection weights.
         """
         import os
         import json
         os.makedirs(save_directory, exist_ok=True)
         
-        # Save the wrapped BERT model's state dict
+        # Save the ENTIRE wrapper's state dict (includes BERT + projection)
         model_path = os.path.join(save_directory, 'pytorch_model.bin')
-        torch.save(self.bert.state_dict(), model_path)
+        torch.save(self.state_dict(), model_path)
         
         # Save config (extract from the BERT model's config if available)
         config_path = os.path.join(save_directory, 'config.json')
@@ -404,6 +422,10 @@ class AddressAwareBertWrapper(nn.Module):
                 'max_position_embeddings': 512,
                 'type_vocab_size': self.bert.embeddings.segment_embedding.num_embeddings,
             }
+        
+        # Add wrapper-specific config
+        config['use_projection'] = self.use_projection
+        config['embedding_dim'] = self.embedding_dim if self.use_projection else self.hidden_size
         
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
@@ -446,6 +468,10 @@ if __name__ == '__main__':
                         help='use cached embeddings for evaluation')
     parser.add_argument("--embedding_cache_dir", type=str, default=None, 
                         help='directory to cache embeddings')
+    parser.add_argument("--use_projection", action='store_true', default=True,
+                        help='use projection layer for dimensionality reduction (default: True)')
+    parser.add_argument("--embedding_dim", type=int, default=256,
+                        help='dimension of function embeddings after projection (default: 256)')
     parser.add_argument("--triplet_margin", type=float, default=0.5,
                         help='margin for triplet loss (higher = stricter separation)')
     parser.add_argument("--max_grad_norm", type=float, default=1.0,
@@ -494,7 +520,7 @@ if __name__ == '__main__':
             num_attention_heads=config_dict['num_attention_heads'],
             intermediate_size=config_dict['hidden_size'] * 4,
             max_position_embeddings=config_dict['max_position_embeddings'],
-            type_vocab_size=config_dict.get('type_vocab_size', 256),  # Default 256 to match segment_types
+            type_vocab_size=config_dict.get('type_vocab_size', 2),
         )
         
         bert_model = BertModel(config, add_pooling_layer=False)
@@ -516,15 +542,15 @@ if __name__ == '__main__':
         state_dict = torch.load(weights_path, map_location='cpu')
         bert_model.load_state_dict(state_dict)
         
-        # CRITICAL: Re-set vocab_stoi after loading state_dict
-        # load_state_dict() restores parameters/buffers but NOT Python attributes like vocab_stoi
-        # This is needed for address vs daddr distinction in AddressPositionalEmbedding
-        bert_model.embeddings.vocab_stoi = vocab_stoi
-        logger.info(f"✓ Restored vocab_stoi mapping (address={vocab_stoi.get('address')}, daddr={vocab_stoi.get('daddr')})")
-        
-        # Wrap for finetuning
-        model = AddressAwareBertWrapper(bert_model)
-        logger.info("Loaded address-aware BERT encoder")
+        # Wrap for finetuning with projection layer
+        model = AddressAwareBertWrapper(
+            bert_model,
+            hidden_size=config_dict['hidden_size'],
+            embedding_dim=args.embedding_dim,
+            use_projection=args.use_projection,
+            dropout=0.1
+        )
+        logger.info(f"Loaded address-aware BERT encoder with projection layer (embedding_dim={args.embedding_dim})")
         
     else:
         # Load baseline model 

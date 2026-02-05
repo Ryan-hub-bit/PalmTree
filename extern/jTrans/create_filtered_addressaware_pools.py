@@ -88,16 +88,39 @@ def create_filtered_pools(func_blocks_path, ground_truth_path, output_dir,
             high_func = func_blocks[high_id]
             
             # Filter 1: Too few instructions
-            low_num_instr = low_func.get('num_instructions', 0)
-            high_num_instr = high_func.get('num_instructions', 0)
+            # Count instructions from 'instructions' field (tab-separated)
+            if 'instructions' in low_func:
+                low_num_instr = low_func['instructions'].count('\t') + 1
+            elif 'num_instructions' in low_func:
+                low_num_instr = low_func['num_instructions']
+            else:
+                low_num_instr = 0
+            
+            if 'instructions' in high_func:
+                high_num_instr = high_func['instructions'].count('\t') + 1
+            elif 'num_instructions' in high_func:
+                high_num_instr = high_func['num_instructions']
+            else:
+                high_num_instr = 0
             
             if low_num_instr < min_instructions or high_num_instr < min_instructions:
                 trivial_count += 1
                 continue
             
-            # Get tokens for hash computation
-            low_tokens = low_func.get('tokens', '')
-            high_tokens = high_func.get('tokens', '')
+            # Get instructions for hash computation (prefer 'instructions' over 'tokens')
+            if 'instructions' in low_func:
+                low_tokens = low_func['instructions']
+            elif 'tokens' in low_func:
+                low_tokens = low_func['tokens']
+            else:
+                low_tokens = ''
+            
+            if 'instructions' in high_func:
+                high_tokens = high_func['instructions']
+            elif 'tokens' in high_func:
+                high_tokens = high_func['tokens']
+            else:
+                high_tokens = ''
             
             # Check if tokens are empty
             if not low_tokens or not high_tokens:

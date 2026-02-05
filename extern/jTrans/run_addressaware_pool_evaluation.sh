@@ -6,7 +6,7 @@
 #
 # Example:
 #   ./run_addressaware_pool_evaluation.sh \
-#       /home/kun/Document/AAE/output/jtrans/addressaware_finetune_sincos/finetune_epoch_2 \
+#       /home/kun/Document/AAE/output/jtrans/addressaware_finetune_targetO3/finetune_epoch_3 \
 #       /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware
 
 set -e
@@ -43,6 +43,7 @@ conda activate jtrans
 
 # Configuration
 POOL_DIR="/data/kun/jtrans/addressaware/eval/pools_filtered"
+# Use EVAL data (pools reference eval function IDs, not training IDs)
 FUNC_BLOCKS="/data/kun/jtrans/addressaware/eval/func_blocks_addr.json"
 MAX_LEN=512  # Same as finetune
 BATCH_SIZE=32

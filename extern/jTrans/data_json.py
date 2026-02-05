@@ -127,11 +127,11 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
                 func_id = opt_dict[o]
                 func_data = func_blocks[str(func_id)]  # JSON keys are strings
                 
-                # Handle both baseline format (tokens) and address-aware format (instructions)
-                if 'tokens' in func_data:
-                    func_str = func_data['tokens']
-                elif 'instructions' in func_data:
+                # PREFER 'instructions' (has position annotations) over 'tokens' (stripped)
+                if 'instructions' in func_data:
                     func_str = func_data['instructions']
+                elif 'tokens' in func_data:
+                    func_str = func_data['tokens']
                 else:
                     continue
                 
@@ -632,17 +632,28 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
                     pos_idx = random.randint(0, len(pairs) - 1)
             positive = pairs[pos_idx]
         
-        # Select negative from different function with SAME opt as anchor
+        # Select negative from different function
         neg_func_idx = random.randint(0, len(self.processed_datas) - 1)
         while neg_func_idx == idx:
             neg_func_idx = random.randint(0, len(self.processed_datas) - 1)
         
         neg_pairs = self.processed_datas[neg_func_idx]
-        # Try to use same opt index as anchor, fallback to random if not available
-        if anchor_idx < len(neg_pairs):
-            neg_idx = anchor_idx
+        
+        # If target_opt is set, negative should also be target_opt (O3) from different function
+        # This matches the evaluation: query (Ox) searches among pool of O3 functions
+        if self.target_opt is not None:
+            # Negative is target_opt from different function (matches evaluation pool)
+            if target_idx < len(neg_pairs):
+                neg_idx = target_idx
+            else:
+                # Fallback if target_opt not available in this function
+                neg_idx = random.randint(0, len(neg_pairs) - 1)
         else:
-            neg_idx = random.randint(0, len(neg_pairs) - 1)
+            # Original mode: use same opt as anchor
+            if anchor_idx < len(neg_pairs):
+                neg_idx = anchor_idx
+            else:
+                neg_idx = random.randint(0, len(neg_pairs) - 1)
         negative = neg_pairs[neg_idx]
         
         return (

@@ -29,14 +29,61 @@ def load_vocab(vocab_path):
     return tokenizer
 
 
+def load_func_blocks_from_ground_truth(func_blocks_path, ground_truth_path):
+    """
+    Load function blocks using ground truth to determine which functions we need.
+    This matches the data_json.py approach used in finetune.
+    """
+    print(f'Loading ground truth from {ground_truth_path}...')
+    with open(ground_truth_path, 'r') as f:
+        ground_truth = json.load(f)
+    
+    all_pairs = ground_truth['pairs']
+    total_pairs = len(all_pairs)
+    print(f'Found {total_pairs} function pairs')
+    
+    # Collect function IDs we need
+    needed_func_ids = set()
+    for pair in all_pairs:
+        # Address-aware format has opt1, opt2, func_id1, func_id2
+        if 'opt1' in pair and 'opt2' in pair:
+            needed_func_ids.add(str(pair['func_id1']))
+            needed_func_ids.add(str(pair['func_id2']))
+    
+    print(f'Loading {len(needed_func_ids)} needed functions from {func_blocks_path}...')
+    
+    # Load only the needed function blocks
+    func_blocks = {}
+    with open(func_blocks_path, 'r') as f:
+        all_blocks = json.load(f)
+        for func_id in needed_func_ids:
+            if func_id in all_blocks:
+                func_blocks[func_id] = all_blocks[func_id]
+    
+    print(f'Loaded {len(func_blocks)} function blocks')
+    return func_blocks
+
+
 class AddressAwareBertWrapper(torch.nn.Module):
     """
     Wrapper for address-aware BERT (matching finetune.py).
-    Extracts [CLS] token as pooled output.
+    Extracts [CLS] token and applies projection layer.
     """
-    def __init__(self, bert_model):
+    def __init__(self, bert_model, hidden_size=768, embedding_dim=256, use_projection=True, dropout=0.1):
         super().__init__()
         self.bert = bert_model
+        self.use_projection = use_projection
+        self.hidden_size = hidden_size
+        self.embedding_dim = embedding_dim
+        
+        # Projection layer (task-specific)
+        if use_projection:
+            self.projection = torch.nn.Sequential(
+                torch.nn.Linear(hidden_size, hidden_size),
+                torch.nn.GELU(),
+                torch.nn.Dropout(dropout),
+                torch.nn.Linear(hidden_size, embedding_dim)
+            )
         
     def forward(self, token_ids, attention_mask, token_type_ids,
                 binary_pos, function_pos, bb_pos, var_offsets=None):
@@ -60,11 +107,16 @@ class AddressAwareBertWrapper(torch.nn.Module):
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
         pooler_output = sequence_output[:, 0, :]  # CLS token
         
+        # Project and normalize
+        if self.use_projection:
+            pooler_output = self.projection(pooler_output)
+            pooler_output = torch.nn.functional.normalize(pooler_output, p=2, dim=1)
+        
         return pooler_output
 
 
 def load_model(checkpoint_path, vocab_stoi, device='cuda'):
-    """Load finetuned address-aware model"""
+    """Load finetuned address-aware model (entire wrapper with projection)"""
     print(f"Loading model from: {checkpoint_path}")
     
     # Import address-aware embedding
@@ -78,7 +130,11 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
     
     config = BertConfig(**config_dict)
     
-    # Create BERT model
+    # Get projection settings from config (with defaults for backward compatibility)
+    use_projection = config_dict.get('use_projection', True)
+    embedding_dim = config_dict.get('embedding_dim', 256)
+    
+    # Create BERT model structure (to wrap)
     bert_model = BertModel(config, add_pooling_layer=False)
     
     # Replace embeddings with address-aware version
@@ -93,23 +149,36 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
         vocab_stoi=vocab_stoi
     )
     
-    # Load weights
+    # Create wrapper with projection layer
+    wrapper = AddressAwareBertWrapper(
+        bert_model,
+        hidden_size=config.hidden_size,
+        embedding_dim=embedding_dim,
+        use_projection=use_projection,
+        dropout=0.1
+    )
+    
+    # Load weights into wrapper (includes BERT + projection)
     weights_path = os.path.join(checkpoint_path, 'pytorch_model.bin')
     state_dict = torch.load(weights_path, map_location=device)
-    bert_model.load_state_dict(state_dict)
+    wrapper.load_state_dict(state_dict)
     
     # CRITICAL: Re-set vocab_stoi after loading state_dict
     # load_state_dict() restores parameters/buffers but NOT Python attributes like vocab_stoi
-    bert_model.embeddings.vocab_stoi = vocab_stoi
+    # This is the key thing that needs to be restored (like baseline restores position_embeddings layer)
+    wrapper.bert.embeddings.vocab_stoi = vocab_stoi
     print(f"  vocab_stoi restored (address={vocab_stoi.get('address')}, daddr={vocab_stoi.get('daddr')})")
     
-    # Wrap model
-    model = AddressAwareBertWrapper(bert_model).to(device)
+    # Move to device and set eval mode
+    model = wrapper.to(device)
     model.eval()
     
     print(f"Model loaded successfully")
     print(f"  Vocab size: {config.vocab_size}")
     print(f"  Hidden size: {config.hidden_size}")
+    print(f"  Use projection: {use_projection}")
+    print(f"  Embedding dim: {embedding_dim if use_projection else config.hidden_size}")
+
     print(f"  Layers: {config.num_hidden_layers}")
     return model, config
 
@@ -170,9 +239,11 @@ def parse_address_aware_function(func_str, max_len=512):
             tokens.append('var')
             var_hex = var_match.group(1)
             var_offset = int(var_hex, 16)
-            # Convert to signed
-            if var_offset >= 0x80000000:
-                var_offset = var_offset - 0x100000000
+            # Handle 64-bit negative offsets (two's complement) - MATCH data_json.py
+            # Values > 0x7FFFFFFFFFFFFFFF are negative in two's complement
+            if var_offset > 0x7FFFFFFFFFFFFFFF:
+                # Convert to signed 64-bit integer
+                var_offset = var_offset - 0x10000000000000000
             binary_positions.append(-1.0)
             function_positions.append(-1.0)
             bb_positions.append(-1.0)
@@ -197,8 +268,15 @@ def tokenize_function(func_block, tokenizer, vocab_stoi, max_len=512):
     - Use <sos> and <eos> (NOT [CLS] and [SEP])
     - Generate instruction-level segment labels (1, 2, 3, ...)
     - Use <pad> for padding (NOT [PAD])
+    - PREFER 'instructions' field (has position annotations) over 'tokens' (stripped)
     """
-    func_str = func_block['tokens']
+    # PREFER 'instructions' field over 'tokens' - instructions has position annotations
+    if 'instructions' in func_block:
+        func_str = func_block['instructions']
+    elif 'tokens' in func_block:
+        func_str = func_block['tokens']
+    else:
+        raise ValueError(f"Function block missing both 'instructions' and 'tokens' fields: {list(func_block.keys())}")
     
     # Split by tabs to get instructions (matching pretrain format)
     instructions = func_str.split('\t') if '\t' in func_str else [func_str]
@@ -254,12 +332,21 @@ def tokenize_function(func_block, tokenizer, vocab_stoi, max_len=512):
         all_var_offsets = all_var_offsets[:max_len]
         all_segments = all_segments[:max_len]
     
-    # Convert tokens to IDs (use <unk> for unknown, not [UNK])
-    token_ids = [vocab_stoi.get(t, vocab_stoi.get('<unk>', 1)) for t in all_tokens]
+    # Convert tokens to IDs using tokenizer (same as data_json.py)
+    token_ids = []
+    unk_token_id = tokenizer.unk_token_id if tokenizer.unk_token_id is not None else vocab_stoi.get('<unk>', 1)
+    for tok in all_tokens:
+        # Use tokenizer's convert_tokens_to_ids method for proper handling
+        token_id = tokenizer.convert_tokens_to_ids(tok)
+        # Handle None return for unknown tokens
+        if token_id is None:
+            token_id = unk_token_id
+        token_ids.append(token_id)
     
-    # Pad to max_len (use <pad>, not [PAD])
+    # Pad to max_len (use tokenizer's pad_token_id)
     padding_len = max_len - len(token_ids)
-    token_ids += [vocab_stoi.get('<pad>', 0)] * padding_len
+    pad_token_id = tokenizer.pad_token_id if tokenizer.pad_token_id is not None else vocab_stoi.get('<pad>', 0)
+    token_ids += [pad_token_id] * padding_len
     all_binary_pos += [-1.0] * padding_len
     all_function_pos += [-1.0] * padding_len
     all_bb_pos += [-1.0] * padding_len
@@ -462,6 +549,7 @@ def main():
     parser.add_argument('--vocab_path', required=True, help='Vocabulary path')
     parser.add_argument('--pool_dir', required=True, help='Pool directory')
     parser.add_argument('--func_blocks', required=True, help='Function blocks JSON')
+    parser.add_argument('--ground_truth', help='Ground truth JSON (optional, for smart loading like finetune)')
     parser.add_argument('--max_len', type=int, default=512, help='Max sequence length')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     parser.add_argument('--device', default='cuda', help='Device')
@@ -484,10 +572,16 @@ def main():
     model, config = load_model(args.checkpoint, vocab_stoi, args.device)
     
     # Load func blocks
-    print(f"\nLoading func blocks: {args.func_blocks}")
-    with open(args.func_blocks, 'r') as f:
-        func_blocks = json.load(f)
-    print(f"Loaded {len(func_blocks)} functions")
+    if args.ground_truth:
+        # Use ground truth to load only needed functions (same as finetune)
+        print(f"\nUsing ground truth to load function blocks (same as finetune)")
+        func_blocks = load_func_blocks_from_ground_truth(args.func_blocks, args.ground_truth)
+    else:
+        # Load all function blocks directly
+        print(f"\nLoading func blocks: {args.func_blocks}")
+        with open(args.func_blocks, 'r') as f:
+            func_blocks = json.load(f)
+        print(f"Loaded {len(func_blocks)} functions")
     
     # Find pool files
     pool_dir = Path(args.pool_dir)
