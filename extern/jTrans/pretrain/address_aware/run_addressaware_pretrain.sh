@@ -47,7 +47,7 @@ VOCABCHECK
 
 python3 train_addressaware.py \
     --train_path /data/kun/jtrans/addressaware/addr_pretrain.txt \
-    --vocab_path ./vocab.txt \
+    --vocab_path ./vocab_addr.pkl \
     --output_dir /home/kun/Document/AAE/output/jtrans/addressaware_pretrain \
     --batch_size 64 \
     --learning_rate 1e-4 \

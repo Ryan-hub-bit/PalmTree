@@ -512,6 +512,11 @@ if __name__ == '__main__':
         with open(config_path, 'r') as f:
             config_dict = json.load(f)
         
+        # Read experimental flags from config (default to True for backward compatibility)
+        use_jtp = config_dict.get('use_jtp', True)
+        use_binary_pos = config_dict.get('use_binary_pos', True)
+        logger.info(f"Checkpoint config: use_jtp={use_jtp}, use_binary_pos={use_binary_pos}")
+        
         # Create BERT model with config
         config = BertConfig(
             vocab_size=config_dict['vocab_size'],
@@ -525,7 +530,7 @@ if __name__ == '__main__':
         
         bert_model = BertModel(config, add_pooling_layer=False)
         
-        # Replace embeddings with address-aware version
+        # Replace embeddings with address-aware version (matching pretrain config)
         bert_model.embeddings = AddressAwareBERTEmbedding(
             vocab_size=config_dict['vocab_size'],
             embed_size=config_dict['hidden_size'],
@@ -533,6 +538,7 @@ if __name__ == '__main__':
             max_len=config_dict['max_position_embeddings'],
             use_address_embedding=True,
             use_var_embedding=True,
+            use_binary_pos=use_binary_pos,  # Use flag from checkpoint
             segment_types=256,
             vocab_stoi=vocab_stoi  # Pass vocab mapping for address vs daddr distinction
         )

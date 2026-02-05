@@ -1,11 +1,13 @@
 #!/bin/bash
-#SBATCH --job-name=addr_pretrain
+#SBATCH --job-name=addr_no_jtp
 #SBATCH --output=/work/kliu14/jtransdata/log/%x_%j.out
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=12
 #SBATCH --time=3-00:00:00
 #SBATCH --partition=gpu4
 #SBATCH --account=loni_insembed01
+
+# SLURM: No JTP (MLM only, with binary_pos)
 
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
@@ -16,7 +18,7 @@ source ~/.bashrc
 source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
 conda activate /work/kliu14/.conda/envs/jtrans
 
-# Your requested command:
-./run_addressaware_pretrain_hpc.sh
+# Run no JTP experiment
+./run_no_jtp_hpc.sh
 
 echo "Done!"

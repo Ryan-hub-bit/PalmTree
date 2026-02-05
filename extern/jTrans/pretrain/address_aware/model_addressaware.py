@@ -23,11 +23,12 @@ class AddressAwareJTransForMLM(nn.Module):
     """
     
     def __init__(self, vocab_size, hidden=768, n_layers=12, attn_heads=12, 
-                 dropout=0.1, max_len=512):
+                 dropout=0.1, max_len=512, use_jtp=True, use_binary_pos=True):
         super().__init__()
         
         self.hidden = hidden
         self.vocab_size = vocab_size
+        self.use_jtp = use_jtp
         
         # Create BERT config
         config = BertConfig(
@@ -53,6 +54,7 @@ class AddressAwareJTransForMLM(nn.Module):
             max_len=max_len,
             use_address_embedding=True,
             use_var_embedding=True,
+            use_binary_pos=use_binary_pos,
             segment_types=256,  # Support up to 256 instructions per sequence
             vocab_stoi=None  # Will be set by train script after vocab is loaded
         )
@@ -65,14 +67,17 @@ class AddressAwareJTransForMLM(nn.Module):
             nn.Linear(hidden, vocab_size)
         )
         
-        # JTP head (predicts jump target positions)
+        # JTP head (predicts jump target positions) - OPTIONAL
         # Outputs position index [0, max_len-1]
-        self.jtp_head = nn.Sequential(
-            nn.Linear(hidden, hidden),
-            nn.GELU(),
-            nn.LayerNorm(hidden),
-            nn.Linear(hidden, max_len)
-        )
+        if self.use_jtp:
+            self.jtp_head = nn.Sequential(
+                nn.Linear(hidden, hidden),
+                nn.GELU(),
+                nn.LayerNorm(hidden),
+                nn.Linear(hidden, max_len)
+            )
+        else:
+            self.jtp_head = None
     
     def forward(self, token_ids, attention_mask, token_type_ids, 
                 binary_pos, function_pos, bb_pos, var_offsets=None):
@@ -114,16 +119,23 @@ class AddressAwareJTransForMLM(nn.Module):
         # MLM predictions
         mlm_logits = self.mlm_head(sequence_output)
         
-        # JTP predictions
-        jtp_logits = self.jtp_head(sequence_output)
+        # JTP predictions (optional)
+        if self.use_jtp:
+            jtp_logits = self.jtp_head(sequence_output)
+        else:
+            jtp_logits = None
         
         return mlm_logits, jtp_logits
 
 
 def create_addressaware_model(vocab_size, hidden=768, n_layers=12, attn_heads=12, 
-                               dropout=0.1, max_len=512):
+                               dropout=0.1, max_len=512, use_jtp=True, use_binary_pos=True):
     """
     Factory function to create address-aware model.
+    
+    Args:
+        use_jtp: Whether to include JTP head (if False, MLM only)
+        use_binary_pos: Whether to use binary-level position embeddings
     """
     model = AddressAwareJTransForMLM(
         vocab_size=vocab_size,
@@ -131,7 +143,9 @@ def create_addressaware_model(vocab_size, hidden=768, n_layers=12, attn_heads=12
         n_layers=n_layers,
         attn_heads=attn_heads,
         dropout=dropout,
-        max_len=max_len
+        max_len=max_len,
+        use_jtp=use_jtp,
+        use_binary_pos=use_binary_pos
     )
     
     # Initialize weights

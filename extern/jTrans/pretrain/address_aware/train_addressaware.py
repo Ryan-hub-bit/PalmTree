@@ -242,8 +242,8 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         mlm_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
         mlm_loss = mlm_loss_fn(mlm_logits.view(-1, mlm_logits.size(-1)), mlm_labels.view(-1))
         
-        # JTP loss (if labels provided)
-        if jtp_labels is not None:
+        # JTP loss (if JTP head exists and labels provided)
+        if jtp_logits is not None and jtp_labels is not None:
             jtp_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
             jtp_loss = jtp_loss_fn(jtp_logits.view(-1, jtp_logits.size(-1)), jtp_labels.view(-1))
             loss = mlm_loss + jtp_loss
@@ -269,7 +269,7 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
             mlm_correct += ((mlm_preds == mlm_labels) & mlm_mask).sum().item()
             mlm_total += mlm_mask.sum().item()
         
-        if jtp_labels is not None:
+        if jtp_logits is not None and jtp_labels is not None:
             jtp_mask = jtp_labels != -100
             if jtp_mask.sum() > 0:
                 jtp_preds = jtp_logits.argmax(dim=-1)
@@ -334,7 +334,7 @@ def validate_epoch(model, dataloader, device, logger):
             mlm_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
             mlm_loss = mlm_loss_fn(mlm_logits.view(-1, mlm_logits.size(-1)), mlm_labels.view(-1))
             
-            if jtp_labels is not None:
+            if jtp_logits is not None and jtp_labels is not None:
                 jtp_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
                 jtp_loss = jtp_loss_fn(jtp_logits.view(-1, jtp_logits.size(-1)), jtp_labels.view(-1))
                 loss = mlm_loss + jtp_loss
@@ -352,7 +352,7 @@ def validate_epoch(model, dataloader, device, logger):
                 mlm_correct += ((mlm_preds == mlm_labels) & mlm_mask).sum().item()
                 mlm_total += mlm_mask.sum().item()
             
-            if jtp_labels is not None:
+            if jtp_logits is not None and jtp_labels is not None:
                 jtp_mask = jtp_labels != -100
                 if jtp_mask.sum() > 0:
                     jtp_preds = jtp_logits.argmax(dim=-1)
@@ -394,6 +394,10 @@ def main():
     # Masking parameters
     parser.add_argument('--token_mask_prob', type=float, default=0.15, help='Token masking probability')
     
+    # Experimental flags
+    parser.add_argument('--no_jtp', action='store_true', help='Disable JTP task (MLM only)')
+    parser.add_argument('--no_binary_pos', action='store_true', help='Disable binary position embeddings (use only function_pos and bb_pos)')
+    
     # Data sampling
     parser.add_argument('--data_ratio', type=float, default=1.0, help='Ratio of training data to use (0.0-1.0)')
     
@@ -422,6 +426,8 @@ def main():
     logger.info(f"Data ratio: {args.data_ratio:.1%} of training data")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.learning_rate}")
+    logger.info(f"JTP task: {'Disabled (MLM only)' if args.no_jtp else 'Enabled'}")
+    logger.info(f"Binary position: {'Disabled' if args.no_binary_pos else 'Enabled'}")
     
     # Load vocabulary
     logger.info(f"Loading vocabulary from {args.vocab_path}...")
@@ -458,7 +464,9 @@ def main():
         n_layers=args.num_hidden_layers,
         attn_heads=args.num_attention_heads,
         dropout=args.dropout,
-        max_len=args.max_len
+        max_len=args.max_len,
+        use_jtp=not args.no_jtp,
+        use_binary_pos=not args.no_binary_pos
     )
     
     # Set vocab_stoi for address/daddr distinction in embeddings
@@ -580,7 +588,9 @@ def main():
                 'num_attention_heads': args.num_attention_heads,
                 'max_position_embeddings': args.max_len,
                 'type_vocab_size': 256,  # Must match segment_types in AddressAwareBERTEmbedding
-                'model_type': 'address_aware_jtrans'
+                'model_type': 'address_aware_jtrans',
+                'use_jtp': not args.no_jtp,  # Save experimental flags
+                'use_binary_pos': not args.no_binary_pos
             }
             with open(os.path.join(checkpoint_dir, 'config.json'), 'w') as f:
                 json.dump(config, f, indent=2)
