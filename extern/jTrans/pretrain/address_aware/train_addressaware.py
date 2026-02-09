@@ -2,7 +2,7 @@
 Address-Aware jTrans Training Script
 
 Trains with hierarchical address embeddings instead of position=word trick.
-Uses MLM + JTP tasks like baseline but with address-aware tokenization.
+Uses MLM task with address-aware tokenization.
 """
 
 import os
@@ -54,12 +54,9 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
     model.train()
     total_loss = 0
     total_mlm_loss = 0
-    total_jtp_loss = 0
     
     mlm_correct = 0
     mlm_total = 0
-    jtp_correct = 0
-    jtp_total = 0
     
     progress_bar = tqdm(dataloader, desc="Training")
     
@@ -220,15 +217,10 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         if var_offsets is not None:
             var_offsets = var_offsets.to(device)
         
-        # JTP labels (if present)
-        jtp_labels = batch.get('jtp_labels', None)
-        if jtp_labels is not None:
-            jtp_labels = jtp_labels.to(device)
-        
         optimizer.zero_grad()
         
         # Forward pass
-        mlm_logits, jtp_logits = model(
+        mlm_logits = model(
             token_ids=token_ids,
             attention_mask=attention_mask,
             token_type_ids=token_type_ids,
@@ -241,15 +233,7 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         # MLM loss
         mlm_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
         mlm_loss = mlm_loss_fn(mlm_logits.view(-1, mlm_logits.size(-1)), mlm_labels.view(-1))
-        
-        # JTP loss (if JTP head exists and labels provided)
-        if jtp_logits is not None and jtp_labels is not None:
-            jtp_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
-            jtp_loss = jtp_loss_fn(jtp_logits.view(-1, jtp_logits.size(-1)), jtp_labels.view(-1))
-            loss = mlm_loss + jtp_loss
-        else:
-            jtp_loss = torch.tensor(0.0).to(device)
-            loss = mlm_loss
+        loss = mlm_loss
         
         # Backward
         loss.backward()
@@ -260,7 +244,6 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         # Stats
         total_loss += loss.item()
         total_mlm_loss += mlm_loss.item()
-        total_jtp_loss += jtp_loss.item()
         
         # Accuracy (only for masked positions)
         mlm_mask = mlm_labels != -100
@@ -269,26 +252,16 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
             mlm_correct += ((mlm_preds == mlm_labels) & mlm_mask).sum().item()
             mlm_total += mlm_mask.sum().item()
         
-        if jtp_logits is not None and jtp_labels is not None:
-            jtp_mask = jtp_labels != -100
-            if jtp_mask.sum() > 0:
-                jtp_preds = jtp_logits.argmax(dim=-1)
-                jtp_correct += ((jtp_preds == jtp_labels) & jtp_mask).sum().item()
-                jtp_total += jtp_mask.sum().item()
-        
         progress_bar.set_postfix({
             'loss': f'{loss.item():.4f}',
-            'mlm': f'{mlm_loss.item():.4f}',
-            'jtp': f'{jtp_loss.item():.4f}'
+            'mlm': f'{mlm_loss.item():.4f}'
         })
     
     avg_loss = total_loss / len(dataloader)
     avg_mlm_loss = total_mlm_loss / len(dataloader)
-    avg_jtp_loss = total_jtp_loss / len(dataloader)
     mlm_acc = mlm_correct / mlm_total if mlm_total > 0 else 0
-    jtp_acc = jtp_correct / jtp_total if jtp_total > 0 else 0
     
-    return avg_loss, avg_mlm_loss, avg_jtp_loss, mlm_acc, jtp_acc
+    return avg_loss, avg_mlm_loss, mlm_acc
 
 
 def validate_epoch(model, dataloader, device, logger):
@@ -296,12 +269,9 @@ def validate_epoch(model, dataloader, device, logger):
     model.eval()
     total_loss = 0
     total_mlm_loss = 0
-    total_jtp_loss = 0
     
     mlm_correct = 0
     mlm_total = 0
-    jtp_correct = 0
-    jtp_total = 0
     
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Validation"):
@@ -317,11 +287,7 @@ def validate_epoch(model, dataloader, device, logger):
             if var_offsets is not None:
                 var_offsets = var_offsets.to(device)
             
-            jtp_labels = batch.get('jtp_labels', None)
-            if jtp_labels is not None:
-                jtp_labels = jtp_labels.to(device)
-            
-            mlm_logits, jtp_logits = model(
+            mlm_logits = model(
                 token_ids=token_ids,
                 attention_mask=attention_mask,
                 token_type_ids=token_type_ids,
@@ -333,39 +299,22 @@ def validate_epoch(model, dataloader, device, logger):
             
             mlm_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
             mlm_loss = mlm_loss_fn(mlm_logits.view(-1, mlm_logits.size(-1)), mlm_labels.view(-1))
-            
-            if jtp_logits is not None and jtp_labels is not None:
-                jtp_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
-                jtp_loss = jtp_loss_fn(jtp_logits.view(-1, jtp_logits.size(-1)), jtp_labels.view(-1))
-                loss = mlm_loss + jtp_loss
-            else:
-                jtp_loss = torch.tensor(0.0).to(device)
-                loss = mlm_loss
+            loss = mlm_loss
             
             total_loss += loss.item()
             total_mlm_loss += mlm_loss.item()
-            total_jtp_loss += jtp_loss.item()
             
             mlm_mask = mlm_labels != -100
             if mlm_mask.sum() > 0:
                 mlm_preds = mlm_logits.argmax(dim=-1)
                 mlm_correct += ((mlm_preds == mlm_labels) & mlm_mask).sum().item()
                 mlm_total += mlm_mask.sum().item()
-            
-            if jtp_logits is not None and jtp_labels is not None:
-                jtp_mask = jtp_labels != -100
-                if jtp_mask.sum() > 0:
-                    jtp_preds = jtp_logits.argmax(dim=-1)
-                    jtp_correct += ((jtp_preds == jtp_labels) & jtp_mask).sum().item()
-                    jtp_total += jtp_mask.sum().item()
     
     avg_loss = total_loss / len(dataloader)
     avg_mlm_loss = total_mlm_loss / len(dataloader)
-    avg_jtp_loss = total_jtp_loss / len(dataloader)
     mlm_acc = mlm_correct / mlm_total if mlm_total > 0 else 0
-    jtp_acc = jtp_correct / jtp_total if jtp_total > 0 else 0
     
-    return avg_loss, avg_mlm_loss, avg_jtp_loss, mlm_acc, jtp_acc
+    return avg_loss, avg_mlm_loss, mlm_acc
 
 
 def main():
@@ -393,10 +342,6 @@ def main():
     
     # Masking parameters
     parser.add_argument('--token_mask_prob', type=float, default=0.15, help='Token masking probability')
-    
-    # Experimental flags
-    parser.add_argument('--no_jtp', action='store_true', help='Disable JTP task (MLM only)')
-    parser.add_argument('--no_binary_pos', action='store_true', help='Disable binary position embeddings (use only function_pos and bb_pos)')
     
     # Data sampling
     parser.add_argument('--data_ratio', type=float, default=1.0, help='Ratio of training data to use (0.0-1.0)')
@@ -426,8 +371,6 @@ def main():
     logger.info(f"Data ratio: {args.data_ratio:.1%} of training data")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.learning_rate}")
-    logger.info(f"JTP task: {'Disabled (MLM only)' if args.no_jtp else 'Enabled'}")
-    logger.info(f"Binary position: {'Disabled' if args.no_binary_pos else 'Enabled'}")
     
     # Load vocabulary
     logger.info(f"Loading vocabulary from {args.vocab_path}...")
@@ -464,9 +407,7 @@ def main():
         n_layers=args.num_hidden_layers,
         attn_heads=args.num_attention_heads,
         dropout=args.dropout,
-        max_len=args.max_len,
-        use_jtp=not args.no_jtp,
-        use_binary_pos=not args.no_binary_pos
+        max_len=args.max_len
     )
     
     # Set vocab_stoi for address/daddr distinction in embeddings
@@ -559,12 +500,12 @@ def main():
         logger.info("-" * 80)
         
         # Train
-        train_loss, train_mlm_loss, train_jtp_loss, train_mlm_acc, train_jtp_acc = train_epoch(
+        train_loss, train_mlm_loss, train_mlm_acc = train_epoch(
             model, train_dataloader, optimizer, scheduler, device, logger
         )
         
-        logger.info(f"Train - Loss: {train_loss:.4f}, MLM Loss: {train_mlm_loss:.4f}, JTP Loss: {train_jtp_loss:.4f}")
-        logger.info(f"Train - MLM Acc: {train_mlm_acc:.4f}, JTP Acc: {train_jtp_acc:.4f}")
+        logger.info(f"Train - Loss: {train_loss:.4f}, MLM Loss: {train_mlm_loss:.4f}")
+        logger.info(f"Train - MLM Acc: {train_mlm_acc:.4f}")
         
         # Save checkpoint
         if (epoch + 1) % args.save_every == 0:
@@ -589,8 +530,6 @@ def main():
                 'max_position_embeddings': args.max_len,
                 'type_vocab_size': 256,  # Must match segment_types in AddressAwareBERTEmbedding
                 'model_type': 'address_aware_jtrans',
-                'use_jtp': not args.no_jtp,  # Save experimental flags
-                'use_binary_pos': not args.no_binary_pos
             }
             with open(os.path.join(checkpoint_dir, 'config.json'), 'w') as f:
                 json.dump(config, f, indent=2)

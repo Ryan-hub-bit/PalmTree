@@ -133,13 +133,17 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
     # Get projection settings from config (with defaults for backward compatibility)
     use_projection = config_dict.get('use_projection', True)
     embedding_dim = config_dict.get('embedding_dim', 256)
-    use_binary_pos = config_dict.get('use_binary_pos', True)  # Read experimental flag
+    use_binary_pos = config_dict.get('use_binary_pos', False)  # Default False (unified model)
     print(f"Model config: use_projection={use_projection}, embedding_dim={embedding_dim}, use_binary_pos={use_binary_pos}")
+    print(f"  Note: use_binary_pos is DEPRECATED. Model always uses: code address=null embedding, data address=real binpos")
     
     # Create BERT model structure (to wrap)
     bert_model = BertModel(config, add_pooling_layer=False)
     
-    # Replace embeddings with address-aware version (matching checkpoint config)
+    # Replace embeddings with address-aware version
+    # Note: use_binary_pos parameter is deprecated and has no effect
+    # The model automatically handles: code address (binary_pos=-1) → null embedding
+    #                                  data address (binary_pos>=0) → sin/cos encoding
     bert_model.embeddings = AddressAwareBERTEmbedding(
         vocab_size=config.vocab_size,
         embed_size=config.hidden_size,
@@ -147,7 +151,7 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
         max_len=config.max_position_embeddings,
         use_address_embedding=True,
         use_var_embedding=True,
-        use_binary_pos=use_binary_pos,  # Use flag from checkpoint
+        use_binary_pos=use_binary_pos,  # Kept for backward compatibility, no effect
         segment_types=256,
         vocab_stoi=vocab_stoi
     )

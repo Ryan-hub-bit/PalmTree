@@ -428,7 +428,9 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
             # Check for nested address() pattern
             nested_match = self.nested_addr_pattern.match(part)
             if nested_match:
-                binary_pos = float(nested_match.group(2))
+                # CODE ADDRESS: Don't parse binary_pos (use -1.0 as marker for null embedding)
+                # Code addresses don't need global binary context
+                binary_pos = -1.0  # <-- Force null embedding for code addresses
                 function_pos = float(nested_match.group(3))
                 bb_pos = float(nested_match.group(4))
                 
@@ -440,7 +442,8 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
             # Check for daddr() pattern
             daddr_match = self.daddr_pattern.match(part)
             if daddr_match:
-                binary_pos = float(daddr_match.group(2))
+                # DATA ADDRESS: Parse real binary_pos (need global binary context)
+                binary_pos = float(daddr_match.group(2))  # <-- Real binary position for data addresses
                 function_pos = float(daddr_match.group(3))
                 bb_pos = float(daddr_match.group(4))
                 

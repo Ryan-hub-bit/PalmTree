@@ -77,7 +77,7 @@ class AddressPositionalEmbedding(nn.Module):
     - bb_pos: [0, 1] position in basic block (local context)
     """
     
-    def __init__(self, d_model, max_len=512, dropout=0.1, num_sin_cos_features=8, use_binary_pos=True):
+    def __init__(self, d_model, max_len=512, dropout=0.1, num_sin_cos_features=8):
         """
         Args:
             d_model: Embedding dimension (output size)
@@ -85,13 +85,14 @@ class AddressPositionalEmbedding(nn.Module):
             dropout: Dropout rate for MLP projection
             num_sin_cos_features: Number of sin/cos pairs per position level (default: 8)
                                  Each level gets 2*num_sin_cos_features dimensions (sin + cos)
-            use_binary_pos: Whether to use binary-level position (if False, only use function_pos and bb_pos)
+        
+        Note: Code addresses ('address' tokens) always use learnable null embedding for binary position.
+              Data addresses ('daddr' tokens) always use real binary position.
         """
         super().__init__()
         
         self.d_model = d_model
         self.num_sin_cos_features = num_sin_cos_features
-        self.use_binary_pos = use_binary_pos
         
         # Sin/Cos frequencies for multi-scale encoding
         # Lower frequencies capture global structure, higher frequencies capture fine details
@@ -99,11 +100,11 @@ class AddressPositionalEmbedding(nn.Module):
         self.register_buffer('frequencies', 
                            torch.pow(2.0, torch.arange(num_sin_cos_features).float()))
         
-        # Learnable "null" embedding for binary position when use_binary_pos=False
+        # Learnable "null" embedding for binary position (used for code addresses)
         # This allows the model to explicitly learn "no binary position" representation
         # Different from zeros or encoding of position 0.0
-        if not use_binary_pos:
-            self.null_binary_embedding = nn.Parameter(torch.randn(1, 1, 2 * num_sin_cos_features) * 0.02)
+        # Code addresses don't need global binary context, data addresses do
+        self.null_binary_embedding = nn.Parameter(torch.randn(1, 1, 2 * num_sin_cos_features) * 0.02)
         
         # Each hierarchical level gets 2*num_sin_cos_features dimensions (sin + cos)
         # Total dimensions: 3 * 2 * num_sin_cos_features (always use 3 levels for MLP compatibility)
@@ -196,24 +197,17 @@ class AddressPositionalEmbedding(nn.Module):
         function_sincos = self._apply_sincos_encoding(function_pos_norm)  # [batch, seq, 2*num_features]
         bb_sincos = self._apply_sincos_encoding(bb_pos_norm)              # [batch, seq, 2*num_features]
         
-        # Determine which tokens are 'address' vs 'daddr'
-        address_token_id = vocab_stoi.get('address', -1)
-        daddr_token_id = vocab_stoi.get('daddr', -1)
-        is_code_address = (token_ids == address_token_id)  # [batch, seq]
-        is_data_address = (token_ids == daddr_token_id)   # [batch, seq]
+        # Step 3: Conditional binary_pos based on position value
+        # If binary_pos was -1 (set by dataloader for code addresses), use null embedding
+        # Otherwise use real sin/cos encoding (for data addresses)
+        batch_size, seq_len = token_ids.shape
+        null_embed = self.null_binary_embedding.expand(batch_size, seq_len, -1)  # [batch, seq, 2*num_features]
         
-        # Step 3: Conditional binary_pos
-        # For daddr: ALWAYS use binary_pos (data addresses need global context)
-        # For address: use binary_pos only if use_binary_pos=True
-        if not self.use_binary_pos:
-            # Replace binary_pos with learnable null embedding for code addresses
-            # This is different from encoding position 0.0 (which would be sin(0)=0, cos(0)=1, etc.)
-            batch_size, seq_len = token_ids.shape
-            null_embed = self.null_binary_embedding.expand(batch_size, seq_len, -1)  # [batch, seq, 2*num_features]
-            
-            # Use null embedding for code addresses, keep real binary_sincos for data addresses
-            is_code_mask = is_code_address.unsqueeze(-1)  # [batch, seq, 1]
-            binary_sincos = null_embed * is_code_mask + binary_sincos * (~is_code_mask)
+        # Create mask: True where binary_pos < 0 (i.e., -1.0 from dataloader)
+        use_null_mask = (binary_pos < 0.0).unsqueeze(-1)  # [batch, seq, 1]
+        
+        # Use null embedding where binary_pos < 0, otherwise use sin/cos encoding
+        binary_sincos = null_embed * use_null_mask + binary_sincos * (~use_null_mask)
         
         # Step 4: Concat - Concatenate all 3 hierarchical levels
         # This preserves distinct information from each level (unlike summing which mixes them)
@@ -444,9 +438,14 @@ class AddressAwareBERTEmbedding(nn.Module):
             max_len: Maximum sequence length
             use_address_embedding: Whether to use address-aware positional embeddings
             use_var_embedding: Whether to use var offset embeddings
-            use_binary_pos: Whether to use binary-level position (only effective if use_address_embedding=True)
+            use_binary_pos: DEPRECATED - kept for backward compatibility, has no effect.
+                           Code addresses always use null embedding, data addresses use real binary_pos.
             segment_types: Number of segment types (instruction IDs). Default 256 to handle long sequences.
             vocab_stoi: Vocabulary string-to-index mapping (needed for address vs daddr distinction)
+        
+        Note: Code addresses ('address' tokens) always use learnable null embedding for binary position.
+              Data addresses ('daddr' tokens) always use real binary position from dataloader.
+              This is controlled by dataloader setting binary_pos=-1 for code addresses.
         """
         super().__init__()
         
@@ -462,8 +461,9 @@ class AddressAwareBERTEmbedding(nn.Module):
         self.position_embedding = SequencePositionalEmbedding(embed_size, max_len)
         
         # 3. Address-aware positional embedding - sin/cos encoding on 3 levels (OPTIONAL)
+        # Note: AddressPositionalEmbedding always creates null_binary_embedding
         if self.use_address_embedding:
-            self.address_position = AddressPositionalEmbedding(embed_size, max_len, dropout=dropout, use_binary_pos=use_binary_pos)
+            self.address_position = AddressPositionalEmbedding(embed_size, max_len, dropout=dropout)
         else:
             self.address_position = None
         

@@ -427,11 +427,14 @@ class AddressAwareBertWrapper(nn.Module):
         config['use_projection'] = self.use_projection
         config['embedding_dim'] = self.embedding_dim if self.use_projection else self.hidden_size
         
-        # Add use_binary_pos if this is an address-aware model
+        # For address-aware models: always set use_binary_pos=False (new unified behavior)
+        # Code addresses use null embedding, data addresses use real binary_pos
+        # This is controlled by dataloader setting binary_pos=-1 for code addresses
         if hasattr(self.bert, 'embeddings') and hasattr(self.bert.embeddings, 'address_position'):
-            if hasattr(self.bert.embeddings.address_position, 'use_binary_pos'):
-                config['use_binary_pos'] = self.bert.embeddings.address_position.use_binary_pos
-                print(f"  Saved use_binary_pos={config['use_binary_pos']} to config")
+            # Check if this is the new unified version (has null_binary_embedding)
+            if hasattr(self.bert.embeddings.address_position, 'null_binary_embedding'):
+                config['use_binary_pos'] = False  # New unified behavior
+                print(f"  Saved use_binary_pos=False (unified model: code=null, data=real)")
         
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
@@ -518,10 +521,12 @@ if __name__ == '__main__':
         with open(config_path, 'r') as f:
             config_dict = json.load(f)
         
-        # Read experimental flags from config (default to True for backward compatibility)
-        use_jtp = config_dict.get('use_jtp', True)
-        use_binary_pos = config_dict.get('use_binary_pos', True)
-        logger.info(f"Checkpoint config: use_jtp={use_jtp}, use_binary_pos={use_binary_pos}")
+        # Read use_binary_pos flag (default False for unified behavior)
+        # Note: use_binary_pos is DEPRECATED. Model always uses:
+        #   - Code address (binary_pos=-1 from dataloader) → null embedding
+        #   - Data address (binary_pos>=0 from dataloader) → sin/cos encoding
+        use_binary_pos = config_dict.get('use_binary_pos', False)
+        logger.info(f"Checkpoint config: use_binary_pos={use_binary_pos} (DEPRECATED, kept for compatibility)")
         
         # Create BERT model with config
         config = BertConfig(

@@ -29,16 +29,6 @@ echo "Starting Address-Aware Pretraining"
 echo "Data ratio: $DATA_RATIO ($(echo "$DATA_RATIO * 100" | bc)% of training data)"
 echo "=========================================="
 
-# Debug: Check vocab size before training
-echo "Checking vocabulary..."
-python3 <<'VOCABCHECK'
-import pickle
-vocab = pickle.load(open('./vocab_addr.pkl', 'rb'))
-print(f"Vocabulary file: ./vocab_addr.pkl")
-print(f"Vocabulary size: {len(vocab)}")
-print(f"Max token ID: {max(vocab.stoi.values())}")
-print(f"Special tokens: <pad>={vocab.stoi.get('<pad>')}, <unk>={vocab.stoi.get('<unk>')}, <mask>={vocab.stoi.get('<mask>')}")
-VOCABCHECK
 
 python3 train_addressaware.py \
   --train_path /work/kliu14/jtransdata/addr_pretrain.txt \
