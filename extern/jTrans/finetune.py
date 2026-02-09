@@ -427,6 +427,12 @@ class AddressAwareBertWrapper(nn.Module):
         config['use_projection'] = self.use_projection
         config['embedding_dim'] = self.embedding_dim if self.use_projection else self.hidden_size
         
+        # Add use_binary_pos if this is an address-aware model
+        if hasattr(self.bert, 'embeddings') and hasattr(self.bert.embeddings, 'address_position'):
+            if hasattr(self.bert.embeddings.address_position, 'use_binary_pos'):
+                config['use_binary_pos'] = self.bert.embeddings.address_position.use_binary_pos
+                print(f"  Saved use_binary_pos={config['use_binary_pos']} to config")
+        
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=2)
 
