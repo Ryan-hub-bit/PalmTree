@@ -196,34 +196,40 @@ class AddressPositionalEmbedding(nn.Module):
         function_sincos = self._apply_sincos_encoding(function_pos_norm)  # [batch, seq, 2*num_features]
         bb_sincos = self._apply_sincos_encoding(bb_pos_norm)              # [batch, seq, 2*num_features]
         
-        # Determine which tokens are 'address' vs 'daddr'
-        address_token_id = vocab_stoi.get('address', -1)
+        # Determine daddr tokens (data addresses need real binary position)
         daddr_token_id = vocab_stoi.get('daddr', -1)
-        is_code_address = (token_ids == address_token_id)  # [batch, seq]
         is_data_address = (token_ids == daddr_token_id)   # [batch, seq]
         
         # Step 3: Conditional binary_pos
         # For daddr: ALWAYS use binary_pos (data addresses need global context)
-        # For address: use binary_pos only if use_binary_pos=True
+        # For all other tokens with positions: use null binary embedding if use_binary_pos=False
         if not self.use_binary_pos:
             # Replace binary_pos with learnable null embedding for code addresses
             # This is different from encoding position 0.0 (which would be sin(0)=0, cos(0)=1, etc.)
             batch_size, seq_len = token_ids.shape
             null_embed = self.null_binary_embedding.expand(batch_size, seq_len, -1)  # [batch, seq, 2*num_features]
             
-            # Use null embedding for code addresses, keep real binary_sincos for data addresses
-            is_code_mask = is_code_address.unsqueeze(-1)  # [batch, seq, 1]
-            binary_sincos = null_embed * is_code_mask + binary_sincos * (~is_code_mask)
+            # Use null embedding for non-daddr tokens, keep real binary_sincos for daddr
+            is_data_mask = is_data_address.unsqueeze(-1)  # [batch, seq, 1]
+            binary_sincos = null_embed * (~is_data_mask) + binary_sincos * is_data_mask
         
         # Step 4: Concat - Concatenate all 3 hierarchical levels
         # This preserves distinct information from each level (unlike summing which mixes them)
         hierarchical_features = torch.cat([binary_sincos, function_sincos, bb_sincos], dim=-1)
         
-        # Determine which tokens are 'address' vs 'daddr' (if not already done above)
-        address_token_id = vocab_stoi.get('address', -1)
-        daddr_token_id = vocab_stoi.get('daddr', -1)
-        is_code_address = (token_ids == address_token_id).unsqueeze(-1).float()  # [batch, seq, 1]
-        is_data_address = (token_ids == daddr_token_id).unsqueeze(-1).float()   # [batch, seq, 1]
+        # Determine which projection to use based on token type:
+        # - 'daddr' tokens → data_address_projection (memory operands, data flow)
+        # - All other tokens with valid positions → code_address_projection
+        #   This includes:
+        #   * 'address' tokens (explicit code addresses)
+        #   * Opcodes at addresses (mov, call, jmp, etc. at their instruction addresses)
+        #   These are paired: opcode and its 'address' token share the same position,
+        #   so they should use the same projection for consistency.
+        is_data_address_float = is_data_address.unsqueeze(-1).float()  # [batch, seq, 1]
+        
+        # Code address: any token with valid position info that is NOT daddr
+        # This ensures opcodes and their paired 'address' tokens use the same embedding
+        is_code_address = (address_mask.float() * (1.0 - is_data_address_float))  # [batch, seq, 1]
         
         # Step 5: MLP - Apply appropriate controller/projection based on token type
         # The MLP acts as a "controller" that translates hierarchical readings into embeddings
@@ -231,10 +237,8 @@ class AddressPositionalEmbedding(nn.Module):
         data_embedding = self.data_address_projection(hierarchical_features)  # [batch, seq, d_model]
         
         # Combine embeddings based on token type
-        embedding = code_embedding * is_code_address + data_embedding * is_data_address
-        
-        # Zero out embedding for non-address tokens (where address_mask is False)
-        embedding = embedding * address_mask.float()
+        # Note: is_code_address and is_data_address are mutually exclusive
+        embedding = code_embedding * is_code_address + data_embedding * is_data_address_float
         
         return embedding
         
