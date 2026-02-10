@@ -192,13 +192,20 @@ class AddressPositionalEmbedding(nn.Module):
         # Result: [batch, seq, 3 * 2 * num_features]
         hierarchical_features = torch.cat([binary_sincos, function_sincos, bb_sincos], dim=-1)
         
-        # Determine which tokens are 'address' vs 'daddr'
-        address_token_id = vocab_stoi.get('address', -1)
+        # Determine which projection to use based on token type:
+        # - 'daddr' tokens → data_address_projection (memory operands, data flow)
+        # - All other tokens with valid positions → code_address_projection
+        #   This includes:
+        #   * 'address' tokens (explicit code addresses)
+        #   * Opcodes at addresses (mov, call, jmp, etc. at their instruction addresses)
+        #   These are paired: opcode and its 'address' token share the same position,
+        #   so they should use the same projection for consistency.
         daddr_token_id = vocab_stoi.get('daddr', -1)
+        is_data_address = (token_ids == daddr_token_id).unsqueeze(-1).float()  # [batch, seq, 1]
         
-        # Create masks for code and data addresses
-        is_code_address = (token_ids == address_token_id).unsqueeze(-1).float()  # [batch, seq, 1]
-        is_data_address = (token_ids == daddr_token_id).unsqueeze(-1).float()   # [batch, seq, 1]
+        # Code address: any token with valid position info that is NOT daddr
+        # This ensures opcodes and their paired 'address' tokens use the same embedding
+        is_code_address = (address_mask.float() * (1.0 - is_data_address))  # [batch, seq, 1]
         
         # Step 4: MLP - Apply appropriate controller/projection based on token type
         # The MLP acts as a "controller" that translates hierarchical readings into embeddings
@@ -206,10 +213,8 @@ class AddressPositionalEmbedding(nn.Module):
         data_embedding = self.data_address_projection(hierarchical_features)  # [batch, seq, d_model]
         
         # Combine embeddings based on token type
+        # Note: is_code_address and is_data_address are mutually exclusive
         embedding = code_embedding * is_code_address + data_embedding * is_data_address
-        
-        # Zero out embedding for non-address tokens (where address_mask is False)
-        embedding = embedding * address_mask.float()
         
         return embedding
         
