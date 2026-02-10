@@ -9,14 +9,14 @@
 set -e
 
 # Paths
-POOL_IDS="/data/kun/funcsim_match/pool_ids_10k.json"
-POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_10k.json"
+POOL_IDS="/data/kun/funcsim_match/pool_ids_1k.json"
+POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_1k.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../extern/PalmTree/src/vocab_base"
 CHECKPOINT="../../extern/PalmTree/src/output/baseline/best_model.pt"
 
 # Output
-OUTPUT="../../output/funcsim/palmtree_baseline_results_10k.json"
+OUTPUT="../../output/palmtreefuncsim/palmtree_baseline_results_1k.json"
 LOG_DIR="../../log/funcsim"
 TASK_NAME="palmtree_baseline"  # Task identifier for caching
 

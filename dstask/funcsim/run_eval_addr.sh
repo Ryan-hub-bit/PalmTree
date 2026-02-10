@@ -7,16 +7,16 @@
 set -e
 
 # Paths
-POOL_IDS="/data/kun/funcsim_match/pool_ids_100k.json"
-POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_100k.json"
+POOL_IDS="/data/kun/funcsim_match/pool_ids_10k.json"
+POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_10k.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="/home/kun/Document/AAE/extern/PalmTree/src/vocab_addr"
-CHECKPOINT="../../output/funcsim/mlm_addr_var/best_model.pt"
-TEST_INDICES="../../output/funcsim/mlm_addr_var/test_indices.json"
+CHECKPOINT="../../output/palmtreefuncsim/mlm_addr_var/best_model.pt"
+TEST_INDICES="../../output/palmtreefuncsim/mlm_addr_var/test_indices.json"
 
 # Output
-OUTPUT="../../output/funcsim/mlm_addr_var/test_results_100k.json"
-LOG_DIR="../../log/funcsim/mlm_addr_var"
+OUTPUT="../../output/palmtreefuncsim/mlm_addr_var/test_results_10k.json"
+LOG_DIR="../../log/palmtreefuncsim/mlm_addr_var"
 
 # Model config (must match training)
 HIDDEN=768

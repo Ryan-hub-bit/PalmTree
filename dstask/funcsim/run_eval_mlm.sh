@@ -7,16 +7,16 @@
 set -e
 
 # Paths
-POOL_IDS="/data/kun/funcsim_match/pool_ids_100k.json"
-POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_100k.json"
+POOL_IDS="/data/kun/funcsim_match/pool_ids_10k.json"
+POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_10k.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../strupos/vocab.pkl"
-CHECKPOINT="../../output/funcsim/mlm/best_model.pt"
-TEST_INDICES="../../output/funcsim/mlm/test_indices.json"
+CHECKPOINT="../../output/palmtreefuncsim/mlm/best_model.pt"
+TEST_INDICES="../../output/palmtreefuncsim/mlm/test_indices.json"
 
 # Output
-OUTPUT="../../output/funcsim/mlm/test_results_100k.json"
-LOG_DIR="../../log/funcsim/mlm"
+OUTPUT="../../output/palmtreefuncsim/mlm/test_results_10k.json"
+LOG_DIR="../../log/palmtreefuncsim/mlm"
 
 # Model config (must match training)
 HIDDEN=768

@@ -21,8 +21,8 @@ VOCAB="/home/kun/Document/AAE/extern/PalmTree/src/vocab_addr"
 PRETRAINED_BERT="/home/kun/Document/AAE/extern/PalmTree/src/output/address_aware/best_model_bert.pt"
 
 # Output
-OUTPUT_DIR="../../output/funcsim/Palmtreeaddr"
-LOG_DIR="../../log/funcsim/Palmtreeaddr"
+OUTPUT_DIR="../../output/palmtreefuncsim/Palmtreeaddr"
+LOG_DIR="../../log/palmtreefuncsim/Palmtreeaddr"
 EXPERIMENT_NAME="funcsim_Palmtreeaddr"
 TASK_NAME="Palmtreeaddr"  # Task identifier for embedding cache (e.g., 'mlm', 'mlm_addr_var')
 

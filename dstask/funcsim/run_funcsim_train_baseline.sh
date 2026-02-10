@@ -21,8 +21,8 @@ VOCAB="/home/kun/Document/AAE/extern/PalmTree/src/vocab_base"
 PRETRAINED_BERT="/home/kun/Document/AAE/extern/PalmTree/src/output/baseline/best_model_bert.pt"
 
 # Output
-OUTPUT_DIR="../../output/funcsim/PalmtreeBaseline"
-LOG_DIR="../../log/funcsim/PalmtreeBaseline"
+OUTPUT_DIR="../../output/palmtreefuncsim/PalmtreeBaseline"
+LOG_DIR="../../log/palmtreefuncsim/PalmtreeBaseline"
 EXPERIMENT_NAME="funcsim_PalmtreeBaseline"
 TASK_NAME="PalmtreeBaseline"  # Task identifier for embedding cache (e.g., 'mlm', 'mlm_addr_var')
 # Model config (must match pre-trained BERT)

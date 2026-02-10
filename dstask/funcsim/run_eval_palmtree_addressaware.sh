@@ -13,10 +13,10 @@ POOL_IDS="/data/kun/funcsim_match/pool_ids_1k.json"
 POOL_FUNCTION_BLOCKS="/data/kun/funcsim_match/pool_function_blocks_1k.json"
 FUNCSIM_PAIRS="/data/kun/funcsim_match/funcsim_pairs.json"
 VOCAB="../../extern/PalmTree/src/vocab_addr"
-CHECKPOINT="/home/kun/Document/AAE/output/funcsim/Palmtreeaddr/best_model.pt"
+CHECKPOINT="/home/kun/Document/AAE/output/palmtreefuncsim/Palmtreeaddr/best_model.pt"
 
 # Output
-OUTPUT="../../output/funcsim/palmtree_addressaware_results_1k.json"
+OUTPUT="../../output/palmtreefuncsim/palmtree_addressaware_results_1k.json"
 LOG_DIR="../../log/funcsim"
 TASK_NAME="palmtree_addressaware"  # Task identifier for caching
 
