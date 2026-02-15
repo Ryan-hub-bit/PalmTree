@@ -344,6 +344,7 @@ class AddressAwareDataset(Dataset):
             'function_pos': torch.FloatTensor(function_pos),
             'bb_pos': torch.FloatTensor(bb_pos),
             'var_offsets': torch.LongTensor(all_var_offsets),
+            'jtp_labels': torch.LongTensor(jtp_labels),
         }
     
     def _create_jtp_labels(self, instructions, all_tokens_info):

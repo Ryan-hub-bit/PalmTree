@@ -23,12 +23,21 @@ class AddressAwareJTransForMLM(nn.Module):
     """
     
     def __init__(self, vocab_size, hidden=768, n_layers=12, attn_heads=12, 
-                 dropout=0.1, max_len=512, use_jtp=True, use_binary_pos=True):
+                 dropout=0.1, max_len=512, use_jtp=True, use_binary_pos=False):
+        """
+        Args:
+            use_jtp: Whether to use JTP (Jump-Target Prediction) task. Default True.
+            use_binary_pos: Whether to use real binary_pos for code addresses. Default False.
+                           False = code addresses use null learnable embedding (recommended)
+                           True = code addresses use real binary position
+                           Data addresses (daddr) always use real binary_pos regardless.
+        """
         super().__init__()
         
         self.hidden = hidden
         self.vocab_size = vocab_size
         self.use_jtp = use_jtp
+        self.max_len = max_len
         
         # Create BERT config
         config = BertConfig(
@@ -129,13 +138,14 @@ class AddressAwareJTransForMLM(nn.Module):
 
 
 def create_addressaware_model(vocab_size, hidden=768, n_layers=12, attn_heads=12, 
-                               dropout=0.1, max_len=512, use_jtp=True, use_binary_pos=True):
+                               dropout=0.1, max_len=512, use_jtp=True, use_binary_pos=False):
     """
     Factory function to create address-aware model.
     
     Args:
-        use_jtp: Whether to include JTP head (if False, MLM only)
-        use_binary_pos: Whether to use binary-level position embeddings
+        use_jtp: Whether to include JTP head. Default True.
+        use_binary_pos: Whether code addresses use real binary_pos. Default False (use null embedding).
+                       Data addresses always use real binary_pos regardless.
     """
     model = AddressAwareJTransForMLM(
         vocab_size=vocab_size,

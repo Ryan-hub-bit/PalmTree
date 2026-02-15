@@ -518,9 +518,10 @@ if __name__ == '__main__':
         with open(config_path, 'r') as f:
             config_dict = json.load(f)
         
-        # Read experimental flags from config (default to True for backward compatibility)
+        # Read experimental flags from config
+        # Default: JTP enabled, binary_pos disabled for code addresses (daddr always uses binary_pos)
         use_jtp = config_dict.get('use_jtp', True)
-        use_binary_pos = config_dict.get('use_binary_pos', True)
+        use_binary_pos = config_dict.get('use_binary_pos', False)
         logger.info(f"Checkpoint config: use_jtp={use_jtp}, use_binary_pos={use_binary_pos}")
         
         # Create BERT model with config

@@ -36,5 +36,5 @@ python finetune.py \
   --max_grad_norm 1.0 \
   --data_ratio 1.0 \
   --use_projection \
-  --embedding_dim 512 \
+  --embedding_dim 768 \
   --target_opt O3

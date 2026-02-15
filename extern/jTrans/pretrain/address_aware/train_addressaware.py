@@ -394,9 +394,9 @@ def main():
     # Masking parameters
     parser.add_argument('--token_mask_prob', type=float, default=0.15, help='Token masking probability')
     
-    # Experimental flags
-    parser.add_argument('--no_jtp', action='store_true', help='Disable JTP task (MLM only)')
-    parser.add_argument('--no_binary_pos', action='store_true', help='Disable binary position embeddings (use only function_pos and bb_pos)')
+    # Experimental flags (both enabled by default)
+    parser.add_argument('--no_jtp', action='store_true', help='Disable JTP task (default: JTP enabled, use this flag to disable)')
+    parser.add_argument('--no_binary_pos', action='store_true', help='Enable binary position for code addresses (default: disabled, daddr always uses binary_pos)')
     
     # Data sampling
     parser.add_argument('--data_ratio', type=float, default=1.0, help='Ratio of training data to use (0.0-1.0)')

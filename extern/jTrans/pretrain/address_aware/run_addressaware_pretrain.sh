@@ -29,21 +29,6 @@ echo "Starting Address-Aware Pretraining"
 echo "Data ratio: $DATA_RATIO ($(echo "$DATA_RATIO * 100" | bc)% of training data)"
 echo "=========================================="
 
-# Debug: Check vocab size before training
-echo "Checking vocabulary..."
-python3 << 'VOCABCHECK'
-# Load vocab from txt file
-vocab_dict = {'<pad>': 0, '<unk>': 1, '<mask>': 2}
-with open('./vocab.txt', 'r') as f:
-    for line in f:
-        token = line.strip()
-        if token and token not in vocab_dict:
-            vocab_dict[token] = len(vocab_dict)
-print(f"Vocabulary file: ./vocab.txt")
-print(f"Vocabulary size: {len(vocab_dict)}")
-print(f"Max token ID: {max(vocab_dict.values())}")
-print(f"Special tokens: <pad>={vocab_dict.get('<pad>')}, <unk>={vocab_dict.get('<unk>')}, <mask>={vocab_dict.get('<mask>')}")
-VOCABCHECK
 
 python3 train_addressaware.py \
     --train_path /data/kun/jtrans/addressaware/addr_pretrain.txt \

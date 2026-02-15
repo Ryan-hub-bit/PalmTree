@@ -130,10 +130,11 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
     
     config = BertConfig(**config_dict)
     
-    # Get projection settings from config (with defaults for backward compatibility)
+    # Get projection settings from config (with defaults)
+    # Default: JTP enabled, binary_pos disabled for code addresses (daddr always uses binary_pos)
     use_projection = config_dict.get('use_projection', True)
     embedding_dim = config_dict.get('embedding_dim', 256)
-    use_binary_pos = config_dict.get('use_binary_pos', True)  # Read experimental flag
+    use_binary_pos = config_dict.get('use_binary_pos', False)
     print(f"Model config: use_projection={use_projection}, embedding_dim={embedding_dim}, use_binary_pos={use_binary_pos}")
     
     # Create BERT model structure (to wrap)

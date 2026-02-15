@@ -24,7 +24,7 @@ python finetune.py \
   --func_blocks /data/kun/jtrans/addressaware/func_blocks_addr.json \
   --ground_truth /data/kun/jtrans/addressaware/ground_truth_addr.json \
   --tokenizer /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware \
-  --model_path /home/kun/Document/AAE/output/jtrans/addressaware_pretrain/checkpoint_epoch_5 \
+  --model_path /home/kun/Document/AAE/output/jtrans/addressaware_pretrain/checkpoint_epoch_15 \
   --output_path /home/kun/Document/AAE/output/jtrans/addressaware_finetune \
   --batch_size 16 \
   --eval_batch_size 32 \
