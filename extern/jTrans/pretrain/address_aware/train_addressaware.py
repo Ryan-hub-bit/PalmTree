@@ -49,8 +49,9 @@ def setup_logging(output_dir):
     return logging.getLogger(__name__)
 
 
-def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
-    """Train one epoch."""
+def train_epoch(model, dataloader, optimizer, scheduler, device, logger,
+                scaler=None, jtp_weight=1.0, debug=False, tb_writer=None, global_step=0):
+    """Train one epoch with optional AMP and loss weighting."""
     model.train()
     total_loss = 0
     total_mlm_loss = 0
@@ -61,158 +62,26 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
     jtp_correct = 0
     jtp_total = 0
     
+    use_amp = scaler is not None
     progress_bar = tqdm(dataloader, desc="Training")
     
     for batch_idx, batch in enumerate(progress_bar):
-        # VALIDATION: Check all inputs on CPU before moving to GPU
-        token_ids_cpu = batch['bert_input']
-        segment_labels_cpu = batch['segment_label']
-        mlm_labels_cpu = batch['bert_label']
-        
-        max_id = token_ids_cpu.max().item()
-        min_id = token_ids_cpu.min().item()
-        # Handle DataParallel wrapper
-        actual_model = model.module if isinstance(model, nn.DataParallel) else model
-        vocab_size = actual_model.bert.embeddings.token_embedding.num_embeddings
-        
-        max_seg = segment_labels_cpu.max().item()
-        min_seg = segment_labels_cpu.min().item()
-        segment_vocab_size = actual_model.bert.embeddings.segment_embedding.num_embeddings
-        
-        # Filter out ignore_index (-100) for MLM label validation
-        valid_mlm_mask = (mlm_labels_cpu != -100)
-        if valid_mlm_mask.any():
-            valid_mlm_labels = mlm_labels_cpu[valid_mlm_mask]
-            max_mlm = valid_mlm_labels.max().item()
-            min_mlm = valid_mlm_labels.min().item()
-        else:
-            max_mlm = -1
-            min_mlm = -1
-        
-        # Check MLM labels
-        if max_mlm >= vocab_size or (min_mlm < 0 and min_mlm != -100):
-            print(f"\n{'='*80}")
-            print(f"INVALID MLM LABEL IN BATCH {batch_idx}")
-            print(f"{'='*80}")
-            print(f"Vocab size: {vocab_size} (IDs 0-{vocab_size-1})")
-            print(f"Max MLM label (excluding -100): {max_mlm}")
-            print(f"Min MLM label (excluding -100): {min_mlm}")
-            print(f"MLM labels shape: {mlm_labels_cpu.shape}")
-            
-            # Find invalid positions
-            invalid_mask = ((mlm_labels_cpu >= vocab_size) | (mlm_labels_cpu < -100))
-            invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
-            print(f"\nInvalid MLM label count: {invalid_mask.sum().item()}")
-            print(f"First 20 invalid positions:")
-            for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:20]):
-                invalid_label = mlm_labels_cpu[seq_idx, tok_idx].item()
-                token_id = token_ids_cpu[seq_idx, tok_idx].item()
-                print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: Label = {invalid_label}, Token ID = {token_id}")
-            
-            print(f"{'='*80}\n")
-            raise ValueError(f"Invalid MLM label detected in batch {batch_idx}: max={max_mlm}, allowed=[0, {vocab_size-1}]")
-        
-        # Check JTP labels (if present)
-        jtp_labels_cpu = batch.get('jtp_labels', None)
-        if jtp_labels_cpu is not None:
-            valid_jtp_mask = (jtp_labels_cpu != -100)
-            if valid_jtp_mask.any():
-                valid_jtp_labels = jtp_labels_cpu[valid_jtp_mask]
-                max_jtp = valid_jtp_labels.max().item()
-                min_jtp = valid_jtp_labels.min().item()
-                
-                # JTP labels should be in range [0, seq_len-1]
-                seq_len = token_ids_cpu.shape[1]  # Get sequence length from batch
-                if max_jtp >= seq_len or min_jtp < 0:
-                    print(f"\n{'='*80}")
-                    print(f"INVALID JTP LABEL IN BATCH {batch_idx}")
-                    print(f"{'='*80}")
-                    print(f"Sequence length: {seq_len} (valid positions 0-{seq_len-1})")
-                    print(f"Max JTP label (excluding -100): {max_jtp}")
-                    print(f"Min JTP label (excluding -100): {min_jtp}")
-                    print(f"JTP labels shape: {jtp_labels_cpu.shape}")
-                    
-                    # Find invalid positions
-                    invalid_mask = ((jtp_labels_cpu >= seq_len) | ((jtp_labels_cpu < 0) & (jtp_labels_cpu != -100)))
-                    invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
-                    print(f"\nInvalid JTP label count: {invalid_mask.sum().item()}")
-                    print(f"First 20 invalid positions:")
-                    for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:20]):
-                        invalid_label = jtp_labels_cpu[seq_idx, tok_idx].item()
-                        token_id = token_ids_cpu[seq_idx, tok_idx].item()
-                        print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: JTP Label = {invalid_label}, Token ID = {token_id}")
-                    
-                    print(f"{'='*80}\n")
-                    raise ValueError(f"Invalid JTP label detected in batch {batch_idx}: max={max_jtp}, allowed=[0, {seq_len-1}]")
-        
-        # Check segment labels
-        if max_seg >= segment_vocab_size or min_seg < 0:
-            print(f"\n{'='*80}")
-            print(f"INVALID SEGMENT LABEL IN BATCH {batch_idx}")
-            print(f"{'='*80}")
-            print(f"Segment embedding size: {segment_vocab_size} (IDs 0-{segment_vocab_size-1})")
-            print(f"Max segment label: {max_seg}")
-            print(f"Min segment label: {min_seg}")
-            print(f"Segment labels shape: {segment_labels_cpu.shape}")
-            
-            # Find invalid positions
-            invalid_mask = (segment_labels_cpu >= segment_vocab_size) | (segment_labels_cpu < 0)
-            invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
-            print(f"\nInvalid segment count: {invalid_mask.sum().item()}")
-            print(f"First 20 invalid positions:")
-            for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:20]):
-                invalid_seg = segment_labels_cpu[seq_idx, tok_idx].item()
-                token_id = token_ids_cpu[seq_idx, tok_idx].item()
-                print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: Segment = {invalid_seg}, Token ID = {token_id}")
-            
-            # Show context
-            seq_idx, tok_idx = invalid_positions[0][0].item(), invalid_positions[0][1].item()
-            start = max(0, tok_idx - 5)
-            end = min(segment_labels_cpu.shape[1], tok_idx + 6)
-            print(f"\nContext (seq {seq_idx}, tokens {start}:{end}):")
-            print(f"  Token IDs: {token_ids_cpu[seq_idx, start:end].tolist()}")
-            print(f"  Segments: {segment_labels_cpu[seq_idx, start:end].tolist()}")
-            print(f"{'='*80}\n")
-            
-            raise ValueError(f"Invalid segment label detected in batch {batch_idx}: max={max_seg}, allowed=[0, {segment_vocab_size-1}]")
-        
-        # Check token IDs
-        if max_id >= vocab_size or min_id < 0:
-            print(f"\n{'='*80}")
-            print(f"INVALID TOKEN ID IN BATCH {batch_idx}")
-            print(f"{'='*80}")
-            print(f"Vocab size: {vocab_size}")
-            print(f"Max token ID: {max_id}")
-            print(f"Min token ID: {min_id}")
-            print(f"Token IDs shape: {token_ids_cpu.shape}")
-            
-            # Find invalid positions
-            invalid_mask = (token_ids_cpu >= vocab_size) | (token_ids_cpu < 0)
-            invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
-            print(f"\nInvalid token count: {invalid_mask.sum().item()}")
-            print(f"First 10 invalid positions:")
-            for i, (seq_idx, tok_idx) in enumerate(invalid_positions[:10]):
-                invalid_id = token_ids_cpu[seq_idx, tok_idx].item()
-                print(f"  Seq {seq_idx.item()}, Token {tok_idx.item()}: ID = {invalid_id}")
-            
-            # Show context
-            seq_idx, tok_idx = invalid_positions[0][0].item(), invalid_positions[0][1].item()
-            start = max(0, tok_idx - 5)
-            end = min(token_ids_cpu.shape[1], tok_idx + 6)
-            print(f"\nContext (seq {seq_idx}, tokens {start}:{end}):")
-            print(f"  Token IDs: {token_ids_cpu[seq_idx, start:end].tolist()}")
-            print(f"  Segments: {batch['segment_label'][seq_idx, start:end].tolist()}")
-            print(f"{'='*80}\n")
-            
-            raise ValueError(f"Invalid token ID detected in batch {batch_idx}")
+        # Debug validation (only first 5 batches unless --debug)
+        if debug or batch_idx < 5:
+            token_ids_cpu = batch['bert_input']
+            actual_model = model.module if isinstance(model, nn.DataParallel) else model
+            vocab_size = actual_model.bert.embeddings.token_embedding.num_embeddings
+            max_id = token_ids_cpu.max().item()
+            min_id = token_ids_cpu.min().item()
+            if max_id >= vocab_size or min_id < 0:
+                raise ValueError(f"Invalid token ID in batch {batch_idx}: min={min_id}, max={max_id}, vocab={vocab_size}")
         
         # Move to device
-        token_ids = token_ids_cpu.to(device)
+        token_ids = batch['bert_input'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         token_type_ids = batch['segment_label'].to(device)
         mlm_labels = batch['bert_label'].to(device)
         
-        # Address positions
         binary_pos = batch['binary_pos'].to(device)
         function_pos = batch['function_pos'].to(device)
         bb_pos = batch['bb_pos'].to(device)
@@ -220,41 +89,48 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         if var_offsets is not None:
             var_offsets = var_offsets.to(device)
         
-        # JTP labels (if present)
         jtp_labels = batch.get('jtp_labels', None)
         if jtp_labels is not None:
             jtp_labels = jtp_labels.to(device)
         
         optimizer.zero_grad()
         
-        # Forward pass
-        mlm_logits, jtp_logits = model(
-            token_ids=token_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids,
-            binary_pos=binary_pos,
-            function_pos=function_pos,
-            bb_pos=bb_pos,
-            var_offsets=var_offsets
-        )
+        # Forward pass with optional AMP
+        with torch.cuda.amp.autocast(enabled=use_amp):
+            mlm_logits, jtp_logits = model(
+                token_ids=token_ids,
+                attention_mask=attention_mask,
+                token_type_ids=token_type_ids,
+                binary_pos=binary_pos,
+                function_pos=function_pos,
+                bb_pos=bb_pos,
+                var_offsets=var_offsets
+            )
+            
+            # MLM loss
+            mlm_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+            mlm_loss = mlm_loss_fn(mlm_logits.view(-1, mlm_logits.size(-1)), mlm_labels.view(-1))
+            
+            # JTP loss with configurable weight
+            if jtp_logits is not None and jtp_labels is not None:
+                jtp_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
+                jtp_loss = jtp_loss_fn(jtp_logits.view(-1, jtp_logits.size(-1)), jtp_labels.view(-1))
+                loss = mlm_loss + jtp_weight * jtp_loss
+            else:
+                jtp_loss = torch.tensor(0.0).to(device)
+                loss = mlm_loss
         
-        # MLM loss
-        mlm_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
-        mlm_loss = mlm_loss_fn(mlm_logits.view(-1, mlm_logits.size(-1)), mlm_labels.view(-1))
-        
-        # JTP loss (if JTP head exists and labels provided)
-        if jtp_logits is not None and jtp_labels is not None:
-            jtp_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
-            jtp_loss = jtp_loss_fn(jtp_logits.view(-1, jtp_logits.size(-1)), jtp_labels.view(-1))
-            loss = mlm_loss + jtp_loss
+        # Backward with AMP
+        if use_amp:
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
         else:
-            jtp_loss = torch.tensor(0.0).to(device)
-            loss = mlm_loss
-        
-        # Backward
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        optimizer.step()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
         scheduler.step()
         
         # Stats
@@ -263,18 +139,28 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
         total_jtp_loss += jtp_loss.item()
         
         # Accuracy (only for masked positions)
-        mlm_mask = mlm_labels != -100
-        if mlm_mask.sum() > 0:
-            mlm_preds = mlm_logits.argmax(dim=-1)
-            mlm_correct += ((mlm_preds == mlm_labels) & mlm_mask).sum().item()
-            mlm_total += mlm_mask.sum().item()
+        with torch.no_grad():
+            mlm_mask = mlm_labels != -100
+            if mlm_mask.sum() > 0:
+                mlm_preds = mlm_logits.argmax(dim=-1)
+                mlm_correct += ((mlm_preds == mlm_labels) & mlm_mask).sum().item()
+                mlm_total += mlm_mask.sum().item()
+            
+            if jtp_logits is not None and jtp_labels is not None:
+                jtp_mask = jtp_labels != -100
+                if jtp_mask.sum() > 0:
+                    jtp_preds = jtp_logits.argmax(dim=-1)
+                    jtp_correct += ((jtp_preds == jtp_labels) & jtp_mask).sum().item()
+                    jtp_total += jtp_mask.sum().item()
         
-        if jtp_logits is not None and jtp_labels is not None:
-            jtp_mask = jtp_labels != -100
-            if jtp_mask.sum() > 0:
-                jtp_preds = jtp_logits.argmax(dim=-1)
-                jtp_correct += ((jtp_preds == jtp_labels) & jtp_mask).sum().item()
-                jtp_total += jtp_mask.sum().item()
+        global_step += 1
+        
+        # TensorBoard logging
+        if tb_writer is not None and global_step % 50 == 0:
+            tb_writer.add_scalar('train/loss', loss.item(), global_step)
+            tb_writer.add_scalar('train/mlm_loss', mlm_loss.item(), global_step)
+            tb_writer.add_scalar('train/jtp_loss', jtp_loss.item(), global_step)
+            tb_writer.add_scalar('train/lr', scheduler.get_last_lr()[0], global_step)
         
         progress_bar.set_postfix({
             'loss': f'{loss.item():.4f}',
@@ -288,10 +174,10 @@ def train_epoch(model, dataloader, optimizer, scheduler, device, logger):
     mlm_acc = mlm_correct / mlm_total if mlm_total > 0 else 0
     jtp_acc = jtp_correct / jtp_total if jtp_total > 0 else 0
     
-    return avg_loss, avg_mlm_loss, avg_jtp_loss, mlm_acc, jtp_acc
+    return avg_loss, avg_mlm_loss, avg_jtp_loss, mlm_acc, jtp_acc, global_step
 
 
-def validate_epoch(model, dataloader, device, logger):
+def validate_epoch(model, dataloader, device, logger, jtp_weight=1.0):
     """Validate one epoch."""
     model.eval()
     total_loss = 0
@@ -337,7 +223,7 @@ def validate_epoch(model, dataloader, device, logger):
             if jtp_logits is not None and jtp_labels is not None:
                 jtp_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
                 jtp_loss = jtp_loss_fn(jtp_logits.view(-1, jtp_logits.size(-1)), jtp_labels.view(-1))
-                loss = mlm_loss + jtp_loss
+                loss = mlm_loss + jtp_weight * jtp_loss
             else:
                 jtp_loss = torch.tensor(0.0).to(device)
                 loss = mlm_loss
@@ -387,25 +273,51 @@ def main():
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     parser.add_argument('--learning_rate', type=float, default=1e-4, help='Learning rate')
     parser.add_argument('--num_epochs', type=int, default=10, help='Number of epochs')
-    parser.add_argument('--warmup_steps', type=int, default=10000, help='Warmup steps')
+    parser.add_argument('--warmup_ratio', type=float, default=0.06, help='Warmup ratio of total steps (default: 6%)')
+    parser.add_argument('--warmup_steps', type=int, default=None, help='Override warmup with fixed steps (overrides warmup_ratio if set)')
     parser.add_argument('--save_every', type=int, default=1, help='Save every N epochs')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of workers')
     
     # Masking parameters
     parser.add_argument('--token_mask_prob', type=float, default=0.15, help='Token masking probability')
+    parser.add_argument('--instruction_mask_prob', type=float, default=0.15, help='Instruction masking probability')
+    parser.add_argument('--masking_strategy', type=str, default='mixed', choices=['token', 'instruction', 'mixed'],
+                        help='Masking strategy: token (standard MLM), instruction (mask whole instructions), mixed (50/50)')
+    
+    # Loss weighting
+    parser.add_argument('--jtp_weight', type=float, default=1.0, help='Weight for JTP loss (loss = MLM + jtp_weight * JTP)')
     
     # Experimental flags (both enabled by default)
-    parser.add_argument('--no_jtp', action='store_true', help='Disable JTP task (default: JTP enabled, use this flag to disable)')
-    parser.add_argument('--no_binary_pos', action='store_true', help='Enable binary position for code addresses (default: disabled, daddr always uses binary_pos)')
+    parser.add_argument('--no_jtp', action='store_true', help='Disable JTP task')
+    parser.add_argument('--no_binary_pos', action='store_true', help='Disable binary position for code addresses')
     
     # Data sampling
     parser.add_argument('--data_ratio', type=float, default=1.0, help='Ratio of training data to use (0.0-1.0)')
+    parser.add_argument('--val_split', type=float, default=0.05, help='Validation split ratio (default: 5%)')
+    
+    # Training efficiency
+    parser.add_argument('--amp', action='store_true', default=True, help='Enable mixed precision training (default: True)')
+    parser.add_argument('--no_amp', action='store_true', help='Disable mixed precision training')
+    parser.add_argument('--debug', action='store_true', help='Enable verbose per-batch validation checks')
     
     args = parser.parse_args()
+    
+    # Handle AMP flag
+    use_amp = args.amp and not args.no_amp and torch.cuda.is_available()
     
     # Setup
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     logger = setup_logging(args.output_dir)
+    
+    # TensorBoard
+    tb_writer = None
+    try:
+        from torch.utils.tensorboard import SummaryWriter
+        tb_dir = os.path.join(args.output_dir, 'tensorboard')
+        tb_writer = SummaryWriter(tb_dir)
+        logger.info(f"TensorBoard logging to {tb_dir}")
+    except ImportError:
+        logger.warning("TensorBoard not available, skipping.")
     
     # Log GPU info
     if torch.cuda.is_available():
@@ -419,15 +331,20 @@ def main():
         logger.info(f"PyTorch device: {device}")
     
     logger.info("=" * 80)
-    logger.info("jTrans ADDRESS-AWARE Pretraining")
+    logger.info("jTrans ADDRESS-AWARE Pretraining (Improved)")
     logger.info("=" * 80)
     logger.info(f"Train data: {args.train_path}")
     logger.info(f"Vocab: {args.vocab_path}")
     logger.info(f"Data ratio: {args.data_ratio:.1%} of training data")
+    logger.info(f"Validation split: {args.val_split:.1%}")
     logger.info(f"Batch size: {args.batch_size}")
     logger.info(f"Learning rate: {args.learning_rate}")
     logger.info(f"JTP task: {'Disabled (MLM only)' if args.no_jtp else 'Enabled'}")
+    logger.info(f"JTP weight: {args.jtp_weight}")
     logger.info(f"Binary position: {'Disabled' if args.no_binary_pos else 'Enabled'}")
+    logger.info(f"Masking strategy: {args.masking_strategy}")
+    logger.info(f"Mixed precision (AMP): {use_amp}")
+    logger.info(f"Debug mode: {args.debug}")
     
     # Load vocabulary
     logger.info(f"Loading vocabulary from {args.vocab_path}...")
@@ -435,15 +352,34 @@ def main():
     vocab_size = len(vocab)
     logger.info(f"Vocabulary size: {vocab_size}")
     
-    # Create dataloaders
+    # Create datasets with train/val split
     logger.info("Creating dataloaders...")
+    train_split = 1.0 - args.val_split
+    
     train_dataset = AddressAwareDataset(
         corpus_path=args.train_path,
         vocab=vocab,
         seq_len=args.max_len,
         token_mask_prob=args.token_mask_prob,
+        instruction_mask_prob=args.instruction_mask_prob,
+        masking_strategy=args.masking_strategy,
         on_memory=True,
-        data_percentage=args.data_ratio
+        data_percentage=args.data_ratio,
+        train_split=train_split,
+        is_train=True,
+    )
+    
+    val_dataset = AddressAwareDataset(
+        corpus_path=args.train_path,
+        vocab=vocab,
+        seq_len=args.max_len,
+        token_mask_prob=args.token_mask_prob,
+        instruction_mask_prob=args.instruction_mask_prob,
+        masking_strategy='token',  # Val always uses token masking for consistency
+        on_memory=True,
+        data_percentage=args.data_ratio,
+        train_split=train_split,
+        is_train=False,
     )
     
     train_dataloader = DataLoader(
@@ -454,7 +390,17 @@ def main():
         pin_memory=True
     )
     
-    logger.info(f"Train batches: {len(train_dataloader)}")
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        pin_memory=True
+    ) if len(val_dataset) > 0 else None
+    
+    logger.info(f"Train samples: {len(train_dataset)}, Train batches: {len(train_dataloader)}")
+    if val_dataloader:
+        logger.info(f"Val samples: {len(val_dataset)}, Val batches: {len(val_dataloader)}")
     
     # Create model
     logger.info("Creating address-aware model...")
@@ -480,7 +426,6 @@ def main():
         model = nn.DataParallel(model)
     
     # Verify embedding layer size matches vocab
-    # Handle DataParallel wrapper: .module gives access to the actual model
     actual_model = model.module if isinstance(model, nn.DataParallel) else model
     actual_embedding_size = actual_model.bert.embeddings.token_embedding.weight.shape[0]
     logger.info(f"Model token embedding size: {actual_embedding_size}")
@@ -498,22 +443,34 @@ def main():
     from transformers import get_linear_schedule_with_warmup, AdamW
     optimizer = AdamW(model.parameters(), lr=args.learning_rate)
     total_steps = len(train_dataloader) * args.num_epochs
+    
+    # Warmup: use fixed steps if specified, otherwise use ratio
+    if args.warmup_steps is not None:
+        warmup_steps = args.warmup_steps
+    else:
+        warmup_steps = int(total_steps * args.warmup_ratio)
+    logger.info(f"Total steps: {total_steps}, Warmup steps: {warmup_steps} ({warmup_steps/total_steps:.1%})")
+    
     scheduler = get_linear_schedule_with_warmup(
         optimizer,
-        num_warmup_steps=args.warmup_steps,
+        num_warmup_steps=warmup_steps,
         num_training_steps=total_steps
     )
     
+    # AMP GradScaler
+    scaler = torch.cuda.amp.GradScaler() if use_amp else None
+    
     # Check for existing checkpoints to resume training
     start_epoch = 0
+    global_step = 0
+    best_val_loss = float('inf')
+    
     if os.path.exists(args.output_dir):
-        # Find all checkpoint directories
         checkpoint_dirs = [d for d in os.listdir(args.output_dir) 
                           if d.startswith('checkpoint_epoch_') and 
                           os.path.isdir(os.path.join(args.output_dir, d))]
         
         if checkpoint_dirs:
-            # Extract epoch numbers and find the latest
             epoch_nums = [int(d.split('_')[-1]) for d in checkpoint_dirs]
             latest_epoch = max(epoch_nums)
             latest_checkpoint_dir = os.path.join(args.output_dir, f'checkpoint_epoch_{latest_epoch}')
@@ -523,24 +480,38 @@ def main():
             logger.info(f"Loading checkpoint from: {latest_checkpoint_dir}")
             
             try:
-                # Load model state
+                # Load model state (BERT part for finetune compatibility)
                 checkpoint_path = os.path.join(latest_checkpoint_dir, 'pytorch_model.bin')
                 if os.path.exists(checkpoint_path):
                     actual_model = model.module if isinstance(model, nn.DataParallel) else model
                     actual_model.bert.load_state_dict(torch.load(checkpoint_path, map_location=device))
                     logger.info("✓ Model weights loaded")
                 
-                # Load optimizer state if exists
+                # Try to load full model (includes MLM/JTP heads) for proper resume
+                full_path = os.path.join(latest_checkpoint_dir, 'full_model.bin')
+                if os.path.exists(full_path):
+                    actual_model = model.module if isinstance(model, nn.DataParallel) else model
+                    actual_model.load_state_dict(torch.load(full_path, map_location=device))
+                    logger.info("✓ Full model weights loaded (includes MLM/JTP heads)")
+                
                 optimizer_path = os.path.join(latest_checkpoint_dir, 'optimizer.pt')
                 if os.path.exists(optimizer_path):
                     optimizer.load_state_dict(torch.load(optimizer_path, map_location=device))
                     logger.info("✓ Optimizer state loaded")
                 
-                # Load scheduler state if exists
                 scheduler_path = os.path.join(latest_checkpoint_dir, 'scheduler.pt')
                 if os.path.exists(scheduler_path):
                     scheduler.load_state_dict(torch.load(scheduler_path, map_location=device))
                     logger.info("✓ Scheduler state loaded")
+                
+                # Load training info for best_val_loss
+                info_path = os.path.join(latest_checkpoint_dir, 'training_info.json')
+                if os.path.exists(info_path):
+                    with open(info_path, 'r') as f:
+                        info = json.load(f)
+                    best_val_loss = info.get('best_val_loss', float('inf'))
+                    global_step = info.get('global_step', 0)
+                    logger.info(f"✓ Training info loaded (best_val_loss={best_val_loss:.4f})")
                 
                 start_epoch = latest_epoch
                 logger.info(f"Resuming training from epoch {start_epoch + 1}")
@@ -559,24 +530,53 @@ def main():
         logger.info("-" * 80)
         
         # Train
-        train_loss, train_mlm_loss, train_jtp_loss, train_mlm_acc, train_jtp_acc = train_epoch(
-            model, train_dataloader, optimizer, scheduler, device, logger
+        train_loss, train_mlm_loss, train_jtp_loss, train_mlm_acc, train_jtp_acc, global_step = train_epoch(
+            model, train_dataloader, optimizer, scheduler, device, logger,
+            scaler=scaler, jtp_weight=args.jtp_weight, debug=args.debug,
+            tb_writer=tb_writer, global_step=global_step
         )
         
         logger.info(f"Train - Loss: {train_loss:.4f}, MLM Loss: {train_mlm_loss:.4f}, JTP Loss: {train_jtp_loss:.4f}")
         logger.info(f"Train - MLM Acc: {train_mlm_acc:.4f}, JTP Acc: {train_jtp_acc:.4f}")
+        
+        # Log embedding scale factors
+        actual_model = model.module if isinstance(model, nn.DataParallel) else model
+        emb = actual_model.bert.embeddings
+        logger.info(f"Embedding scales - token: {emb.token_scale.item():.3f}, pos: {emb.pos_scale.item():.3f}, "
+                     f"addr: {emb.addr_scale.item():.3f}, seg: {emb.seg_scale.item():.3f}, var: {emb.var_scale.item():.3f}")
+        
+        # Validate
+        val_loss = float('inf')
+        if val_dataloader is not None:
+            val_loss, val_mlm_loss, val_jtp_loss, val_mlm_acc, val_jtp_acc = validate_epoch(
+                model, val_dataloader, device, logger, jtp_weight=args.jtp_weight
+            )
+            logger.info(f"Val   - Loss: {val_loss:.4f}, MLM Loss: {val_mlm_loss:.4f}, JTP Loss: {val_jtp_loss:.4f}")
+            logger.info(f"Val   - MLM Acc: {val_mlm_acc:.4f}, JTP Acc: {val_jtp_acc:.4f}")
+            
+            if tb_writer is not None:
+                tb_writer.add_scalar('val/loss', val_loss, epoch + 1)
+                tb_writer.add_scalar('val/mlm_loss', val_mlm_loss, epoch + 1)
+                tb_writer.add_scalar('val/mlm_acc', val_mlm_acc, epoch + 1)
+        
+        if tb_writer is not None:
+            tb_writer.add_scalar('train/epoch_loss', train_loss, epoch + 1)
+            tb_writer.add_scalar('train/epoch_mlm_acc', train_mlm_acc, epoch + 1)
         
         # Save checkpoint
         if (epoch + 1) % args.save_every == 0:
             checkpoint_dir = os.path.join(args.output_dir, f'checkpoint_epoch_{epoch + 1}')
             os.makedirs(checkpoint_dir, exist_ok=True)
             
-            # Save model weights (BERT part only for compatibility)
-            # Unwrap DataParallel if needed
             actual_model = model.module if isinstance(model, nn.DataParallel) else model
+            
+            # Save BERT part only (for finetune.py compatibility)
             torch.save(actual_model.bert.state_dict(), os.path.join(checkpoint_dir, 'pytorch_model.bin'))
             
-            # Save optimizer and scheduler states for resumption
+            # Save full model (for training resume with MLM/JTP heads)
+            torch.save(actual_model.state_dict(), os.path.join(checkpoint_dir, 'full_model.bin'))
+            
+            # Save optimizer and scheduler states
             torch.save(optimizer.state_dict(), os.path.join(checkpoint_dir, 'optimizer.pt'))
             torch.save(scheduler.state_dict(), os.path.join(checkpoint_dir, 'scheduler.pt'))
             
@@ -587,10 +587,12 @@ def main():
                 'num_hidden_layers': args.num_hidden_layers,
                 'num_attention_heads': args.num_attention_heads,
                 'max_position_embeddings': args.max_len,
-                'type_vocab_size': 256,  # Must match segment_types in AddressAwareBERTEmbedding
+                'type_vocab_size': 256,
                 'model_type': 'address_aware_jtrans',
-                'use_jtp': not args.no_jtp,  # Save experimental flags
-                'use_binary_pos': not args.no_binary_pos
+                'use_jtp': not args.no_jtp,
+                'use_binary_pos': not args.no_binary_pos,
+                'masking_strategy': args.masking_strategy,
+                'jtp_weight': args.jtp_weight,
             }
             with open(os.path.join(checkpoint_dir, 'config.json'), 'w') as f:
                 json.dump(config, f, indent=2)
@@ -598,17 +600,51 @@ def main():
             # Save training info
             training_info = {
                 'epoch': epoch + 1,
+                'global_step': global_step,
                 'train_loss': train_loss,
                 'train_mlm_acc': train_mlm_acc,
+                'val_loss': val_loss,
+                'best_val_loss': best_val_loss,
             }
             with open(os.path.join(checkpoint_dir, 'training_info.json'), 'w') as f:
                 json.dump(training_info, f, indent=2)
             
             logger.info(f"✓ Checkpoint saved to {checkpoint_dir}")
         
+        # Save best model (based on val loss)
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_dir = os.path.join(args.output_dir, 'best_model')
+            os.makedirs(best_dir, exist_ok=True)
+            
+            actual_model = model.module if isinstance(model, nn.DataParallel) else model
+            torch.save(actual_model.bert.state_dict(), os.path.join(best_dir, 'pytorch_model.bin'))
+            
+            config = {
+                'vocab_size': vocab_size,
+                'hidden_size': args.hidden_size,
+                'num_hidden_layers': args.num_hidden_layers,
+                'num_attention_heads': args.num_attention_heads,
+                'max_position_embeddings': args.max_len,
+                'type_vocab_size': 256,
+                'model_type': 'address_aware_jtrans',
+                'use_jtp': not args.no_jtp,
+                'use_binary_pos': not args.no_binary_pos,
+                'masking_strategy': args.masking_strategy,
+                'jtp_weight': args.jtp_weight,
+            }
+            with open(os.path.join(best_dir, 'config.json'), 'w') as f:
+                json.dump(config, f, indent=2)
+            
+            logger.info(f"★ NEW BEST model saved (val_loss={val_loss:.4f})")
+        
         logger.info("=" * 80)
     
-    logger.info("Training completed!")
+    if tb_writer is not None:
+        tb_writer.close()
+    
+    logger.info(f"Training completed! Best val loss: {best_val_loss:.4f}")
+    logger.info(f"Best model saved at: {os.path.join(args.output_dir, 'best_model')}")
 
 
 if __name__ == '__main__':

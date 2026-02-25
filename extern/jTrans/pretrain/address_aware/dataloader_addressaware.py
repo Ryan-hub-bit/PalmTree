@@ -42,6 +42,8 @@ class AddressAwareDataset(Dataset):
         encoding="utf-8",
         on_memory=True,
         token_mask_prob=0.15,  # Standard MLM masking rate
+        instruction_mask_prob=0.15,  # Instruction-level masking rate
+        masking_strategy='mixed',  # 'token', 'instruction', or 'mixed'
         data_percentage=1.0,
         train_split=1.0,
         is_train=True,
@@ -49,6 +51,8 @@ class AddressAwareDataset(Dataset):
         self.vocab = vocab
         self.seq_len = seq_len
         self.token_mask_prob = token_mask_prob
+        self.instruction_mask_prob = instruction_mask_prob
+        self.masking_strategy = masking_strategy
         
         # Special token IDs
         self.pad_idx = vocab.stoi.get('<pad>', 0)
@@ -96,7 +100,9 @@ class AddressAwareDataset(Dataset):
                 self.lines = self.lines[train_size:]
         
         print(f"Dataset size: {len(self.lines)} lines")
+        print(f"Masking strategy: {masking_strategy}")
         print(f"Token mask rate: {token_mask_prob}")
+        print(f"Instruction mask rate: {instruction_mask_prob}")
     
     def _load_corpus(self, path):
         """Load corpus file"""
@@ -237,34 +243,24 @@ class AddressAwareDataset(Dataset):
     def _process_line_for_instruction_masking(self, line):
         """
         Process a full line and apply instruction-level masking.
-        Format: <sos> inst1 inst2 inst3 ... <eos>
-        NO separators between instructions, just <sos> at start and <eos> at end.
-        Segment labels: All tokens get segment 1 (single sequence).
+        Masks entire instructions at once, forcing the model to reconstruct
+        full instructions from surrounding context — better for learning
+        function-level semantics needed by downstream funcsim.
         
-        Strategy: Calculate number of instructions to mask based on instruction_mask_prob,
-        then randomly select which instructions to mask.
-        
-        Returns:
-            bert_input: Token IDs with instruction-level masking
-            bert_label: Labels for masked instructions (-1 for unmasked)
-            segment_label: All 1s (single sequence)
-            binary_pos, function_pos, bb_pos: Position embeddings
-            var_offsets: Var offset values (-1 for non-var tokens)
+        Returns dict with bert_input, bert_label, segment_label, attention_mask,
+            binary_pos, function_pos, bb_pos, var_offsets, jtp_labels.
         """
         instructions = [inst.strip() for inst in line.split('\t') if inst.strip()]
         
-        # Calculate how many instructions to mask
         num_instructions = len(instructions)
         if num_instructions == 0:
-            # Empty line, return minimal valid output
-            return self._create_empty_sample()
+            # Return a padded empty sample
+            return self._process_line_for_token_masking('')
         
         num_to_mask = max(1, int(num_instructions * self.instruction_mask_prob))
-        # Ensure we don't mask all instructions (if more than 1)
         if num_instructions > 1:
             num_to_mask = min(num_to_mask, num_instructions - 1)
         
-        # Randomly select which instructions to mask
         instructions_to_mask = set(random.sample(range(num_instructions), num_to_mask))
         
         all_tokens = []
@@ -272,46 +268,60 @@ class AddressAwareDataset(Dataset):
         all_labels = []
         all_segments = []
         all_var_offsets = []
+        all_tokens_info = []  # (token_id, inst_idx, is_opcode, raw_text) for JTP
         
-        # Add <sos> at the beginning (segment 1)
+        # <sos>
         all_tokens.append(self.sos_idx)
         all_positions.append((-1.0, -1.0, -1.0))
-        all_labels.append(-100)  # SOS is not masked - use -100 to match ignore_index
+        all_labels.append(-100)
         all_segments.append(1)
-        all_var_offsets.append(-1)  # SOS is not a var, use -1 as sentinel
+        all_var_offsets.append(-1)
+        all_tokens_info.append((self.sos_idx, -1, False, '<sos>'))
         
         for inst_idx, inst_text in enumerate(instructions):
+            inst_text = inst_text.strip()
+            if not inst_text:
+                continue
+            
             tokens, positions, var_offsets = self._parse_instruction(inst_text)
+            inst_segment = inst_idx + 1
             
-            # Mask this instruction if it was selected
             if inst_idx in instructions_to_mask:
-                # Mask entire instruction
-                masked_tokens, positions, var_offsets, labels = self._mask_instruction(tokens, positions, var_offsets)
+                masked_tokens, positions, masked_var_offsets, labels = self._mask_instruction(tokens, positions, var_offsets)
+                # Track original tokens for JTP even when masked
+                for token_idx, orig_tok in enumerate(tokens):
+                    is_opcode = (token_idx == 0)
+                    all_tokens_info.append((masked_tokens[token_idx], inst_idx, is_opcode, orig_tok))
+                all_tokens.extend(masked_tokens)
+                all_positions.extend(positions)
+                all_labels.extend(labels)
+                all_segments.extend([inst_segment] * len(masked_tokens))
+                all_var_offsets.extend(masked_var_offsets)
             else:
-                # No instruction-level masking (but still convert to IDs)
-                masked_tokens = [self.vocab.stoi.get(t, self.unk_idx) for t in tokens]
-                labels = [-100] * len(tokens)  # Not masked - use -100 to match ignore_index
-            
-            # All tokens in the same segment (segment 1)
-            all_tokens.extend(masked_tokens)
-            all_positions.extend(positions)
-            all_labels.extend(labels)
-            all_segments.extend([1] * len(masked_tokens))
-            all_var_offsets.extend(var_offsets)
-            
-            # NO <eos> after each instruction - we'll add it only at the very end
+                token_ids = [self.vocab.stoi.get(t, self.unk_idx) for t in tokens]
+                labels = [-100] * len(tokens)
+                for token_idx, (tok_id, orig_tok) in enumerate(zip(token_ids, tokens)):
+                    is_opcode = (token_idx == 0)
+                    all_tokens_info.append((tok_id, inst_idx, is_opcode, orig_tok))
+                all_tokens.extend(token_ids)
+                all_positions.extend(positions)
+                all_labels.extend(labels)
+                all_segments.extend([inst_segment] * len(token_ids))
+                all_var_offsets.extend(var_offsets)
         
-        # Add <eos> at the end (segment 1)
+        # <eos>
+        last_segment = inst_idx + 1 if instructions else 1
         all_tokens.append(self.eos_idx)
         all_positions.append((-1.0, -1.0, -1.0))
-        all_labels.append(-100)  # EOS is not masked - use -100 to match ignore_index
-        all_segments.append(1)
-        all_var_offsets.append(-1)  # EOS is not a var, use -1 as sentinel
+        all_labels.append(-100)
+        all_segments.append(last_segment)
+        all_var_offsets.append(-1)
+        all_tokens_info.append((self.eos_idx, inst_idx if instructions else -1, False, '<eos>'))
         
-        # Generate JTP labels
+        # JTP labels
         jtp_labels = self._create_jtp_labels(instructions, all_tokens_info)
         
-        # Truncate or pad to seq_len
+        # Truncate or pad
         if len(all_tokens) > self.seq_len:
             all_tokens = all_tokens[:self.seq_len]
             all_labels = all_labels[:self.seq_len]
@@ -319,27 +329,30 @@ class AddressAwareDataset(Dataset):
             all_segments = all_segments[:self.seq_len]
             all_var_offsets = all_var_offsets[:self.seq_len]
             jtp_labels = jtp_labels[:self.seq_len]
+            jtp_labels = [-100 if (label >= self.seq_len and label != -100) else label for label in jtp_labels]
         else:
             padding_len = self.seq_len - len(all_tokens)
             all_tokens += [self.pad_idx] * padding_len
-            all_labels += [-100] * padding_len  # Use -100 to match CrossEntropyLoss ignore_index
+            all_labels += [-100] * padding_len
             all_positions += [(-1.0, -1.0, -1.0)] * padding_len
-            all_segments += [0] * padding_len  # Padding gets segment 0
-            all_var_offsets += [-1] * padding_len  # Padding is not a var, use -1 as sentinel
-            jtp_labels += [-100] * padding_len  # Padding tokens have no JTP label
+            all_segments += [0] * padding_len
+            all_var_offsets += [-1] * padding_len
+            jtp_labels += [-100] * padding_len
         
-        # Use segment labels as instruction IDs
+        all_segments = [min(seg, 255) for seg in all_segments]
         segment_label = all_segments
         
-        # Split positions
         binary_pos = [p[0] for p in all_positions]
         function_pos = [p[1] for p in all_positions]
         bb_pos = [p[2] for p in all_positions]
+        
+        attention_mask = [1 if token != self.vocab.pad_index else 0 for token in all_tokens]
         
         return {
             'bert_input': torch.LongTensor(all_tokens),
             'bert_label': torch.LongTensor(all_labels),
             'segment_label': torch.LongTensor(segment_label),
+            'attention_mask': torch.LongTensor(attention_mask),
             'binary_pos': torch.FloatTensor(binary_pos),
             'function_pos': torch.FloatTensor(function_pos),
             'bb_pos': torch.FloatTensor(bb_pos),
@@ -536,18 +549,24 @@ class AddressAwareDataset(Dataset):
     
     def __getitem__(self, index):
         """
-        Get one training sample with MLM masking.
+        Get one training sample with masking.
         
-        Returns dict with standard BERT format:
-        - bert_input: token IDs
-        - bert_label: MLM labels (-100 for non-masked)
-        - segment_label: all zeros (single sequence)
-        - attention_mask: 1 for real tokens, 0 for padding
-        - binary_pos, function_pos, bb_pos: hierarchical positions
-        - var_offsets: var(0xXX) offsets
+        Masking strategy:
+        - 'token': standard token-level MLM (15% random tokens)
+        - 'instruction': mask entire instructions (~15% of instructions)
+        - 'mixed': randomly pick token or instruction masking per sample (50/50)
         """
-        # Process line with token-level MLM masking
-        result = self._process_line_for_token_masking(self.lines[index])
+        line = self.lines[index]
+        
+        if self.masking_strategy == 'instruction':
+            result = self._process_line_for_instruction_masking(line)
+        elif self.masking_strategy == 'mixed':
+            if random.random() < 0.5:
+                result = self._process_line_for_instruction_masking(line)
+            else:
+                result = self._process_line_for_token_masking(line)
+        else:  # 'token'
+            result = self._process_line_for_token_masking(line)
         
         # Validate token IDs are within vocab range (before returning tensors)
         bert_input = result['bert_input']

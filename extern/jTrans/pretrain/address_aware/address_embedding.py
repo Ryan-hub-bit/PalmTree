@@ -483,6 +483,14 @@ class AddressAwareBERTEmbedding(nn.Module):
         
         self.dropout = nn.Dropout(p=dropout)
         self.layer_norm = nn.LayerNorm(embed_size)
+        
+        # Learnable scale factors for embedding fusion
+        # Initialized to 1.0 so initial behavior is identical to plain addition
+        self.token_scale = nn.Parameter(torch.ones(1))
+        self.pos_scale = nn.Parameter(torch.ones(1))
+        self.addr_scale = nn.Parameter(torch.ones(1))
+        self.seg_scale = nn.Parameter(torch.ones(1))
+        self.var_scale = nn.Parameter(torch.ones(1))
     
     def forward(self, token_ids, segment_labels, binary_pos, function_pos, bb_pos, var_offsets=None):
         """
@@ -501,40 +509,10 @@ class AddressAwareBERTEmbedding(nn.Module):
         """
         batch_size, seq_len = token_ids.size()
         
-        # VALIDATION: Check for invalid token IDs before embedding lookup
-        max_token_id = token_ids.max().item()
-        min_token_id = token_ids.min().item()
-        vocab_size = self.token_embedding.num_embeddings
-        
-        if max_token_id >= vocab_size or min_token_id < 0:
-            print(f"\n{'='*80}")
-            print(f"INVALID TOKEN ID DETECTED IN FORWARD PASS")
-            print(f"{'='*80}")
-            print(f"Vocab size: {vocab_size}")
-            print(f"Max token ID in batch: {max_token_id}")
-            print(f"Min token ID in batch: {min_token_id}")
-            print(f"Token IDs shape: {token_ids.shape}")
-            
-            # Find all invalid positions
-            invalid_mask = (token_ids >= vocab_size) | (token_ids < 0)
-            if invalid_mask.any():
-                invalid_positions = torch.nonzero(invalid_mask, as_tuple=False)
-                print(f"\nNumber of invalid token IDs: {invalid_mask.sum().item()}")
-                print(f"First 10 invalid positions (batch_idx, seq_idx):")
-                for i, (batch_idx, seq_idx) in enumerate(invalid_positions[:10]):
-                    invalid_id = token_ids[batch_idx, seq_idx].item()
-                    print(f"  [{batch_idx.item()}, {seq_idx.item()}] = {invalid_id}")
-                
-                # Show context around first invalid token
-                batch_idx, seq_idx = invalid_positions[0][0].item(), invalid_positions[0][1].item()
-                start_idx = max(0, seq_idx - 5)
-                end_idx = min(seq_len, seq_idx + 6)
-                print(f"\nContext around first invalid token (batch {batch_idx}, position {seq_idx}):")
-                print(f"Token IDs: {token_ids[batch_idx, start_idx:end_idx].tolist()}")
-                print(f"Segment labels: {segment_labels[batch_idx, start_idx:end_idx].tolist()}")
-            print(f"{'='*80}\n")
-            
-            raise ValueError(f"Token ID out of range: min={min_token_id}, max={max_token_id}, vocab_size={vocab_size}")
+        # Quick validation (assertions compiled out with python -O)
+        assert token_ids.max().item() < self.token_embedding.num_embeddings, \
+            f"Token ID {token_ids.max().item()} >= vocab {self.token_embedding.num_embeddings}"
+        assert token_ids.min().item() >= 0, f"Negative token ID: {token_ids.min().item()}"
         
         # 1. Get token embeddings (trained from scratch)
         token_emb = self.token_embedding(token_ids)
@@ -556,8 +534,12 @@ class AddressAwareBERTEmbedding(nn.Module):
         else:
             var_pos_emb = 0
         
-        # Combine all embeddings
-        embedding = token_emb + seq_pos_emb + addr_pos_emb + self.segment_embedding(segment_labels) + var_pos_emb
+        # Combine all embeddings with learnable scale factors
+        embedding = (self.token_scale * token_emb
+                     + self.pos_scale * seq_pos_emb
+                     + self.addr_scale * addr_pos_emb
+                     + self.seg_scale * self.segment_embedding(segment_labels)
+                     + self.var_scale * var_pos_emb)
         
         # Apply layer norm and dropout
         embedding = self.layer_norm(embedding)

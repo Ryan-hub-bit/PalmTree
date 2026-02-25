@@ -1,15 +1,16 @@
 #!/bin/bash
 
-# Address-Aware jTrans Pretraining Script
-# Uses hierarchical address embeddings instead of position=word trick
-# PRETRAINING: Uses single combined file (no train/val/test split)
+# Address-Aware jTrans Pretraining Script (HPC - Improved)
+# Uses hierarchical address embeddings with instruction-level masking,
+# mixed precision, validation split, and loss weighting.
 #
-# Usage: ./run_addressaware_pretrain.sh [data_ratio]
-# Example: ./run_addressaware_pretrain.sh 0.1  # Use 10% of data
-#          ./run_addressaware_pretrain.sh 1.0  # Use 100% of data (default)
+# Usage: ./run_addressaware_pretrain_hpc.sh [data_ratio] [num_epochs]
+# Example: ./run_addressaware_pretrain_hpc.sh 0.1 5    # 10% data, 5 epochs
+#          ./run_addressaware_pretrain_hpc.sh 1.0 20   # Full data, 20 epochs
 
 # Data ratio (default: 1.0 = 100% of data)
 DATA_RATIO="${1:-1.0}"
+NUM_EPOCHS="${2:-20}"
 
 # Use all available GPUs (default: 0,1,2,3 for 4 GPUs)
 # SLURM will set CUDA_VISIBLE_DEVICES automatically, but if running locally, set it here
@@ -17,16 +18,13 @@ if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
     export CUDA_VISIBLE_DEVICES=0,1,2,3
 fi
 echo "Using GPUs: $CUDA_VISIBLE_DEVICES"
-# Uncomment for debugging (makes CUDA synchronous, slower)
-# export CUDA_LAUNCH_BLOCKING=1
-
-# Data from address-aware function export with hierarchical positions
-# Format: opcode(0xADDR:func_pos:bb_pos:inst_pos) operand1 operand2 ...
-# For pretraining, we use the same file for train and test (no validation needed during MLM)
 
 echo "=========================================="
-echo "Starting Address-Aware Pretraining"
-echo "Data ratio: $DATA_RATIO ($(echo "$DATA_RATIO * 100" | bc)% of training data)"
+echo "Starting Address-Aware Pretraining (HPC Improved)"
+echo "Data ratio: $DATA_RATIO"
+echo "Epochs: $NUM_EPOCHS"
+echo "Masking strategy: mixed (token + instruction)"
+echo "Mixed precision: enabled"
 echo "=========================================="
 
 # Debug: Check vocab size before training
@@ -46,10 +44,14 @@ python3 train_addressaware.py \
   --output_dir /work/kliu14/jtransoutput/addressaware_pretrain \
   --batch_size 128 \
   --learning_rate 1e-4 \
-  --num_epochs 20 \
-  --warmup_steps 10000 \
+  --num_epochs "$NUM_EPOCHS" \
+  --warmup_ratio 0.06 \
   --max_len 512 \
   --token_mask_prob 0.15 \
+  --instruction_mask_prob 0.15 \
+  --masking_strategy mixed \
+  --jtp_weight 1.0 \
+  --val_split 0.05 \
   --hidden_size 768 \
   --num_hidden_layers 12 \
   --num_attention_heads 12 \
