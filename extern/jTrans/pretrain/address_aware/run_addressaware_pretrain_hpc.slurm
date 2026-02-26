@@ -4,8 +4,7 @@
 #SBATCH --error=/work/kliu14/jtransdata/log/%x_%j.err
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=12
-#SBATCH --mem=128G
-#SBATCH --time=3-00:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --partition=gpu4
 #SBATCH --account=loni_insembed01
 
@@ -31,14 +30,13 @@ source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
 conda activate /work/kliu14/.conda/envs/jtrans
 
 # cd to script directory (critical for relative paths like vocab_addr.pkl)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware
 echo "Working directory: $(pwd)"
 
 # Pass arguments through: sbatch run_addressaware_pretrain_hpc.slurm [data_ratio] [num_epochs]
 # Defaults: data_ratio=1.0, num_epochs=20
 DATA_RATIO="${1:-1.0}"
-NUM_EPOCHS="${2:-20}"
+NUM_EPOCHS="${2:-10}"
 
 echo "Data ratio: $DATA_RATIO"
 echo "Num epochs: $NUM_EPOCHS"
