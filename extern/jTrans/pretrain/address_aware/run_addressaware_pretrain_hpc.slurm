@@ -30,7 +30,7 @@ source /usr/local/packages/conda/24.3.0/etc/profile.d/conda.sh
 conda activate /work/kliu14/.conda/envs/jtrans
 
 # cd to script directory (critical for relative paths like vocab_addr.pkl)
-cd /home/kun/Document/AAE/extern/jTrans/pretrain/address_aware
+cd /home/kliu14/AAE/extern/jTrans/pretrain/address_aware
 echo "Working directory: $(pwd)"
 
 # Pass arguments through: sbatch run_addressaware_pretrain_hpc.slurm [data_ratio] [num_epochs]
