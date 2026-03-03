@@ -43,12 +43,13 @@ def load_func_blocks_from_ground_truth(func_blocks_path, ground_truth_path):
     print(f'Found {total_pairs} function pairs')
     
     # Collect function IDs we need
+    # Format: {binary_name, function_name, O0: func_id, O1: func_id, O2: func_id, O3: func_id, Os: func_id}
+    OPT_LEVELS = {'O0', 'O1', 'O2', 'O3', 'Os'}
     needed_func_ids = set()
     for pair in all_pairs:
-        # Address-aware format has opt1, opt2, func_id1, func_id2
-        if 'opt1' in pair and 'opt2' in pair:
-            needed_func_ids.add(str(pair['func_id1']))
-            needed_func_ids.add(str(pair['func_id2']))
+        for opt in OPT_LEVELS:
+            if opt in pair and pair[opt] is not None:
+                needed_func_ids.add(str(pair[opt]))
     
     print(f'Loading {len(needed_func_ids)} needed functions from {func_blocks_path}...')
     
@@ -99,9 +100,11 @@ class AddressAwareBertWrapper(torch.nn.Module):
         )
         
         # Pass through transformer encoder
+        # Convert 0/1 mask to 0/-10000 extended mask (BertEncoder adds this to scores)
+        extended_mask = (1.0 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * -10000.0
         outputs = self.bert.encoder(
             embeddings,
-            attention_mask=attention_mask.unsqueeze(1).unsqueeze(2)
+            attention_mask=extended_mask
         )
         
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]

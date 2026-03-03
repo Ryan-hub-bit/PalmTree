@@ -118,9 +118,11 @@ class AddressAwareJTransForMLM(nn.Module):
         )
         
         # Pass through transformer
+        # Convert 0/1 mask to 0/-10000 extended mask (BertEncoder adds this to scores)
+        extended_mask = (1.0 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * -10000.0
         outputs = self.bert.encoder(
             embeddings,
-            attention_mask=attention_mask.unsqueeze(1).unsqueeze(2)
+            attention_mask=extended_mask
         )
         
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]

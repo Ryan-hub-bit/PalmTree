@@ -49,6 +49,18 @@ def train_dp(model, args, train_set, valid_set, logger):
             loss=(self.margin-(good_sim-bad_sim)).clamp(min=1e-6).mean()
             return loss
 
+    class InfoNCE_Loss(nn.Module):
+        def __init__(self, temperature=0.07):
+            super(InfoNCE_Loss, self).__init__()
+            self.temperature = temperature
+
+        def forward(self, anchor, pos, neg=None):
+            # anchor: [N, D], pos: [N, D] - assumed L2 normalized
+            # All other positives in the batch serve as in-batch negatives
+            sim = torch.mm(anchor, pos.t()) / self.temperature  # [N, N]
+            labels = torch.arange(sim.size(0), device=sim.device)
+            return F.cross_entropy(sim, labels)
+
     if WANDB:
         wandb.init(project=f'jTrans-finetune', name="jTrans_Freeze_10_Train_Test")
         wandb.config.update(args)
@@ -97,7 +109,10 @@ def train_dp(model, args, train_set, valid_set, logger):
     etc=0
     for epoch in range(args.epoch):
         model.train()
-        triplet_loss=Triplet_COS_Loss(margin=args.triplet_margin)
+        if args.loss_type == 'infonce':
+            criterion = InfoNCE_Loss(temperature=args.temperature)
+        else:
+            criterion = Triplet_COS_Loss(margin=args.triplet_margin)
         train_iterator = tqdm(train_dataloader)
         
         # Initialize gradient accumulation tracking
@@ -175,7 +190,10 @@ def train_dp(model, args, train_set, valid_set, logger):
                 output3 = model(input_ids=input_ids3, attention_mask=attention_mask3, token_type_ids=token_type_ids3)
                 neg = output3.pooler_output
 
-            loss = triplet_loss(anchor, pos, neg)
+            if args.loss_type == 'infonce':
+                loss = criterion(anchor, pos)
+            else:
+                loss = criterion(anchor, pos, neg)
             
             # Scale loss for gradient accumulation
             loss = loss / args.gradient_accumulation_steps
@@ -201,7 +219,7 @@ def train_dp(model, args, train_set, valid_set, logger):
                 train_iterator.set_description(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss_val:.4f}")
                 if WANDB:
                     wandb.log({
-                        'triplet loss' : loss_val,
+                        'loss' : loss_val,
                         'lr' : tmp_lr,
                         'global_step' : global_steps,
                     })
@@ -374,9 +392,11 @@ class AddressAwareBertWrapper(nn.Module):
         )
         
         # Pass through transformer encoder
+        # Convert 0/1 mask to 0/-10000 extended mask (BertEncoder adds this to scores)
+        extended_mask = (1.0 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * -10000.0
         outputs = self.bert.encoder(
             embeddings,
-            attention_mask=attention_mask.unsqueeze(1).unsqueeze(2)
+            attention_mask=extended_mask
         )
         
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
@@ -480,6 +500,10 @@ if __name__ == '__main__':
                         help='dimension of function embeddings after projection (default: 256)')
     parser.add_argument("--triplet_margin", type=float, default=0.5,
                         help='margin for triplet loss (higher = stricter separation)')
+    parser.add_argument("--loss_type", type=str, default='infonce', choices=['triplet', 'infonce'],
+                        help='loss function: triplet (margin-based) or infonce (in-batch negatives, default)')
+    parser.add_argument("--temperature", type=float, default=0.07,
+                        help='temperature for InfoNCE loss (lower = sharper distribution, default: 0.07)')
     parser.add_argument("--max_grad_norm", type=float, default=1.0,
                         help='max gradient norm for clipping (0 = no clipping)')
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1,

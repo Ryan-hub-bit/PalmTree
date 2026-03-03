@@ -109,6 +109,7 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
     # Convert to original format
     functions = []
     func_emb_data = []
+    func_opt_labels = []  # Track which opt each index corresponds to
     
     for (binary, func_name), opt_dict in func_mapping.items():
         # Only include if we have functions for requested opts
@@ -118,6 +119,7 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
             continue
         
         func_list = []
+        opt_labels = []  # Track opt label for each entry in func_list
         
         if add_ebd:
             ebd_entry = {'proj': binary, 'funcname': func_name}
@@ -139,16 +141,18 @@ def load_paired_data_json(func_blocks_path, ground_truth_path, opt=['O0', 'O1', 
                     ebd_entry[o] = len(func_list)
                 
                 func_list.append(func_str)
+                opt_labels.append(o)
         
         if len(func_list) >= 2:
             functions.append(func_list)
+            func_opt_labels.append(opt_labels)
             
             if add_ebd:
                 func_emb_data.append(ebd_entry)
     
     print(f'TOTAL {sum(len(f) for f in functions)} function variants across {len(functions)} unique functions')
     
-    return functions, func_emb_data
+    return functions, func_emb_data, func_opt_labels
 
 
 class FunctionDataset_CL_JSON(torch.utils.data.Dataset):
@@ -158,7 +162,7 @@ class FunctionDataset_CL_JSON(torch.utils.data.Dataset):
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path, 
                  opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, target_opt=None):
-        functions, ebds = load_paired_data_json(
+        functions, ebds, _opt_labels = load_paired_data_json(
             func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd
         )
         self.datas = functions
@@ -206,7 +210,7 @@ class FunctionDataset_CL_Load_JSON(torch.utils.data.Dataset):
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
                  opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0,
                  target_opt=None):
-        functions, ebds = load_paired_data_json(
+        functions, ebds, _opt_labels = load_paired_data_json(
             func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )
         
@@ -356,7 +360,7 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
     """
     def __init__(self, tokenizer, func_blocks_path, ground_truth_path,
                  opt=['O0', 'O1', 'O2', 'O3'], add_ebd=True, max_length=512, data_ratio=1.0, target_opt=None):
-        functions, ebds = load_paired_data_json(
+        functions, ebds, opt_labels = load_paired_data_json(
             func_blocks_path, ground_truth_path, opt=opt, add_ebd=add_ebd, data_ratio=data_ratio
         )
         
@@ -380,6 +384,7 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
         
         self.ebds = ebds
         self.opt = opt
+        self.opt_labels = opt_labels  # Per-function list of opt labels
         self.tokenizer = tokenizer
         self.target_opt = target_opt
         
@@ -597,13 +602,19 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
             - var_offsets (3 tensors)
         """
         pairs = self.processed_datas[idx]
+        labels = self.opt_labels[idx]  # e.g. ['O0', 'O2', 'O3'] for functions missing O1
         
         if self.target_opt is not None:
             # Targeted training mode: Ox -> target_opt
-            target_idx = self.opt.index(self.target_opt)
+            # Find target_opt position in THIS function's label list
+            if self.target_opt in labels:
+                target_idx = labels.index(self.target_opt)
+            else:
+                # Fallback: pick random as positive
+                target_idx = random.randint(0, len(pairs) - 1)
             
-            # Select anchor from source opts (excluding target_opt)
-            source_indices = [i for i in range(len(pairs)) if i != target_idx and i < len(self.opt)]
+            # Select anchor from source opts (not target_opt)
+            source_indices = [i for i in range(len(pairs)) if labels[i] != self.target_opt]
             if len(source_indices) == 0:
                 # Fallback if no source opts available in this function
                 anchor_idx = random.randint(0, len(pairs) - 1)
@@ -611,15 +622,8 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
                 anchor_idx = random.choice(source_indices)
             anchor = pairs[anchor_idx]
             
-            # Positive is always target_opt from same function
-            if target_idx < len(pairs):
-                positive = pairs[target_idx]
-            else:
-                # Fallback if target_opt not available
-                pos_idx = random.randint(0, len(pairs) - 1)
-                while pos_idx == anchor_idx and len(pairs) > 1:
-                    pos_idx = random.randint(0, len(pairs) - 1)
-                positive = pairs[pos_idx]
+            # Positive is target_opt from same function
+            positive = pairs[target_idx]
         else:
             # Original random mode: all opt combinations
             anchor_idx = random.randint(0, len(pairs) - 1)
@@ -642,9 +646,10 @@ class FunctionDataset_CL_AddressAware_JSON(torch.utils.data.Dataset):
         # If target_opt is set, negative should also be target_opt (O3) from different function
         # This matches the evaluation: query (Ox) searches among pool of O3 functions
         if self.target_opt is not None:
+            neg_labels = self.opt_labels[neg_func_idx]
             # Negative is target_opt from different function (matches evaluation pool)
-            if target_idx < len(neg_pairs):
-                neg_idx = target_idx
+            if self.target_opt in neg_labels:
+                neg_idx = neg_labels.index(self.target_opt)
             else:
                 # Fallback if target_opt not available in this function
                 neg_idx = random.randint(0, len(neg_pairs) - 1)
