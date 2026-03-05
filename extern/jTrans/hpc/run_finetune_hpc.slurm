@@ -42,7 +42,7 @@ nvidia-smi
 CODE_DIR="/home/kliu14/AAE/extern/jTrans"
 DATA_DIR="/work/kliu14/jtransdata"
 TOKENIZER_DIR="$CODE_DIR/pretrain/address_aware"
-CHECKPOINT_DIR="/work/kliu14/jtransdata/output/addressaware_pretrain/checkpoint_epoch_9"
+CHECKPOINT_DIR="/work/kliu14/jtransoutput/addressaware_pretrain/checkpoint_epoch_9"
 OUTPUT_DIR="/work/kliu14/jtransdata/output/addressaware_finetune_v2"
 
 # Create output & log directories
