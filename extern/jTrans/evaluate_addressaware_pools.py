@@ -70,12 +70,13 @@ class AddressAwareBertWrapper(torch.nn.Module):
     Wrapper for address-aware BERT (matching finetune.py).
     Extracts [CLS] token and applies projection layer.
     """
-    def __init__(self, bert_model, hidden_size=768, embedding_dim=256, use_projection=True, dropout=0.1):
+    def __init__(self, bert_model, hidden_size=768, embedding_dim=256, use_projection=True, dropout=0.1, pooling_type='cls'):
         super().__init__()
         self.bert = bert_model
         self.use_projection = use_projection
         self.hidden_size = hidden_size
         self.embedding_dim = embedding_dim
+        self.pooling_type = pooling_type  # 'cls' or 'mean'
         
         # Projection layer (task-specific)
         if use_projection:
@@ -88,7 +89,7 @@ class AddressAwareBertWrapper(torch.nn.Module):
         
     def forward(self, token_ids, attention_mask, token_type_ids,
                 binary_pos, function_pos, bb_pos, var_offsets=None):
-        """Forward pass returning pooled output (CLS token)."""
+        """Forward pass returning pooled output."""
         # Get embeddings
         embeddings = self.bert.embeddings(
             token_ids,
@@ -108,7 +109,15 @@ class AddressAwareBertWrapper(torch.nn.Module):
         )
         
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
-        pooler_output = sequence_output[:, 0, :]  # CLS token
+        
+        # Pooling strategy
+        if self.pooling_type == 'mean':
+            # Mean pooling over non-padding tokens
+            mask = attention_mask.unsqueeze(-1).float()  # [batch, seq, 1]
+            pooler_output = (sequence_output * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
+        else:
+            # CLS token pooling (default)
+            pooler_output = sequence_output[:, 0, :]
         
         # Project and normalize
         if self.use_projection:
@@ -138,7 +147,8 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
     use_projection = config_dict.get('use_projection', True)
     embedding_dim = config_dict.get('embedding_dim', 256)
     use_binary_pos = config_dict.get('use_binary_pos', False)
-    print(f"Model config: use_projection={use_projection}, embedding_dim={embedding_dim}, use_binary_pos={use_binary_pos}")
+    pooling_type = config_dict.get('pooling_type', 'cls')
+    print(f"Model config: use_projection={use_projection}, embedding_dim={embedding_dim}, use_binary_pos={use_binary_pos}, pooling={pooling_type}")
     
     # Create BERT model structure (to wrap)
     bert_model = BertModel(config, add_pooling_layer=False)
@@ -162,7 +172,8 @@ def load_model(checkpoint_path, vocab_stoi, device='cuda'):
         hidden_size=config.hidden_size,
         embedding_dim=embedding_dim,
         use_projection=use_projection,
-        dropout=0.1
+        dropout=0.1,
+        pooling_type=pooling_type
     )
     
     # Load weights into wrapper (includes BERT + projection)

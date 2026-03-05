@@ -11,7 +11,7 @@ from tqdm import tqdm
 from data import load_paired_data, FunctionDataset_CL, FunctionDataset_CL_Load
 from data_json import FunctionDataset_CL_JSON, FunctionDataset_CL_Load_JSON, FunctionDataset_CL_AddressAware_JSON
 # from finetune_eval_with_pool import finetune_eval_cached, generate_embeddings, evaluate_with_pool  # Module not available
-from transformers import AdamW
+from transformers import AdamW, get_cosine_schedule_with_warmup
 import torch.nn.functional as F
 import argparse
 import wandb
@@ -53,13 +53,35 @@ def train_dp(model, args, train_set, valid_set, logger):
         def __init__(self, temperature=0.07):
             super(InfoNCE_Loss, self).__init__()
             self.temperature = temperature
+            # Buffers for cross-accumulation gathering
+            self.anchor_bank = []
+            self.pos_bank = []
+
+        def reset_bank(self):
+            """Reset embedding banks at start of each accumulation cycle."""
+            self.anchor_bank = []
+            self.pos_bank = []
+
+        def add_to_bank(self, anchor, pos):
+            """Add current micro-batch embeddings to bank (detached for non-current steps)."""
+            self.anchor_bank.append(anchor)
+            self.pos_bank.append(pos)
 
         def forward(self, anchor, pos, neg=None):
-            # anchor: [N, D], pos: [N, D] - assumed L2 normalized
-            # All other positives in the batch serve as in-batch negatives
-            sim = torch.mm(anchor, pos.t()) / self.temperature  # [N, N]
-            labels = torch.arange(sim.size(0), device=sim.device)
-            return F.cross_entropy(sim, labels)
+            # If bank has accumulated embeddings, use the full gathered set
+            if len(self.anchor_bank) > 1:
+                # Concatenate all accumulated embeddings
+                # Only the last batch has live gradients; earlier ones are detached
+                all_anchors = torch.cat(self.anchor_bank, dim=0)  # [N*accum, D]
+                all_pos = torch.cat(self.pos_bank, dim=0)  # [N*accum, D]
+                sim = torch.mm(all_anchors, all_pos.t()) / self.temperature
+                labels = torch.arange(sim.size(0), device=sim.device)
+                return F.cross_entropy(sim, labels)
+            else:
+                # Single batch (no accumulation) - original behavior
+                sim = torch.mm(anchor, pos.t()) / self.temperature  # [N, N]
+                labels = torch.arange(sim.size(0), device=sim.device)
+                return F.cross_entropy(sim, labels)
 
     if WANDB:
         wandb.init(project=f'jTrans-finetune', name="jTrans_Freeze_10_Train_Test")
@@ -98,6 +120,15 @@ def train_dp(model, args, train_set, valid_set, logger):
 
     optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.lr)
 
+    # LR scheduler with linear warmup and cosine decay
+    total_steps = (len(train_dataloader) * args.epoch) // args.gradient_accumulation_steps
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=args.warmup,
+        num_training_steps=total_steps
+    )
+    logger.info(f"LR scheduler: cosine with {args.warmup} warmup steps, {total_steps} total steps")
+
     # Only use DataParallel if multiple GPUs available
     if torch.cuda.device_count() > 1:
         print(f"Using DataParallel with {torch.cuda.device_count()} GPUs")
@@ -117,6 +148,10 @@ def train_dp(model, args, train_set, valid_set, logger):
         
         # Initialize gradient accumulation tracking
         accumulation_steps = 0
+        optimizer.zero_grad()  # Initial zero_grad before epoch starts
+        # Reset InfoNCE embedding bank at start of each epoch
+        if args.loss_type == 'infonce':
+            criterion.reset_bank()
         
         for i, batch_data in enumerate(train_iterator):
             t1=time.time()
@@ -139,10 +174,6 @@ def train_dp(model, args, train_set, valid_set, logger):
                 function_pos1, function_pos2, function_pos3 = function_pos1.cuda(), function_pos2.cuda(), function_pos3.cuda()
                 bb_pos1, bb_pos2, bb_pos3 = bb_pos1.cuda(), bb_pos2.cuda(), bb_pos3.cuda()
                 var_offsets1, var_offsets2, var_offsets3 = var_offsets1.cuda(), var_offsets2.cuda(), var_offsets3.cuda()
-                
-                # Zero gradients only at start of accumulation cycle
-                if accumulation_steps == 0:
-                    optimizer.zero_grad()
                 
                 # Address-aware model forward (wrapped to return pooler_output)
                 output1 = model(
@@ -177,10 +208,6 @@ def train_dp(model, args, train_set, valid_set, logger):
                 input_ids2, attention_mask2, token_type_ids2 = seq2.cuda(), mask2.cuda(), seg2.cuda()
                 input_ids3, attention_mask3, token_type_ids3 = seq3.cuda(), mask3.cuda(), seg3.cuda()
 
-                # Zero gradients only at start of accumulation cycle
-                if accumulation_steps == 0:
-                    optimizer.zero_grad()
-
                 output1 = model(input_ids=input_ids1, attention_mask=attention_mask1, token_type_ids=token_type_ids1)
                 anchor = output1.pooler_output
 
@@ -190,33 +217,68 @@ def train_dp(model, args, train_set, valid_set, logger):
                 output3 = model(input_ids=input_ids3, attention_mask=attention_mask3, token_type_ids=token_type_ids3)
                 neg = output3.pooler_output
 
-            if args.loss_type == 'infonce':
-                loss = criterion(anchor, pos)
+            if args.loss_type == 'infonce' and args.gradient_accumulation_steps > 1:
+                # Cross-accumulation InfoNCE: gather embeddings across micro-batches
+                # to increase the effective number of in-batch negatives.
+                # Earlier micro-batches are detached (no gradient) to save memory.
+                # The last micro-batch has live gradients and benefits from seeing
+                # more negatives in the similarity matrix.
+                if accumulation_steps == 0:
+                    criterion.reset_bank()
+                    optimizer.zero_grad()
+                
+                accumulation_steps += 1
+                
+                if accumulation_steps < args.gradient_accumulation_steps:
+                    # Not the last step: store detached embeddings (saves memory)
+                    criterion.anchor_bank.append(anchor.detach())
+                    criterion.pos_bank.append(pos.detach())
+                else:
+                    # Last step: store live embeddings and compute loss
+                    criterion.anchor_bank.append(anchor)
+                    criterion.pos_bank.append(pos)
+                    # Compute InfoNCE over ALL gathered embeddings [N*accum, N*accum]
+                    loss = criterion(anchor, pos)  # uses bank internally
+                    loss.backward()
+                    
+                    if args.max_grad_norm > 0:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                    optimizer.step()
+                    scheduler.step()
+                    accumulation_steps = 0
             else:
-                loss = criterion(anchor, pos, neg)
-            
-            # Scale loss for gradient accumulation
-            loss = loss / args.gradient_accumulation_steps
-            loss.backward()
-            
-            # Increment accumulation counter
-            accumulation_steps += 1
-            
-            # Update weights only after accumulating enough gradients
-            if accumulation_steps == args.gradient_accumulation_steps:
-                # Gradient clipping for stability
-                if args.max_grad_norm > 0:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                if args.loss_type == 'infonce':
+                    loss = criterion(anchor, pos)
+                else:
+                    loss = criterion(anchor, pos, neg)
+                
+                # Scale loss for gradient accumulation
+                loss = loss / args.gradient_accumulation_steps
+                loss.backward()
+                
+                # Increment accumulation counter
+                accumulation_steps += 1
+                
+                # Update weights only after accumulating enough gradients
+                if accumulation_steps == args.gradient_accumulation_steps:
+                    # Gradient clipping for stability
+                    if args.max_grad_norm > 0:
+                        torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
-                optimizer.step()
-                accumulation_steps = 0  # Reset counter
+                    optimizer.step()
+                    scheduler.step()
+                    optimizer.zero_grad()
+                    accumulation_steps = 0  # Reset counter
             
             if (i+1) % args.log_every == 0:
                 global_steps += 1
                 tmp_lr = optimizer.param_groups[0]["lr"]
-                loss_val = loss.item()  # CRITICAL: Extract scalar to prevent memory leak
+                try:
+                    loss_val = loss.item()  # CRITICAL: Extract scalar to prevent memory leak
+                except:
+                    loss_val = 0.0  # Loss not yet computed (accumulating embeddings)
                 # logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss_val}")
-                train_iterator.set_description(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss_val:.4f}")
+                train_iterator.set_description(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr:.2e}, loss={loss_val:.4f}")
                 if WANDB:
                     wandb.log({
                         'loss' : loss_val,
@@ -355,12 +417,13 @@ class AddressAwareBertWrapper(nn.Module):
     Wrapper for address-aware BERT encoder for function similarity finetuning.
     Extracts [CLS] token and projects to lower-dimensional embedding space.
     """
-    def __init__(self, bert_model, hidden_size=768, embedding_dim=256, use_projection=True, dropout=0.1):
+    def __init__(self, bert_model, hidden_size=768, embedding_dim=256, use_projection=True, dropout=0.1, pooling_type='cls'):
         super().__init__()
         self.bert = bert_model  # The BERT model with AddressAwareBERTEmbedding
         self.use_projection = use_projection
         self.hidden_size = hidden_size
         self.embedding_dim = embedding_dim
+        self.pooling_type = pooling_type  # 'cls' or 'mean'
         
         # Projection layer for task-specific feature learning (like dstask/funcsim)
         if use_projection:
@@ -374,7 +437,11 @@ class AddressAwareBertWrapper(nn.Module):
     def forward(self, token_ids, attention_mask, token_type_ids,
                 binary_pos, function_pos, bb_pos, var_offsets=None):
         """
-        Forward pass returning pooled output (CLS token).
+        Forward pass returning pooled output.
+        
+        Pooling strategy controlled by self.pooling_type:
+            - 'cls': Use [CLS] token (position 0)
+            - 'mean': Mean pool over non-padding tokens
         
         Returns:
             Dict with:
@@ -400,7 +467,15 @@ class AddressAwareBertWrapper(nn.Module):
         )
         
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
-        pooler_output = sequence_output[:, 0, :]  # CLS token [batch_size, hidden]
+        
+        # Pooling strategy
+        if self.pooling_type == 'mean':
+            # Mean pooling over non-padding tokens
+            mask = attention_mask.unsqueeze(-1).float()  # [batch, seq, 1]
+            pooler_output = (sequence_output * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
+        else:
+            # CLS token pooling (default)
+            pooler_output = sequence_output[:, 0, :]  # [batch_size, hidden]
         
         # Project to lower dimension and normalize (for better similarity computation)
         if self.use_projection:
@@ -446,6 +521,7 @@ class AddressAwareBertWrapper(nn.Module):
         # Add wrapper-specific config
         config['use_projection'] = self.use_projection
         config['embedding_dim'] = self.embedding_dim if self.use_projection else self.hidden_size
+        config['pooling_type'] = self.pooling_type
         
         # Add use_binary_pos if this is an address-aware model
         if hasattr(self.bert, 'embeddings') and hasattr(self.bert.embeddings, 'address_position'):
@@ -474,7 +550,9 @@ if __name__ == '__main__':
     parser.add_argument("--eval_batch_size", type=int, default = 256, help='evaluation batch size')
     parser.add_argument("--log_every", type=int, default =1, help='logging frequency')
     parser.add_argument("--local_rank", type=int, default = 0, help='local rank used for ddp')
-    parser.add_argument("--freeze_cnt", type=int, default=10, help='number of layers to freeze')
+    parser.add_argument("--freeze_cnt", type=int, default=4, help='number of layers to freeze (default: 4, use -1 for none)')
+    parser.add_argument("--pooling_type", type=str, default='cls', choices=['cls', 'mean'],
+                        help='pooling strategy: cls (CLS token) or mean (mean pool non-padding tokens)')
     parser.add_argument("--weight_decay", type=float, default = 1e-4, help='regularization weight decay')
     parser.add_argument("--eval_every", type=int, default=1, help="evaluate the model every x epochs")
     parser.add_argument("--eval_every_step", type=int, default=1000, help="evaluate the model every x epochs")
@@ -585,9 +663,10 @@ if __name__ == '__main__':
             hidden_size=config_dict['hidden_size'],
             embedding_dim=args.embedding_dim,
             use_projection=args.use_projection,
-            dropout=0.1
+            dropout=0.1,
+            pooling_type=args.pooling_type
         )
-        logger.info(f"Loaded address-aware BERT encoder with projection layer (embedding_dim={args.embedding_dim})")
+        logger.info(f"Loaded address-aware BERT encoder with projection layer (embedding_dim={args.embedding_dim}, pooling={args.pooling_type})")
         
     else:
         # Load baseline model 
