@@ -377,7 +377,7 @@ def tokenize_function(func_block, tokenizer, vocab_stoi, max_len=512):
     return token_ids, all_binary_pos, all_function_pos, all_bb_pos, all_var_offsets, all_segments
 
 
-def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len=512, batch_size=32):
+def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len=512, batch_size=32, mask_binary_pos=False, multi_layer_pool=0):
     """Generate embeddings for a list of function IDs"""
     embeddings = []
     
@@ -414,6 +414,12 @@ def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, dev
             # Convert to tensors
             input_ids = torch.tensor(batch_input_ids, dtype=torch.long).to(device)
             binary_pos = torch.tensor(batch_binary_pos, dtype=torch.float).to(device)
+            if mask_binary_pos:
+                # Set binary_pos to 0.0 (constant) instead of -1, so address_mask still passes
+                # for function_pos and bb_pos. This makes binary_pos uninformative
+                # while preserving the other two hierarchical levels.
+                valid_mask = binary_pos >= 0  # tokens that originally had positions
+                binary_pos = torch.where(valid_mask, torch.zeros_like(binary_pos), binary_pos)
             function_pos = torch.tensor(batch_function_pos, dtype=torch.float).to(device)
             bb_pos = torch.tensor(batch_bb_pos, dtype=torch.float).to(device)
             var_offsets = torch.tensor(batch_var_offsets, dtype=torch.long).to(device)
@@ -421,22 +427,51 @@ def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, dev
             token_type_ids = torch.tensor(batch_segments, dtype=torch.long).to(device)  # Proper segment labels!
             
             # Get embeddings
-            batch_embeddings = model(
-                token_ids=input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-                binary_pos=binary_pos,
-                function_pos=function_pos,
-                bb_pos=bb_pos,
-                var_offsets=var_offsets
-            )
+            if multi_layer_pool > 0:
+                # Multi-layer pooling: average last N transformer layers, then pool + project
+                emb = model.bert.embeddings(input_ids, token_type_ids, binary_pos, function_pos, bb_pos, var_offsets)
+                extended_mask = (1.0 - attention_mask.unsqueeze(1).unsqueeze(2).float()) * -10000.0
+                
+                hidden_states = [emb]
+                h = emb
+                for layer in model.bert.encoder.layer:
+                    h = layer(h, attention_mask=extended_mask)[0]
+                    hidden_states.append(h)
+                
+                # Average last N layers
+                last_n = hidden_states[-multi_layer_pool:]
+                sequence_output = torch.stack(last_n).mean(dim=0)
+                
+                # Apply same pooling as wrapper
+                if model.pooling_type == 'mean':
+                    mask = attention_mask.unsqueeze(-1).float()
+                    pooler_output = (sequence_output * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
+                else:
+                    pooler_output = sequence_output[:, 0, :]
+                
+                # Apply projection + normalize
+                if model.use_projection:
+                    pooler_output = model.projection(pooler_output)
+                    pooler_output = torch.nn.functional.normalize(pooler_output, p=2, dim=1)
+                
+                batch_embeddings = pooler_output
+            else:
+                batch_embeddings = model(
+                    token_ids=input_ids,
+                    attention_mask=attention_mask,
+                    token_type_ids=token_type_ids,
+                    binary_pos=binary_pos,
+                    function_pos=function_pos,
+                    bb_pos=bb_pos,
+                    var_offsets=var_offsets
+                )
             
             embeddings.append(batch_embeddings.cpu().numpy())
     
     return np.vstack(embeddings)
 
 
-def evaluate_pool(pool_path, model, func_blocks, tokenizer, vocab_stoi, device, max_len=512, batch_size=32):
+def evaluate_pool(pool_path, model, func_blocks, tokenizer, vocab_stoi, device, max_len=512, batch_size=32, mask_binary_pos=False, multi_layer_pool=0, whiten=False):
     """Evaluate on a single pool"""
     print(f"\n{'='*80}")
     print(f"Evaluating: {Path(pool_path).name}")
@@ -459,14 +494,14 @@ def evaluate_pool(pool_path, model, func_blocks, tokenizer, vocab_stoi, device, 
         pool_func_ids = [p['high_id'] for p in pool_data['pool']]
         print(f"\nGenerating pool embeddings ({len(pool_func_ids)} functions)...")
         pool_embeddings = generate_embeddings(
-            model, pool_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size
+            model, pool_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size, mask_binary_pos, multi_layer_pool
         )
         
         # Generate embeddings for queries
         query_func_ids = [q['query_id'] for q in pool_data['queries']]
         print(f"\nGenerating query embeddings ({len(query_func_ids)} functions)...")
         query_embeddings = generate_embeddings(
-            model, query_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size
+            model, query_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size, mask_binary_pos, multi_layer_pool
         )
         
     else:
@@ -492,14 +527,14 @@ def evaluate_pool(pool_path, model, func_blocks, tokenizer, vocab_stoi, device, 
         pool_func_ids = pool_data['pool']
         print(f"\nGenerating pool embeddings ({len(pool_func_ids)} functions)...")
         pool_embeddings = generate_embeddings(
-            model, pool_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size
+            model, pool_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size, mask_binary_pos, multi_layer_pool
         )
         
         # Generate embeddings for queries (from separate query file)
         query_func_ids = [q['query_id'] for q in query_data['queries']]
         print(f"\nGenerating query embeddings ({len(query_func_ids)} functions)...")
         query_embeddings = generate_embeddings(
-            model, query_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size
+            model, query_func_ids, func_blocks, tokenizer, vocab_stoi, device, max_len, batch_size, mask_binary_pos, multi_layer_pool
         )
         
         # Use query data for evaluation
@@ -507,6 +542,20 @@ def evaluate_pool(pool_path, model, func_blocks, tokenizer, vocab_stoi, device, 
     
     # Compute similarities and ranks
     print("\nComputing similarities and ranks...")
+    
+    # Optional: PCA whitening (decorrelates dimensions, can improve cosine similarity)
+    if whiten:
+        print("  Applying PCA whitening...")
+        all_emb = np.vstack([pool_embeddings, query_embeddings])
+        mean = all_emb.mean(axis=0)
+        all_emb_centered = all_emb - mean
+        cov = np.cov(all_emb_centered, rowvar=False)
+        U, S, _ = np.linalg.svd(cov)
+        # Whitening transform: x_white = (x - mean) @ U @ diag(1/sqrt(S))
+        W = U @ np.diag(1.0 / np.sqrt(S + 1e-5))
+        pool_embeddings = (pool_embeddings - mean) @ W
+        query_embeddings = (query_embeddings - mean) @ W
+        print(f"  Whitened to {pool_embeddings.shape[1]} dims")
     
     # Normalize embeddings for cosine similarity (CRITICAL: same as finetune!)
     print("  Normalizing embeddings...")
@@ -574,6 +623,9 @@ def main():
     parser.add_argument('--pool_size', type=int, help='Evaluate specific pool size only')
     parser.add_argument('--opt_pair', help='Evaluate specific opt pair only (e.g., O0_vs_O3)')
     parser.add_argument('--output', help='Output JSON file for results')
+    parser.add_argument('--mask_binary_pos', action='store_true', help='Zero out binary_pos at eval time (removes opt-level signal)')
+    parser.add_argument('--multi_layer_pool', type=int, default=0, help='Average last N transformer layers (0=disabled, use final layer only)')
+    parser.add_argument('--whiten', action='store_true', help='Apply PCA whitening to embeddings before scoring')
     
     args = parser.parse_args()
     
@@ -588,6 +640,14 @@ def main():
     
     # Load model
     model, config = load_model(args.checkpoint, vocab_stoi, args.device)
+    
+    # Print eval-time enhancement flags
+    if args.mask_binary_pos:
+        print("\n[EVAL ENHANCEMENT] binary_pos masked to -1 (removes optimization-level signal)")
+    if args.multi_layer_pool > 0:
+        print(f"\n[EVAL ENHANCEMENT] Multi-layer pooling: averaging last {args.multi_layer_pool} layers")
+    if args.whiten:
+        print("\n[EVAL ENHANCEMENT] PCA whitening enabled")
     
     # Load func blocks
     if args.ground_truth:
@@ -618,7 +678,10 @@ def main():
     for pool_file in pool_files:
         results = evaluate_pool(
             pool_file, model, func_blocks, tokenizer, vocab_stoi,
-            args.device, args.max_len, args.batch_size
+            args.device, args.max_len, args.batch_size,
+            mask_binary_pos=args.mask_binary_pos,
+            multi_layer_pool=args.multi_layer_pool,
+            whiten=args.whiten
         )
         all_results.append(results)
     

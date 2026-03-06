@@ -41,8 +41,8 @@ OPT_PAIR=${4:-""}
 source ~/anaconda3/etc/profile.d/conda.sh
 conda activate jtrans
 
-# Configuration
-POOL_DIR="/data/kun/jtrans/addressaware/eval/pools_filtered"
+# Configuration (deduped: cross-binary duplicate functions removed)
+POOL_DIR="/data/kun/jtrans/addressaware/dedup/pools_dedup"
 # Use EVAL data (pools reference eval function IDs, not training IDs)
 FUNC_BLOCKS="/data/kun/jtrans/addressaware/eval/func_blocks_addr.json"
 MAX_LEN=512  # Same as finetune
