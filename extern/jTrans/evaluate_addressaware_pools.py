@@ -76,7 +76,15 @@ class AddressAwareBertWrapper(torch.nn.Module):
         self.use_projection = use_projection
         self.hidden_size = hidden_size
         self.embedding_dim = embedding_dim
-        self.pooling_type = pooling_type  # 'cls' or 'mean'
+        self.pooling_type = pooling_type  # 'cls', 'mean', or 'attention'
+        
+        # Attention pooling (learnable token weighting)
+        if pooling_type == 'attention':
+            self.attention_pool = torch.nn.Sequential(
+                torch.nn.Linear(hidden_size, hidden_size // 4),
+                torch.nn.Tanh(),
+                torch.nn.Linear(hidden_size // 4, 1)
+            )
         
         # Projection layer (task-specific)
         if use_projection:
@@ -111,7 +119,13 @@ class AddressAwareBertWrapper(torch.nn.Module):
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
         
         # Pooling strategy
-        if self.pooling_type == 'mean':
+        if self.pooling_type == 'attention':
+            # Learned attention-weighted pooling
+            scores = self.attention_pool(sequence_output).squeeze(-1)  # [B, L]
+            scores = scores.masked_fill(attention_mask == 0, float('-inf'))
+            weights = torch.nn.functional.softmax(scores, dim=1)  # [B, L]
+            pooler_output = (sequence_output * weights.unsqueeze(-1)).sum(dim=1)  # [B, H]
+        elif self.pooling_type == 'mean':
             # Mean pooling over non-padding tokens
             mask = attention_mask.unsqueeze(-1).float()  # [batch, seq, 1]
             pooler_output = (sequence_output * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
@@ -443,7 +457,12 @@ def generate_embeddings(model, func_ids, func_blocks, tokenizer, vocab_stoi, dev
                 sequence_output = torch.stack(last_n).mean(dim=0)
                 
                 # Apply same pooling as wrapper
-                if model.pooling_type == 'mean':
+                if model.pooling_type == 'attention':
+                    scores = model.attention_pool(sequence_output).squeeze(-1)
+                    scores = scores.masked_fill(attention_mask == 0, float('-inf'))
+                    weights = torch.nn.functional.softmax(scores, dim=1)
+                    pooler_output = (sequence_output * weights.unsqueeze(-1)).sum(dim=1)
+                elif model.pooling_type == 'mean':
                     mask = attention_mask.unsqueeze(-1).float()
                     pooler_output = (sequence_output * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
                 else:

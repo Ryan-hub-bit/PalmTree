@@ -50,16 +50,22 @@ def train_dp(model, args, train_set, valid_set, logger):
             return loss
 
     class InfoNCE_MoCo_Loss(nn.Module):
-        """InfoNCE loss with MoCo-style memory queue for massive negatives.
+        """InfoNCE loss with MoCo queue, hard negative mining, angular margin,
+        and symmetric loss for maximum discrimination.
         
-        Uses a FIFO queue of past positive embeddings as extra negatives.
-        With queue_size=65536, each batch sees 65K+ negatives without
-        increasing batch size or GPU memory for backward pass.
+        Key features:
+        - FIFO queue of past embeddings as extra negatives (65K+)
+        - Hard negative mining: select top-K hardest negatives from queue
+        - Angular margin: subtract margin from positive logit (ArcFace-style)
+        - Symmetric loss: average both directions (anchor->pos, pos->anchor)
         """
-        def __init__(self, temperature=0.07, queue_size=65536, embedding_dim=512):
+        def __init__(self, temperature=0.07, queue_size=65536, embedding_dim=512,
+                     hard_neg_k=0, margin=0.0):
             super().__init__()
             self.temperature = temperature
             self.queue_size = queue_size
+            self.hard_neg_k = hard_neg_k  # 0 = use all queue negatives
+            self.margin = margin  # ArcFace-style angular margin
             
             if queue_size > 0:
                 # FIFO queue of past embeddings (L2-normalized)
@@ -86,27 +92,56 @@ def train_dp(model, args, train_set, valid_set, logger):
             self.queue_ptr[0] = (ptr + batch_size) % self.queue_size
             self.queue_valid = min(self.queue_valid + batch_size, self.queue_size)
 
+        def _compute_loss(self, query, key):
+            """Compute InfoNCE loss for one direction (query -> key).
+            
+            query: [B, D] L2-normalized (anchor in this direction)
+            key:   [B, D] L2-normalized (positive in this direction)
+            """
+            B = query.size(0)
+            
+            # Positive logits: query_i . key_i (matched pairs)
+            pos_logits = (query * key).sum(dim=1, keepdim=True) / self.temperature  # [B, 1]
+            
+            # ArcFace margin: make positive harder -> forces larger separation
+            if self.margin > 0:
+                pos_logits = pos_logits - self.margin / self.temperature
+            
+            # In-batch negatives: query_i . key_j for j != i
+            sim_all = torch.mm(query, key.t()) / self.temperature  # [B, B]
+            mask = ~torch.eye(B, device=query.device, dtype=torch.bool)
+            neg_in_batch = sim_all[mask].view(B, B - 1)  # [B, B-1]
+            
+            # Queue negatives (with optional hard mining)
+            neg_queue = None
+            if self.queue_size > 0 and self.queue_valid > 0:
+                Q = self.queue_valid
+                sim_queue = torch.mm(query, self.queue[:Q].t()) / self.temperature  # [B, Q]
+                
+                if self.hard_neg_k > 0 and Q > self.hard_neg_k:
+                    # Hard negative mining: keep top-K most similar (hardest)
+                    sim_queue, _ = sim_queue.topk(self.hard_neg_k, dim=1)  # [B, K]
+                neg_queue = sim_queue
+            
+            # Concat: [positive | in-batch negatives | queue negatives]
+            parts = [pos_logits, neg_in_batch]
+            if neg_queue is not None:
+                parts.append(neg_queue)
+            logits = torch.cat(parts, dim=1)  # [B, 1 + (B-1) + K]
+            
+            # Label: positive is always at index 0
+            labels = torch.zeros(B, dtype=torch.long, device=query.device)
+            return F.cross_entropy(logits, labels)
+
         def forward(self, anchor, pos):
-            """InfoNCE: in-batch negatives + queue negatives.
+            """Symmetric InfoNCE: average both directions for stronger signal.
             
             anchor: [B, D] L2-normalized
             pos:    [B, D] L2-normalized
             """
-            B = anchor.size(0)
-            
-            # In-batch similarities: anchor_i should match pos_i (diagonal)
-            sim_in_batch = torch.mm(anchor, pos.t()) / self.temperature  # [B, B]
-            
-            if self.queue_size > 0 and self.queue_valid > 0:
-                # Queue negatives
-                Q = self.queue_valid
-                sim_queue = torch.mm(anchor, self.queue[:Q].t()) / self.temperature  # [B, Q]
-                logits = torch.cat([sim_in_batch, sim_queue], dim=1)  # [B, B+Q]
-            else:
-                logits = sim_in_batch
-            
-            labels = torch.arange(B, device=anchor.device)
-            return F.cross_entropy(logits, labels)
+            loss_fwd = self._compute_loss(anchor, pos)   # anchor queries positive
+            loss_bwd = self._compute_loss(pos, anchor)   # positive queries anchor
+            return (loss_fwd + loss_bwd) / 2
 
     if WANDB:
         wandb.init(project=f'jTrans-finetune', name="jTrans_Freeze_10_Train_Test")
@@ -167,9 +202,11 @@ def train_dp(model, args, train_set, valid_set, logger):
         criterion = InfoNCE_MoCo_Loss(
             temperature=args.temperature,
             queue_size=args.queue_size,
-            embedding_dim=embed_dim
+            embedding_dim=embed_dim,
+            hard_neg_k=args.hard_neg_k,
+            margin=args.margin
         ).to(device)
-        logger.info(f"InfoNCE+MoCo: temp={args.temperature}, queue_size={args.queue_size}, embed_dim={embed_dim}")
+        logger.info(f"InfoNCE+MoCo: temp={args.temperature}, queue={args.queue_size}, dim={embed_dim}, hard_neg_k={args.hard_neg_k}, margin={args.margin}")
     else:
         criterion = Triplet_COS_Loss(margin=args.triplet_margin)
     
@@ -425,7 +462,15 @@ class AddressAwareBertWrapper(nn.Module):
         self.use_projection = use_projection
         self.hidden_size = hidden_size
         self.embedding_dim = embedding_dim
-        self.pooling_type = pooling_type  # 'cls' or 'mean'
+        self.pooling_type = pooling_type  # 'cls', 'mean', or 'attention'
+        
+        # Attention pooling (learnable token weighting)
+        if pooling_type == 'attention':
+            self.attention_pool = nn.Sequential(
+                nn.Linear(hidden_size, hidden_size // 4),
+                nn.Tanh(),
+                nn.Linear(hidden_size // 4, 1)
+            )
         
         # Projection layer for task-specific feature learning (like dstask/funcsim)
         if use_projection:
@@ -471,7 +516,13 @@ class AddressAwareBertWrapper(nn.Module):
         sequence_output = outputs[0]  # [batch_size, seq_len, hidden]
         
         # Pooling strategy
-        if self.pooling_type == 'mean':
+        if self.pooling_type == 'attention':
+            # Learned attention-weighted pooling
+            scores = self.attention_pool(sequence_output).squeeze(-1)  # [B, L]
+            scores = scores.masked_fill(attention_mask == 0, float('-inf'))
+            weights = F.softmax(scores, dim=1)  # [B, L]
+            pooler_output = (sequence_output * weights.unsqueeze(-1)).sum(dim=1)  # [B, H]
+        elif self.pooling_type == 'mean':
             # Mean pooling over non-padding tokens
             mask = attention_mask.unsqueeze(-1).float()  # [batch, seq, 1]
             pooler_output = (sequence_output * mask).sum(1) / mask.sum(1).clamp(min=1e-9)
@@ -553,8 +604,8 @@ if __name__ == '__main__':
     parser.add_argument("--log_every", type=int, default =1, help='logging frequency')
     parser.add_argument("--local_rank", type=int, default = 0, help='local rank used for ddp')
     parser.add_argument("--freeze_cnt", type=int, default=4, help='number of layers to freeze (default: 4, use -1 for none)')
-    parser.add_argument("--pooling_type", type=str, default='cls', choices=['cls', 'mean'],
-                        help='pooling strategy: cls (CLS token) or mean (mean pool non-padding tokens)')
+    parser.add_argument("--pooling_type", type=str, default='cls', choices=['cls', 'mean', 'attention'],
+                        help='pooling strategy: cls (CLS token), mean (mean pool), or attention (learned attention pool)')
     parser.add_argument("--weight_decay", type=float, default = 1e-4, help='regularization weight decay')
     parser.add_argument("--eval_every", type=int, default=1, help="evaluate the model every x epochs")
     parser.add_argument("--eval_every_step", type=int, default=1000, help="evaluate the model every x epochs")
@@ -586,6 +637,10 @@ if __name__ == '__main__':
                         help='temperature for InfoNCE loss (lower = sharper distribution, default: 0.07)')
     parser.add_argument("--queue_size", type=int, default=65536,
                         help='MoCo queue size for extra negatives in InfoNCE (0=disable, default: 65536)')
+    parser.add_argument("--hard_neg_k", type=int, default=0,
+                        help='number of hardest negatives to mine from MoCo queue per anchor (0=use all, default: 0)')
+    parser.add_argument("--margin", type=float, default=0.0,
+                        help='ArcFace-style angular margin on positive logit (0=disabled, default: 0.0)')
     parser.add_argument("--max_grad_norm", type=float, default=1.0,
                         help='max gradient norm for clipping (0 = no clipping)')
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1,
