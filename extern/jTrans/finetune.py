@@ -49,39 +49,64 @@ def train_dp(model, args, train_set, valid_set, logger):
             loss=(self.margin-(good_sim-bad_sim)).clamp(min=1e-6).mean()
             return loss
 
-    class InfoNCE_Loss(nn.Module):
-        def __init__(self, temperature=0.07):
-            super(InfoNCE_Loss, self).__init__()
+    class InfoNCE_MoCo_Loss(nn.Module):
+        """InfoNCE loss with MoCo-style memory queue for massive negatives.
+        
+        Uses a FIFO queue of past positive embeddings as extra negatives.
+        With queue_size=65536, each batch sees 65K+ negatives without
+        increasing batch size or GPU memory for backward pass.
+        """
+        def __init__(self, temperature=0.07, queue_size=65536, embedding_dim=512):
+            super().__init__()
             self.temperature = temperature
-            # Buffers for cross-accumulation gathering
-            self.anchor_bank = []
-            self.pos_bank = []
+            self.queue_size = queue_size
+            
+            if queue_size > 0:
+                # FIFO queue of past embeddings (L2-normalized)
+                self.register_buffer("queue", F.normalize(torch.randn(queue_size, embedding_dim), dim=1))
+                self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+                self.queue_valid = 0  # Track how many valid (non-random) entries
 
-        def reset_bank(self):
-            """Reset embedding banks at start of each accumulation cycle."""
-            self.anchor_bank = []
-            self.pos_bank = []
-
-        def add_to_bank(self, anchor, pos):
-            """Add current micro-batch embeddings to bank (detached for non-current steps)."""
-            self.anchor_bank.append(anchor)
-            self.pos_bank.append(pos)
-
-        def forward(self, anchor, pos, neg=None):
-            # If bank has accumulated embeddings, use the full gathered set
-            if len(self.anchor_bank) > 1:
-                # Concatenate all accumulated embeddings
-                # Only the last batch has live gradients; earlier ones are detached
-                all_anchors = torch.cat(self.anchor_bank, dim=0)  # [N*accum, D]
-                all_pos = torch.cat(self.pos_bank, dim=0)  # [N*accum, D]
-                sim = torch.mm(all_anchors, all_pos.t()) / self.temperature
-                labels = torch.arange(sim.size(0), device=sim.device)
-                return F.cross_entropy(sim, labels)
+        @torch.no_grad()
+        def enqueue(self, embeddings):
+            """Add embeddings to the FIFO queue."""
+            if self.queue_size <= 0:
+                return
+            embeddings = embeddings.detach()
+            batch_size = embeddings.shape[0]
+            ptr = int(self.queue_ptr)
+            
+            if ptr + batch_size <= self.queue_size:
+                self.queue[ptr:ptr + batch_size] = embeddings
             else:
-                # Single batch (no accumulation) - original behavior
-                sim = torch.mm(anchor, pos.t()) / self.temperature  # [N, N]
-                labels = torch.arange(sim.size(0), device=sim.device)
-                return F.cross_entropy(sim, labels)
+                remaining = self.queue_size - ptr
+                self.queue[ptr:] = embeddings[:remaining]
+                self.queue[:batch_size - remaining] = embeddings[remaining:]
+            
+            self.queue_ptr[0] = (ptr + batch_size) % self.queue_size
+            self.queue_valid = min(self.queue_valid + batch_size, self.queue_size)
+
+        def forward(self, anchor, pos):
+            """InfoNCE: in-batch negatives + queue negatives.
+            
+            anchor: [B, D] L2-normalized
+            pos:    [B, D] L2-normalized
+            """
+            B = anchor.size(0)
+            
+            # In-batch similarities: anchor_i should match pos_i (diagonal)
+            sim_in_batch = torch.mm(anchor, pos.t()) / self.temperature  # [B, B]
+            
+            if self.queue_size > 0 and self.queue_valid > 0:
+                # Queue negatives
+                Q = self.queue_valid
+                sim_queue = torch.mm(anchor, self.queue[:Q].t()) / self.temperature  # [B, Q]
+                logits = torch.cat([sim_in_batch, sim_queue], dim=1)  # [B, B+Q]
+            else:
+                logits = sim_in_batch
+            
+            labels = torch.arange(B, device=anchor.device)
+            return F.cross_entropy(logits, labels)
 
     if WANDB:
         wandb.init(project=f'jTrans-finetune', name="jTrans_Freeze_10_Train_Test")
@@ -136,22 +161,27 @@ def train_dp(model, args, train_set, valid_set, logger):
     else:
         print("Using single GPU")
     
+    # Create loss function ONCE (persistent across epochs for MoCo queue state)
+    if args.loss_type == 'infonce':
+        embed_dim = args.embedding_dim if args.use_projection else 768
+        criterion = InfoNCE_MoCo_Loss(
+            temperature=args.temperature,
+            queue_size=args.queue_size,
+            embedding_dim=embed_dim
+        ).to(device)
+        logger.info(f"InfoNCE+MoCo: temp={args.temperature}, queue_size={args.queue_size}, embed_dim={embed_dim}")
+    else:
+        criterion = Triplet_COS_Loss(margin=args.triplet_margin)
+    
     global_steps = 0
     etc=0
     for epoch in range(args.epoch):
         model.train()
-        if args.loss_type == 'infonce':
-            criterion = InfoNCE_Loss(temperature=args.temperature)
-        else:
-            criterion = Triplet_COS_Loss(margin=args.triplet_margin)
         train_iterator = tqdm(train_dataloader)
         
         # Initialize gradient accumulation tracking
         accumulation_steps = 0
-        optimizer.zero_grad()  # Initial zero_grad before epoch starts
-        # Reset InfoNCE embedding bank at start of each epoch
-        if args.loss_type == 'infonce':
-            criterion.reset_bank()
+        optimizer.zero_grad()
         
         for i, batch_data in enumerate(train_iterator):
             t1=time.time()
@@ -192,13 +222,15 @@ def train_dp(model, args, train_set, valid_set, logger):
                 )
                 pos = output2['pooler_output']
                 
-                output3 = model(
-                    token_ids=input_ids3, attention_mask=attention_mask3, 
-                    token_type_ids=token_type_ids3,
-                    binary_pos=binary_pos3, function_pos=function_pos3, 
-                    bb_pos=bb_pos3, var_offsets=var_offsets3
-                )
-                neg = output3['pooler_output']
+                # Skip negative forward for InfoNCE (MoCo queue provides negatives)
+                if args.loss_type != 'infonce':
+                    output3 = model(
+                        token_ids=input_ids3, attention_mask=attention_mask3, 
+                        token_type_ids=token_type_ids3,
+                        binary_pos=binary_pos3, function_pos=function_pos3, 
+                        bb_pos=bb_pos3, var_offsets=var_offsets3
+                    )
+                    neg = output3['pooler_output']
                 
             else:
                 # Baseline: 3 fields × 3 (anchor, positive, negative) = 9
@@ -214,69 +246,39 @@ def train_dp(model, args, train_set, valid_set, logger):
                 output2 = model(input_ids=input_ids2, attention_mask=attention_mask2, token_type_ids=token_type_ids2)
                 pos = output2.pooler_output
 
-                output3 = model(input_ids=input_ids3, attention_mask=attention_mask3, token_type_ids=token_type_ids3)
-                neg = output3.pooler_output
+                # Skip negative forward for InfoNCE (MoCo queue provides negatives)
+                if args.loss_type != 'infonce':
+                    output3 = model(input_ids=input_ids3, attention_mask=attention_mask3, token_type_ids=token_type_ids3)
+                    neg = output3.pooler_output
 
-            if args.loss_type == 'infonce' and args.gradient_accumulation_steps > 1:
-                # Cross-accumulation InfoNCE: gather embeddings across micro-batches
-                # to increase the effective number of in-batch negatives.
-                # Earlier micro-batches are detached (no gradient) to save memory.
-                # The last micro-batch has live gradients and benefits from seeing
-                # more negatives in the similarity matrix.
-                if accumulation_steps == 0:
-                    criterion.reset_bank()
-                    optimizer.zero_grad()
-                
-                accumulation_steps += 1
-                
-                if accumulation_steps < args.gradient_accumulation_steps:
-                    # Not the last step: store detached embeddings (saves memory)
-                    criterion.anchor_bank.append(anchor.detach())
-                    criterion.pos_bank.append(pos.detach())
-                else:
-                    # Last step: store live embeddings and compute loss
-                    criterion.anchor_bank.append(anchor)
-                    criterion.pos_bank.append(pos)
-                    # Compute InfoNCE over ALL gathered embeddings [N*accum, N*accum]
-                    loss = criterion(anchor, pos)  # uses bank internally
-                    loss.backward()
-                    
-                    if args.max_grad_norm > 0:
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-                    optimizer.step()
-                    scheduler.step()
-                    accumulation_steps = 0
+            # Compute loss (InfoNCE uses MoCo queue, triplet uses explicit negative)
+            if args.loss_type == 'infonce':
+                loss = criterion(anchor, pos)
             else:
-                if args.loss_type == 'infonce':
-                    loss = criterion(anchor, pos)
-                else:
-                    loss = criterion(anchor, pos, neg)
-                
-                # Scale loss for gradient accumulation
-                loss = loss / args.gradient_accumulation_steps
-                loss.backward()
-                
-                # Increment accumulation counter
-                accumulation_steps += 1
-                
-                # Update weights only after accumulating enough gradients
-                if accumulation_steps == args.gradient_accumulation_steps:
-                    # Gradient clipping for stability
-                    if args.max_grad_norm > 0:
-                        torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-
-                    optimizer.step()
-                    scheduler.step()
-                    optimizer.zero_grad()
-                    accumulation_steps = 0  # Reset counter
+                loss = criterion(anchor, pos, neg)
+            
+            # Standard gradient accumulation
+            loss = loss / args.gradient_accumulation_steps
+            loss.backward()
+            
+            # Enqueue embeddings for future MoCo negatives
+            if args.loss_type == 'infonce':
+                criterion.enqueue(anchor)
+                criterion.enqueue(pos)
+            
+            accumulation_steps += 1
+            if accumulation_steps == args.gradient_accumulation_steps:
+                if args.max_grad_norm > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+                accumulation_steps = 0
             
             if (i+1) % args.log_every == 0:
                 global_steps += 1
                 tmp_lr = optimizer.param_groups[0]["lr"]
-                try:
-                    loss_val = loss.item()  # CRITICAL: Extract scalar to prevent memory leak
-                except:
-                    loss_val = 0.0  # Loss not yet computed (accumulating embeddings)
+                loss_val = loss.item() * args.gradient_accumulation_steps  # Undo scaling for logging
                 # logger.info(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr}, loss={loss_val}")
                 train_iterator.set_description(f"[*] epoch: [{epoch}/{args.epoch+1}], steps: [{i}/{len(train_iterator)}], lr={tmp_lr:.2e}, loss={loss_val:.4f}")
                 if WANDB:
@@ -582,6 +584,8 @@ if __name__ == '__main__':
                         help='loss function: triplet (margin-based) or infonce (in-batch negatives, default)')
     parser.add_argument("--temperature", type=float, default=0.07,
                         help='temperature for InfoNCE loss (lower = sharper distribution, default: 0.07)')
+    parser.add_argument("--queue_size", type=int, default=65536,
+                        help='MoCo queue size for extra negatives in InfoNCE (0=disable, default: 65536)')
     parser.add_argument("--max_grad_norm", type=float, default=1.0,
                         help='max gradient norm for clipping (0 = no clipping)')
     parser.add_argument("--gradient_accumulation_steps", type=int, default=1,
